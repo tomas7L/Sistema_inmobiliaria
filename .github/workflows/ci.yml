@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build
+    # WPF y WinForms solo compilan en Windows (SDK Microsoft.NET.Sdk.WindowsDesktop).
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Mientras el proyecto WPF todavía no exista (ej: PRs que solo suben specs),
+      # no hay nada que compilar. Este paso detecta esa situación para no romper
+      # el check por algo que todavía no corresponde validar.
+      - name: Buscar solución .NET
+        id: sln
+        shell: bash
+        run: |
+          if compgen -G "*.sln" > /dev/null; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "No se encontró ningún .sln en la raíz todavía. Nada que compilar en este PR."
+          fi
+
+      - name: Setup .NET
+        if: steps.sln.outputs.found == 'true'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restaurar dependencias
+        if: steps.sln.outputs.found == 'true'
+        run: dotnet restore
+
+      - name: Compilar (Release)
+        if: steps.sln.outputs.found == 'true'
+        run: dotnet build --configuration Release --no-restore
