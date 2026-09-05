@@ -1,0 +1,76 @@
+schema: spec-driven
+
+context: |
+  Sistema_inmobiliaria: WPF + MVVM desktop app (.NET 10 LTS, CommunityToolkit.Mvvm)
+  for a single real-estate agency (Del Lago), 2 trusted internal users.
+  Data: Supabase Postgres via EF Core + Npgsql directly from the WPF client (no API).
+  File storage: Supabase Storage (signed lease PDFs). Email: SMTP for notices.
+  No .sln/.csproj yet — deliberate, spec-first. Do not scaffold app code before specs.
+  PDF library and scheduler mechanism not yet chosen. See `open_decisions` below.
+
+open_decisions:
+  - id: credential-exposure
+    summary: >
+      Direct Npgsql connection ships the DB connection string on the client
+      machine, making UI-level Admin/Empleado role separation cosmetic.
+      Undecided: accept for 2 trusted users, or move to Supabase Auth with
+      real Postgres roles/RLS.
+  - id: scheduler-mechanism
+    summary: >
+      Automated notifications (60/30/15 days before due) must fire while the
+      desktop app is closed. Undecided: Supabase pg_cron + Edge Function, or
+      a console executable run as a Windows Scheduled Task.
+  - id: supabase-org
+    summary: >
+      Whether this project gets its own Supabase organization or shares one
+      with the team's other (padel) system.
+  - id: pdf-library
+    summary: PDF generation library not yet chosen.
+
+strict_tdd: false
+
+testing:
+  status: unavailable
+  reason: >
+    No .csproj/.sln exists yet, so there is no runnable test command. Test
+    framework (xUnit / NUnit / MSTest) is still an open decision. Re-detect
+    once the first .csproj is scaffolded as part of an accepted change.
+
+rules:
+  proposal:
+    - Reference relevant domain Engram observations (topic_key `domain/*`) instead of restating them
+    - Include rollback plan for risky changes
+    - Flag any of the four `open_decisions` above that the proposal touches, without resolving them silently
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+    - Domain terms without a clean English equivalent that appear on legal documents
+      (locador, locatario, codeudor, recargo, honorarios, tasa municipal, sellado
+      provincial, ICL, IPC, RIPTE) may be kept as domain vocabulary with an English
+      gloss on first use; structure, prose, and identifiers otherwise stay English
+  design:
+    - Document architecture decisions with rationale
+    - Model receipt/collection concepts as catalog + lines, not fixed columns
+      (per domain/cobranza-definiciones-confirmadas — buys the right to start
+      before all data questions are answered)
+  tasks:
+    - Group by phase, use hierarchical numbering
+    - Keep tasks completable in one session
+    - Respect the review budget declared in `review_budget_lines` below (ask-on-risk
+      delivery strategy); recommend chained PRs when a work unit is forecast to exceed it
+  apply:
+    guidelines:
+      - Follow existing code patterns once a first module exists
+      - Do not create a .sln/.csproj outside of an accepted change that explicitly scopes it
+    tdd: false
+    test_command: ""
+  verify:
+    test_command: ""
+    build_command: ""
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas
+    - Cross-check merged specs against linked domain Engram observations for contradictions
+
+review_budget_lines: 800
+delivery_strategy: ask-on-risk

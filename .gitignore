@@ -231,3 +231,7 @@ MSBuild_Logs/
 appsettings.Development.json
 appsettings.*.local.json
 secrets.json
+
+# Caches locales de herramientas SDD. El registro de skills (.atl/skill-registry.md)
+# si se versiona; su cache derivado no, porque se regenera en cada maquina.
+.atl/.skill-registry.cache.json
