@@ -20,21 +20,42 @@ open_decisions:
       Automated notifications (60/30/15 days before due) must fire while the
       desktop app is closed. Undecided: Supabase pg_cron + Edge Function, or
       a console executable run as a Windows Scheduled Task.
-  - id: supabase-org
-    summary: >
-      Whether this project gets its own Supabase organization or shares one
-      with the team's other (padel) system.
   - id: pdf-library
     summary: PDF generation library not yet chosen.
+
+resolved_decisions:
+  - id: supabase-org
+    resolved: 2026-09-07
+    decision: >
+      This project gets its OWN Supabase organization. It does not share one
+      with the team's other (padel) system.
+    rationale: >
+      The padel system may grow enough to consume the shared organization-level
+      quota (MAU, bandwidth, storage) and leave this system without a database.
+      Isolating the risk is worth the extra organization.
 
 strict_tdd: false
 
 testing:
   status: unavailable
+  framework: xunit
+  framework_chosen: 2026-09-07
+  framework_rationale: >
+    Used by the .NET team itself, so answers exist when something breaks; no
+    setup/teardown attributes (constructor + IDisposable is plain C#, one less
+    framework concept for a learning team); MIT licensed, matching the team's
+    free-software preference.
   reason: >
-    No .csproj/.sln exists yet, so there is no runnable test command. Test
-    framework (xUnit / NUnit / MSTest) is still an open decision. Re-detect
-    once the first .csproj is scaffolded as part of an accepted change.
+    No .csproj/.sln exists yet, so there is no runnable test command. The
+    framework is decided but not yet installed. Re-detect once the first
+    .csproj is scaffolded as part of the contract-and-parties change.
+  open_for_design: >
+    How EF Core is tested against Postgres is NOT decided. The EF InMemory
+    provider is rejected: it enforces no constraints and passes tests that
+    fail in production. Design must choose between a real Postgres container
+    and a dedicated Supabase test schema, and must consider splitting CI so
+    the class libraries build and test on Linux while only the WPF project
+    requires Windows.
 
 rules:
   proposal:
