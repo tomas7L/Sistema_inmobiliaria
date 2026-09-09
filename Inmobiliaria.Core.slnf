@@ -1,0 +1,9 @@
+{
+  "solution": {
+    "path": "Inmobiliaria.sln",
+    "projects": [
+      "src\\Inmobiliaria.Domain\\Inmobiliaria.Domain.csproj",
+      "tests\\Inmobiliaria.Domain.Tests\\Inmobiliaria.Domain.Tests.csproj"
+    ]
+  }
+}
