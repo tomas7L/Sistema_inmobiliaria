@@ -22,30 +22,39 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Mientras el proyecto WPF todavía no exista (ej: PRs que solo suben specs),
-      # no hay nada que compilar. Este paso detecta esa situación para no romper
-      # el check por algo que todavía no corresponde validar.
-      - name: Buscar solución .NET
-        id: sln
-        shell: bash
-        run: |
-          if compgen -G "*.sln" > /dev/null; then
-            echo "found=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "found=false" >> "$GITHUB_OUTPUT"
-            echo "No se encontró ningún .sln en la raíz todavía. Nada que compilar en este PR."
-          fi
-
       - name: Setup .NET
-        if: steps.sln.outputs.found == 'true'
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
 
       - name: Restaurar dependencias
-        if: steps.sln.outputs.found == 'true'
         run: dotnet restore
 
       - name: Compilar (Release)
-        if: steps.sln.outputs.found == 'true'
         run: dotnet build --configuration Release --no-restore
+
+  core:
+    name: core
+    # Filtro sin el proyecto WPF: compila y corre los tests en Linux. Es la mitad
+    # mecánica del guard de arquitectura Domain -> WPF/EF (ver design.md, Decision 1).
+    # No es un required check todavía: un admin del repo debe agregarlo al ruleset
+    # de GitHub manualmente una vez que corrió al menos una vez en un PR.
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restaurar dependencias
+        run: dotnet restore Inmobiliaria.Core.slnf
+
+      - name: Compilar (Release)
+        run: dotnet build Inmobiliaria.Core.slnf --configuration Release --no-restore
+
+      - name: Ejecutar tests
+        run: dotnet test Inmobiliaria.Core.slnf --configuration Release --no-build
