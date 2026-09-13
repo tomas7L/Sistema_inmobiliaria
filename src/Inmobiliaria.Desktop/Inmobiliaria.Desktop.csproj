@@ -4,7 +4,14 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <UserSecretsId>67835c18-c2f2-420a-8fa0-1cbaa5bef210</UserSecretsId>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Inmobiliaria.Domain\Inmobiliaria.Domain.csproj" />
