@@ -9,4 +9,10 @@ public sealed class ParkingUnit : Unit
         : base(id, UnitType.ParkingSpace, address)
     {
     }
+
+    /// <summary>EF Core materialization constructor — see <see cref="Unit(Guid, UnitType)"/>.</summary>
+    private ParkingUnit(Guid id)
+        : base(id, UnitType.ParkingSpace)
+    {
+    }
 }

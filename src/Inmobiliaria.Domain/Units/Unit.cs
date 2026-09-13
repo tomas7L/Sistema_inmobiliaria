@@ -22,6 +22,19 @@ public abstract class Unit
         Address = address;
     }
 
+    /// <summary>
+    /// EF Core materialization constructor. <see cref="Address"/> is an owned navigation and
+    /// cannot be constructor-bound by EF, so this overload leaves it for EF to set via the
+    /// property's private setter immediately after construction; it must never be used from
+    /// application code.
+    /// </summary>
+    protected Unit(Guid id, UnitType unitType)
+    {
+        Id = id;
+        UnitType = unitType;
+        Address = null!;
+    }
+
     public void Relocate(Address address)
     {
         ArgumentNullException.ThrowIfNull(address);

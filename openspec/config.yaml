@@ -33,11 +33,44 @@ resolved_decisions:
       The padel system may grow enough to consume the shared organization-level
       quota (MAU, bandwidth, storage) and leave this system without a database.
       Isolating the risk is worth the extra organization.
+    note: >
+      Provisioned 2026-09-13 under a personal Supabase account as a temporary
+      measure, because the team could not access the shared account. The project
+      is to be transferred to a Volkode-owned organization before any real
+      agency data is stored. A transfer moves the project in place (project
+      settings -> transfer), requires the transferring user to be a member of
+      both organizations, and does not change the region. Region is the one
+      setting a transfer cannot fix, so it was chosen correctly up front.
+      Free plan allows 2 active free projects per ACCOUNT across all
+      organizations where the user is Owner or Admin, not per organization.
+  - id: postgres-version
+    resolved: 2026-09-13
+    decision: >
+      The provisioned Supabase project reports PostgreSQL 17.6
+      (x86_64-pc-linux-gnu). Pin the Testcontainers image to postgres:17.6.
+    rationale: >
+      The design forbids guessing this. Testing against a different major
+      version would reintroduce exactly the production-fidelity gap that
+      choosing Testcontainers over the EF InMemory provider was meant to close.
+  - id: data-api-disabled
+    resolved: 2026-09-13
+    decision: >
+      The Supabase Data API (PostgREST) is DISABLED on this project, along with
+      automatic exposure of new tables. Automatic RLS is off.
+    rationale: >
+      The WPF client connects directly through EF Core and Npgsql and never uses
+      supabase-js or the REST API, so an internet-facing HTTP surface over a
+      database holding tenant DNIs and lease contracts would be pure attack
+      surface with no benefit. RLS is off because the EF Core connection
+      authenticates as the table owner and bypasses it; RLS becomes relevant
+      only if `credential-exposure` is later resolved via Supabase Auth with
+      per-user Postgres roles, and would then be enabled deliberately per table.
+      A greyed-out PostgREST service in the dashboard is the expected result.
 
 strict_tdd: false
 
 testing:
-  status: unavailable
+  status: available
   framework: xunit
   framework_chosen: 2026-09-07
   framework_rationale: >
@@ -45,17 +78,23 @@ testing:
     setup/teardown attributes (constructor + IDisposable is plain C#, one less
     framework concept for a learning team); MIT licensed, matching the team's
     free-software preference.
-  reason: >
-    No .csproj/.sln exists yet, so there is no runnable test command. The
-    framework is decided but not yet installed. Re-detect once the first
-    .csproj is scaffolded as part of the contract-and-parties change.
-  open_for_design: >
-    How EF Core is tested against Postgres is NOT decided. The EF InMemory
-    provider is rejected: it enforces no constraints and passes tests that
-    fail in production. Design must choose between a real Postgres container
-    and a dedicated Supabase test schema, and must consider splitting CI so
-    the class libraries build and test on Linux while only the WPF project
-    requires Windows.
+  ef_testing_decision: >
+    design.md Decision 4, resolved 2026-09-13: Testcontainers for .NET
+    (Testcontainers.PostgreSql), image pinned to postgres:17.6 — the exact
+    version the provisioned Supabase project reports (resolved_decisions:
+    postgres-version). The EF InMemory provider was rejected upstream by the
+    proposal (it enforces no constraints and would pass tests that fail in
+    production) and was not revisited. Rejected alternative: a dedicated
+    Supabase test schema (shared-state risk between two developers running
+    tests concurrently, and a live production-grade credential in CI with no
+    fidelity benefit this change actually exercises). The fixture
+    (`tests/Inmobiliaria.Infrastructure.Tests/PostgresFixture.cs`) calls
+    `Database.Migrate()`, never `EnsureCreated()`, so the hand-written
+    deferred-trigger SQL from the migration is actually present when tests
+    run. Docker Desktop is not guaranteed on the office Windows PC, so the
+    fixture skips (does not fail) when the daemon is unreachable locally; the
+    `core` CI job on ubuntu-latest always has Docker, so the gate cannot be
+    bypassed on the way to main.
 
 rules:
   proposal:
@@ -84,10 +123,10 @@ rules:
       - Follow existing code patterns once a first module exists
       - Do not create a .sln/.csproj outside of an accepted change that explicitly scopes it
     tdd: false
-    test_command: ""
+    test_command: "dotnet test Inmobiliaria.Core.slnf --configuration Release"
   verify:
-    test_command: ""
-    build_command: ""
+    test_command: "dotnet test Inmobiliaria.Core.slnf --configuration Release"
+    build_command: "dotnet build Inmobiliaria.sln --configuration Release"
     coverage_threshold: 0
   archive:
     - Warn before merging destructive deltas

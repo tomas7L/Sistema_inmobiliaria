@@ -39,6 +39,20 @@ public class RentSplitTests
     }
 
     [Fact]
+    public void SetUnitShares_SameUnitTwice_IsRejected()
+    {
+        var contract = ContractTestFactory.CreateActive();
+        var unit = Guid.NewGuid();
+
+        // Sums to exactly 100%, so the sum rule alone would let this through. A contract
+        // covering the same unit twice is still nonsense, and the caller should learn that
+        // here rather than from a composite-key violation at save time.
+        var shares = new[] { new UnitShare(unit, 50m), new UnitShare(unit, 50m) };
+
+        Assert.Throws<RentSplitInvariantException>(() => contract.SetUnitShares(shares));
+    }
+
+    [Fact]
     public void ChangeMonthlyRent_LeavesStoredSharesUntouched()
     {
         var contract = ContractTestFactory.CreateActive();

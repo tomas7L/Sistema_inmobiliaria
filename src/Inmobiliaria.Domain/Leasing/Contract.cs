@@ -109,6 +109,15 @@ public sealed class Contract
             throw new RentSplitInvariantException("A contract must cover at least one unit.");
         }
 
+        // Checked before the sum, because two 50% rows for the same unit add up to 100% and
+        // would otherwise pass. The composite primary key on contract_units rejects this too,
+        // but only at save time and with an opaque database error; the caller deserves to be
+        // told which rule it broke while it can still fix the input.
+        if (shares.Select(s => s.UnitId).Distinct().Count() != shares.Count)
+        {
+            throw new RentSplitInvariantException("A unit may appear only once in a contract's rent split.");
+        }
+
         if (shares.Any(s => s.Percentage <= 0m))
         {
             throw new RentSplitInvariantException("Every unit share must be greater than 0%.");

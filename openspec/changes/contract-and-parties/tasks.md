@@ -57,37 +57,41 @@ Chain strategy: pending
 
 ## Slice 2 (PR 2) — Infrastructure: DbContext & EF Mappings — est. 380–450 lines
 
-- [ ] 2.1 Scaffold `Inmobiliaria.Infrastructure` (net10.0 → Domain); add EF Core, Npgsql, `EFCore.NamingConventions` via `Directory.Packages.props`.
-- [ ] 2.2 `InmobiliariaDbContext.cs`: six `DbSet`s (`Parties, Units, Contracts, ContractParties, ContractUnits, ContractDocuments`), `.UseSnakeCaseNamingConvention()`.
-- [ ] 2.3 [P] `PartyConfiguration.cs`: unique index on DNI (nullable-safe), unique index on CUIL. *(party-registry: Natural Key Uniqueness)*
-- [ ] 2.4 [P] `UnitConfiguration.cs`: `HasDiscriminator<string>("unit_type")` mapping Property/Parking; `.OwnsOne(Address)` flattened columns.
-- [ ] 2.5 [P] `ContractConfiguration.cs`: `monthly_rent numeric(14,2)`, `honorarios_percentage numeric(5,2)` nullable CHECK 0–100, status enum as `text` + CHECK via `.HasConversion<string>()`.
-- [ ] 2.6 [P] `ContractPartyConfiguration.cs`: composite PK `(contract_id, party_id, role)`, role enum as `text` + CHECK (no Garante value).
-- [ ] 2.7 [P] `ContractUnitConfiguration.cs`: composite PK `(contract_id, unit_id)`, `share_percentage numeric(9,6)` CHECK `>0 AND <=100`.
-- [ ] 2.8 [P] `ContractDocumentConfiguration.cs`: `DocumentKind` as `text` + CHECK, `uploaded_by` plain `text` column (no FK).
-- [ ] 2.9 `DesignTimeDbContextFactory.cs`: reads `INMOBILIARIA_DB` env var, falls back to an offline placeholder connection string.
-- [ ] 2.10 Wire `dotnet user-secrets` on `Inmobiliaria.Desktop` (`UserSecretsId`, key `ConnectionStrings:SupabasePostgres`); commit `appsettings.json` with **no** `ConnectionStrings` section. **No connection string in any committed file.**
-- [ ] 2.11 Verify: `Inmobiliaria.Infrastructure` builds green on both CI jobs; no migration exists yet.
+**Actual size: ~327 added lines (see apply-progress) — under the 380–450 estimate; no exception needed.**
+
+- [x] 2.1 Scaffold `Inmobiliaria.Infrastructure` (net10.0 → Domain); add EF Core, Npgsql, `EFCore.NamingConventions` via `Directory.Packages.props`.
+- [x] 2.2 `InmobiliariaDbContext.cs`: six `DbSet`s (`Parties, Units, Contracts, ContractParties, ContractUnits, ContractDocuments`), `.UseSnakeCaseNamingConvention()`.
+- [x] 2.3 [P] `PartyConfiguration.cs`: unique index on DNI (nullable-safe), unique index on CUIL. *(party-registry: Natural Key Uniqueness)*
+- [x] 2.4 [P] `UnitConfiguration.cs`: `HasDiscriminator<string>("unit_type")` mapping Property/Parking; `.OwnsOne(Address)` flattened columns.
+- [x] 2.5 [P] `ContractConfiguration.cs`: `monthly_rent numeric(14,2)`, `honorarios_percentage numeric(5,2)` nullable CHECK 0–100, status enum as `text` + CHECK via `.HasConversion<string>()`.
+- [x] 2.6 [P] `ContractPartyConfiguration.cs`: composite PK `(contract_id, party_id, role)`, role enum as `text` + CHECK (no Garante value).
+- [x] 2.7 [P] `ContractUnitConfiguration.cs`: composite PK `(contract_id, unit_id)`, `share_percentage numeric(9,6)` CHECK `>0 AND <=100`.
+- [x] 2.8 [P] `ContractDocumentConfiguration.cs`: `DocumentKind` as `text` + CHECK, `uploaded_by` plain `text` column (no FK).
+- [x] 2.9 `DesignTimeDbContextFactory.cs`: reads `INMOBILIARIA_DB` env var, falls back to an offline placeholder connection string.
+- [x] 2.10 Wire `dotnet user-secrets` on `Inmobiliaria.Desktop` (`UserSecretsId`, key `ConnectionStrings:SupabasePostgres`); commit `appsettings.json` with **no** `ConnectionStrings` section. **No connection string in any committed file.**
+- [x] 2.11 Verify: `Inmobiliaria.Infrastructure` builds green on both CI jobs; no migration exists yet. **Local-equivalent verification only — see Work Unit Evidence in apply-progress; actual GitHub Actions run pending, no PR opened by this agent.**
 
 ## Slice 3 (PR 3) — Initial Migration, Trigger, Testcontainers, `core` Ruleset — est. 450–650 lines
 
-- [ ] 3.1 Generate migration: `dotnet ef migrations add InitialSchema -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure`.
-- [ ] 3.2 Hand-append to `Up`: `CREATE CONSTRAINT TRIGGER contract_units_share_sum ... DEFERRABLE INITIALLY DEFERRED` + `assert_contract_share_sum()` function; matching `DROP TRIGGER`/`DROP FUNCTION` in `Down`. **Must stay `DEFERRABLE INITIALLY DEFERRED`** — EF inserts join rows one at a time, so an immediate trigger fails the first row of every valid multi-unit contract.
-- [ ] 3.3 Confirm the Testcontainers Postgres image tag (`postgres:<major>-alpine`) matches the major version recorded in task P.2 — **verify, do not guess.**
-- [ ] 3.4 `PostgresFixture.cs`: Testcontainers fixture calling `context.Database.Migrate()` — **never `EnsureCreated()`**, which would skip the hand-written trigger SQL and let the invariant test pass against a database with no invariant. Skip with a clear message when Docker is unreachable locally.
-- [ ] 3.5 `SchemaConstraintTests.cs` — deferred trigger rejects a committed split ≠ 100%.
-- [ ] 3.6 `SchemaConstraintTests.cs` — composite PKs reject duplicate `(contract_id, party_id, role)` and duplicate `(contract_id, unit_id)`.
-- [ ] 3.7 `SchemaConstraintTests.cs` — enum CHECK rejects an invalid stored role/status/document-kind value.
-- [ ] 3.8 `SchemaConstraintTests.cs` — TPH round-trip: `PropertyUnit`/`ParkingUnit` persist and read back as their concrete type.
-- [ ] 3.9 `SchemaConstraintTests.cs` — two sequential contracts on one unit both remain readable (no tenancy overwrite). *(unit-registry: Availability Is Derived, Never Stored)*
-- [ ] 3.10 `SchemaConstraintTests.cs` — original + addendum `ContractDocument` coexist for one contract. *(contract-documents: One-to-Many)*
-- [ ] 3.11 `SchemaConstraintTests.cs` — duplicate DNI and duplicate CUIL both rejected by the unique index. *(party-registry: Natural Key Uniqueness)*
-- [ ] 3.12 `.github/workflows/ci.yml`: `core` job runs `dotnet test` (Docker present on ubuntu-latest → Testcontainers tests execute).
-- [ ] 3.13 Update `openspec/config.yaml`: `testing.status: available`, fill `test_command`/`build_command`, record the EF-testing (Testcontainers vs InMemory) decision.
-- [ ] 3.14 Manual smoke check (not CI): apply the migration to the real Supabase project, then one manual insert/read via Npgsql over the real connection (covers pooler/TLS).
+**Actual size: see apply-progress for the authored-line count and Work Unit Evidence.**
+
+- [x] 3.1 Generate migration: `dotnet ef migrations add InitialSchema -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure`. **Deviation**: generated to `Persistence/Migrations/` via `-o Persistence/Migrations` to match design.md's file table (default `-o` would have been project-root `Migrations/`).
+- [x] 3.2 Hand-append to `Up`: `CREATE CONSTRAINT TRIGGER contract_units_share_sum ... DEFERRABLE INITIALLY DEFERRED` + `assert_contract_share_sum()` function; matching `DROP TRIGGER`/`DROP FUNCTION` in `Down`. **Stays `DEFERRABLE INITIALLY DEFERRED`** — verified by test 3.5's positive-control fact, which inserts two contract_units rows one at a time inside one SaveChanges transaction and asserts it commits.
+- [x] 3.3 Confirmed: Testcontainers image pinned to `postgres:17.6` (exact version, not `-alpine`/floating), matching the Postgres major/minor the provisioned Supabase project reports per `openspec/config.yaml` `resolved_decisions: postgres-version`.
+- [x] 3.4 `PostgresFixture.cs`: Testcontainers fixture calling `context.Database.MigrateAsync()` — never `EnsureCreated()`. Skips (does not fail) with an explicit `SkipReason` when Docker is unreachable locally; both `PostgreSqlBuilder.Build()` and `.StartAsync()` are guarded, since `Build()` itself probes the Docker endpoint and throws first when the daemon is down.
+- [x] 3.5 `SchemaConstraintTests.cs` — `DeferredTrigger_RejectsCommittedSplitNotSummingTo100` (rejection) **and** `DeferredTrigger_AllowsValidTwoUnitSplitInsertedRowByRow` (positive control proving the deferred trigger doesn't fail EF's row-by-row inserts for a valid split).
+- [x] 3.6 `SchemaConstraintTests.cs` — `DuplicateContractPartyCompositeKey_Rejected` and `DuplicateContractUnitCompositeKey_Rejected`.
+- [x] 3.7 `SchemaConstraintTests.cs` — `InvalidRoleCheckConstraint_Rejected`, `InvalidStatusCheckConstraint_Rejected`, `InvalidDocumentKindCheckConstraint_Rejected`.
+- [x] 3.8 `SchemaConstraintTests.cs` — `TphRoundTrip_PreservesConcreteUnitType`.
+- [x] 3.9 `SchemaConstraintTests.cs` — `TwoSequentialContractsOnSameUnit_BothRemainReadable`. *(unit-registry: Availability Is Derived, Never Stored)*
+- [x] 3.10 `SchemaConstraintTests.cs` — `OriginalAndAddendumDocuments_CoexistForOneContract`. *(contract-documents: One-to-Many)*
+- [x] 3.11 `SchemaConstraintTests.cs` — `DuplicateDni_RejectedByUniqueIndex`, `DuplicateCuil_RejectedByUniqueIndex`. *(party-registry: Natural Key Uniqueness)*
+- [x] 3.12 `.github/workflows/ci.yml`: no `core` job edit was needed beyond adding the new test project to `Inmobiliaria.Core.slnf` — the existing `dotnet test Inmobiliaria.Core.slnf` step already picks it up (Docker present on ubuntu-latest → Testcontainers tests execute for real there).
+- [x] 3.13 Updated `openspec/config.yaml`: `testing.status: available`, `apply.test_command`/`verify.test_command`/`verify.build_command` filled, `ef_testing_decision` records the Testcontainers-vs-Supabase-schema decision.
+- [ ] 3.14 **NOT DONE — explicitly out of scope for this agent.** The user's instructions for this PR forbid running `dotnet ef database update` or connecting to Supabase in this session ("do not touch the live database"). This manual smoke check (apply the migration to the real Supabase project, one insert/read via Npgsql) is a required **human follow-up after this PR merges**, using the developer's own connection string, which this agent must never see or request.
 - [ ] 3.15 **MANUAL, non-code, admin-only, AFTER `core` has run at least once on a PR:** add `core` as a required status check in the GitHub ruleset. Until this is done, a red `core` job is advisory only and does not block merge.
-- [ ] 3.16 Repo-wide check: no occurrence of "garante" (case-insensitive) in code, schema, or specs.
-- [ ] 3.17 Verify: `build` job id/`name:` still literally `build` after all three CI edits (1.16, 3.12) — the ruleset check must never stop matching.
+- [x] 3.16 Repo-wide check: the only occurrences of "garante" (case-insensitive) are the deliberate ones that document/prove its exclusion — `PartyRole.cs`'s doc comment, `spec.md`'s RFC-2119 requirement that it must not appear, historical `proposal.md`/`exploration.md` narrative predating this slice, and `SchemaConstraintTests.InvalidRoleCheckConstraint_Rejected`, which asserts the DB CHECK rejects `'Garante'` as a role value. No enum member, column value, or identifier named/derived from it exists anywhere.
+- [x] 3.17 Verified: `build` job id/`name:` still literally `build` (`.github/workflows/ci.yml` lines 16-17) after the Slice 1 and Slice 3 CI touches.
 
 ## Key Learnings
 
