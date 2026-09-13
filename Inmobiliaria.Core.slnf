@@ -3,6 +3,7 @@
     "path": "Inmobiliaria.sln",
     "projects": [
       "src\\Inmobiliaria.Domain\\Inmobiliaria.Domain.csproj",
+      "src\\Inmobiliaria.Infrastructure\\Inmobiliaria.Infrastructure.csproj",
       "tests\\Inmobiliaria.Domain.Tests\\Inmobiliaria.Domain.Tests.csproj"
     ]
   }
