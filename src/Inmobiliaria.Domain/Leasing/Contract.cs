@@ -27,11 +27,27 @@ public sealed class Contract
     public IReadOnlyCollection<ContractParty> Parties => _parties;
     public IReadOnlyCollection<ContractUnit> Units => _units;
 
+    /// <summary>
+    /// EF Core materialization only. EF writes the mapped properties through their backing
+    /// fields and rebuilds <see cref="Units"/> from the persisted contract_units rows, so it
+    /// must not run the public constructor's rent-split validation against an empty list.
+    /// </summary>
+    private Contract()
+    {
+    }
+
+    /// <summary>
+    /// A contract is valid from birth: it always covers at least one unit, and the split
+    /// across those units always sums to exactly 100%. A lease that leases nothing cannot
+    /// be constructed. The database trigger is a backstop but cannot catch this case, because
+    /// a row-level trigger never fires for a contract with no contract_units rows at all.
+    /// </summary>
     public Contract(
         Guid id,
         DateOnly startDate,
         DateOnly nominalEndDate,
         decimal monthlyRent,
+        IReadOnlyCollection<UnitShare> unitShares,
         decimal? honorariosPercentage = null)
     {
         if (nominalEndDate < startDate)
@@ -51,12 +67,16 @@ public sealed class Contract
                 nameof(honorariosPercentage));
         }
 
+        ValidateShares(unitShares);
+
         Id = id;
         StartDate = startDate;
         NominalEndDate = nominalEndDate;
         MonthlyRent = monthlyRent;
         HonorariosPercentage = honorariosPercentage;
         Status = ContractStatus.Active;
+
+        ApplyShares(unitShares);
     }
 
     /// <summary>
@@ -102,6 +122,18 @@ public sealed class Contract
     /// </summary>
     public void SetUnitShares(IReadOnlyCollection<UnitShare> shares)
     {
+        ValidateShares(shares);
+
+        _units.Clear();
+        ApplyShares(shares);
+    }
+
+    /// <summary>
+    /// The rent-split invariant, shared by the constructor and <see cref="SetUnitShares"/> so a
+    /// contract can never reach an invalid split by either path.
+    /// </summary>
+    private static void ValidateShares(IReadOnlyCollection<UnitShare> shares)
+    {
         ArgumentNullException.ThrowIfNull(shares);
 
         if (shares.Count == 0)
@@ -127,9 +159,10 @@ public sealed class Contract
         {
             throw new RentSplitInvariantException("Unit shares must sum to exactly 100%.");
         }
+    }
 
-        _units.Clear();
-
+    private void ApplyShares(IReadOnlyCollection<UnitShare> shares)
+    {
         foreach (var share in shares)
         {
             _units.Add(new ContractUnit(Id, share.UnitId, share.Percentage));

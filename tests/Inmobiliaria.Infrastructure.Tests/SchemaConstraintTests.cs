@@ -2,6 +2,7 @@ using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Domain.Parties;
 using Inmobiliaria.Domain.Shared;
 using Inmobiliaria.Domain.Units;
+using Inmobiliaria.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -26,8 +27,33 @@ public sealed class SchemaConstraintTests
     private static Address TestAddress(string number) =>
         new("Fake Street", number, "Springfield", "Buenos Aires", "1000");
 
-    private static Contract NewContract(decimal monthlyRent = 100_000m) =>
-        new(Guid.NewGuid(), new DateOnly(2026, 1, 1), new DateOnly(2027, 12, 31), monthlyRent);
+    private static Contract NewContract(
+        Guid unitId,
+        decimal monthlyRent = 100_000m,
+        decimal? honorariosPercentage = null) =>
+        new(
+            Guid.NewGuid(),
+            new DateOnly(2026, 1, 1),
+            new DateOnly(2027, 12, 31),
+            monthlyRent,
+            [new UnitShare(unitId, 100m)],
+            honorariosPercentage);
+
+    /// <summary>
+    /// Creates a unit, registers it with <paramref name="context"/>, and returns a contract
+    /// covering it at 100%. A contract cannot exist without a unit, and contract_units carries
+    /// a foreign key to units, so every persisted contract needs a real unit row behind it.
+    /// </summary>
+    private static Contract NewContractWithUnit(
+        InmobiliariaDbContext context,
+        decimal monthlyRent = 100_000m,
+        decimal? honorariosPercentage = null)
+    {
+        var unit = new PropertyUnit(Guid.NewGuid(), TestAddress("1"));
+        context.Units.Add(unit);
+
+        return NewContract(unit.Id, monthlyRent, honorariosPercentage);
+    }
 
     [SkippableFact]
     public async Task DeferredTrigger_AllowsValidTwoUnitSplitInsertedRowByRow()
@@ -40,8 +66,12 @@ public sealed class SchemaConstraintTests
         var unitB = new PropertyUnit(Guid.NewGuid(), TestAddress("200"));
         context.Units.AddRange(unitA, unitB);
 
-        var contract = NewContract();
-        contract.SetUnitShares([new UnitShare(unitA.Id, 60m), new UnitShare(unitB.Id, 40m)]);
+        var contract = new Contract(
+            Guid.NewGuid(),
+            new DateOnly(2026, 1, 1),
+            new DateOnly(2027, 12, 31),
+            100_000m,
+            [new UnitShare(unitA.Id, 60m), new UnitShare(unitB.Id, 40m)]);
         context.Contracts.Add(contract);
 
         // EF inserts the two contract_units rows one at a time inside this single
@@ -63,20 +93,22 @@ public sealed class SchemaConstraintTests
 
         await using var context = _fixture.CreateDbContext();
 
-        var unit = new PropertyUnit(Guid.NewGuid(), TestAddress("300"));
-        context.Units.Add(unit);
-        var contract = NewContract();
+        var strayUnit = new PropertyUnit(Guid.NewGuid(), TestAddress("300"));
+        context.Units.Add(strayUnit);
+        var contract = NewContractWithUnit(context);
         context.Contracts.Add(contract);
         await context.SaveChangesAsync();
 
         await using var transaction = await context.Database.BeginTransactionAsync();
 
         // Raw insert deliberately bypasses Contract.SetUnitShares: this proves the DATABASE
-        // trigger — not the domain invariant — rejects a split that never reaches 100%.
+        // trigger — not the domain invariant — rejects a split that does not total 100%.
+        // The contract's own unit already holds 100%, so adding a stray unit at 60% takes
+        // it to 160% and the deferred trigger must reject the commit.
         await context.Database.ExecuteSqlInterpolatedAsync(
             $"""
             INSERT INTO contract_units (contract_id, unit_id, share_percentage)
-            VALUES ({contract.Id}, {unit.Id}, 60)
+            VALUES ({contract.Id}, {strayUnit.Id}, 60)
             """);
 
         await Assert.ThrowsAsync<PostgresException>(() => transaction.CommitAsync());
@@ -92,8 +124,7 @@ public sealed class SchemaConstraintTests
         var unit = new PropertyUnit(Guid.NewGuid(), TestAddress("400"));
         context.Units.Add(unit);
 
-        var contract = NewContract();
-        contract.SetUnitShares([new UnitShare(unit.Id, 100m)]);
+        var contract = NewContract(unit.Id);
         context.Contracts.Add(contract);
         await context.SaveChangesAsync();
 
@@ -122,7 +153,7 @@ public sealed class SchemaConstraintTests
 
         var party = new Party(Guid.NewGuid(), "Ana", "Gomez");
         context.Parties.Add(party);
-        var contract = NewContract();
+        var contract = NewContractWithUnit(context);
         context.Contracts.Add(contract);
         await context.SaveChangesAsync();
 
@@ -143,7 +174,7 @@ public sealed class SchemaConstraintTests
 
         var party = new Party(Guid.NewGuid(), "Bad", "Role");
         context.Parties.Add(party);
-        var contract = NewContract();
+        var contract = NewContractWithUnit(context);
         context.Contracts.Add(contract);
         await context.SaveChangesAsync();
 
@@ -160,7 +191,7 @@ public sealed class SchemaConstraintTests
 
         await using var context = _fixture.CreateDbContext();
 
-        var contract = NewContract();
+        var contract = NewContractWithUnit(context);
         context.Contracts.Add(contract);
         await context.SaveChangesAsync();
 
@@ -177,7 +208,7 @@ public sealed class SchemaConstraintTests
 
         await using var context = _fixture.CreateDbContext();
 
-        var contract = NewContract();
+        var contract = NewContractWithUnit(context);
         context.Contracts.Add(contract);
         await context.SaveChangesAsync();
 
@@ -226,12 +257,12 @@ public sealed class SchemaConstraintTests
         context.Units.Add(unit);
 
         var expiredContract = new Contract(
-            Guid.NewGuid(), new DateOnly(2020, 1, 1), new DateOnly(2021, 12, 31), 80_000m);
-        expiredContract.SetUnitShares([new UnitShare(unit.Id, 100m)]);
+            Guid.NewGuid(), new DateOnly(2020, 1, 1), new DateOnly(2021, 12, 31), 80_000m,
+            [new UnitShare(unit.Id, 100m)]);
 
         var currentContract = new Contract(
-            Guid.NewGuid(), new DateOnly(2026, 1, 1), new DateOnly(2027, 12, 31), 120_000m);
-        currentContract.SetUnitShares([new UnitShare(unit.Id, 100m)]);
+            Guid.NewGuid(), new DateOnly(2026, 1, 1), new DateOnly(2027, 12, 31), 120_000m,
+            [new UnitShare(unit.Id, 100m)]);
 
         context.Contracts.AddRange(expiredContract, currentContract);
         await context.SaveChangesAsync();
@@ -250,7 +281,7 @@ public sealed class SchemaConstraintTests
 
         await using var context = _fixture.CreateDbContext();
 
-        var contract = NewContract();
+        var contract = NewContractWithUnit(context);
         context.Contracts.Add(contract);
 
         context.ContractDocuments.AddRange(
