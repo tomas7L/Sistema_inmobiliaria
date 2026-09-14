@@ -39,6 +39,21 @@ public class RentSplitTests
     }
 
     [Fact]
+    public void Constructor_WithNoUnits_IsRejected()
+    {
+        // design.md Decision 3 accepted that a row-level trigger can never fire for a contract
+        // with no contract_units rows at all, so the database cannot catch this case. The domain
+        // is the only place that can reject a lease which leases nothing, and it must actually
+        // do so rather than merely be documented as doing so.
+        Assert.Throws<RentSplitInvariantException>(() => new Contract(
+            Guid.NewGuid(),
+            new DateOnly(2026, 1, 1),
+            new DateOnly(2027, 12, 31),
+            monthlyRent: 100_000m,
+            unitShares: []));
+    }
+
+    [Fact]
     public void SetUnitShares_SameUnitTwice_IsRejected()
     {
         var contract = ContractTestFactory.CreateActive();

@@ -162,6 +162,43 @@ The sum of `SharePercentage` across all `ContractUnit` rows of a contract MUST e
 - WHEN shares of 60% and 30% are assigned
 - THEN the system MUST reject the split
 
+### Requirement: A Unit Appears at Most Once in a Split
+
+A unit MUST NOT appear more than once in a contract's rent split. This MUST be checked before the
+100% sum rule, because two 50% rows for the same unit total exactly 100% and would otherwise pass.
+
+The composite primary key on `contract_units` rejects this case as well, but only at save time and
+with an opaque database error. The domain check exists so the caller learns which rule it broke
+while it can still correct the input.
+
+#### Scenario: Same unit listed twice rejected
+
+- GIVEN a contract and a single unit
+- WHEN shares of 50% and 50% are assigned, both to that same unit
+- THEN the system MUST reject the split, even though the percentages total 100%
+
+### Requirement: A Contract Covers at Least One Unit From Creation
+
+A `Contract` MUST NOT exist without at least one unit. The rent split MUST be supplied when the
+contract is constructed, so a lease that leases nothing cannot be represented even in memory.
+
+The database cannot enforce this rule. The rent-split constraint trigger is row-level and never
+fires for a contract with no `contract_units` rows at all, so a contract with zero units is
+database-legal. The domain is therefore the only place this rule can live, and it MUST actually
+enforce it rather than merely be documented as doing so.
+
+#### Scenario: Contract constructed without units rejected
+
+- GIVEN a request to create a contract
+- WHEN no unit shares are supplied
+- THEN construction MUST be rejected
+
+#### Scenario: Contract constructed with a valid split accepted
+
+- GIVEN a request to create a contract covering one unit at 100%
+- WHEN it is constructed
+- THEN the contract MUST be created Active with one `ContractUnit` row
+
 ### Requirement: Share Stored as Percentage, Never Amount
 
 `SharePercentage` MUST be stored as a percentage, never as a fixed monetary amount, so it survives

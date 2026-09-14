@@ -19,7 +19,8 @@ public class ContractLifecycleTests
             Guid.NewGuid(),
             new DateOnly(2020, 1, 1),
             new DateOnly(2021, 1, 1),
-            monthlyRent: 100_000m);
+            monthlyRent: 100_000m,
+            unitShares: [new UnitShare(Guid.NewGuid(), 100m)]);
 
         Assert.Equal(ContractStatus.Active, contract.Status);
         Assert.Null(contract.NoticeGivenDate);
