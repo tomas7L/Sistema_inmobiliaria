@@ -128,9 +128,24 @@ rules:
     test_command: "dotnet test Inmobiliaria.Core.slnf --configuration Release"
     build_command: "dotnet build Inmobiliaria.sln --configuration Release"
     coverage_threshold: 0
+    rules:
+      - Verify is MANDATORY for every change. It is never skipped because the tests pass or the
+        work "looks done" — the contract-and-parties verification found two real defects that a
+        green build had hidden.
+      - A requirement with no enforcing test is a FINDING, even when the code is correct. Say
+        plainly which requirements are untested rather than reporting them as covered.
+      - Check every claim a design document makes about an invariant against the actual
+        constructor and mutator code. design.md claimed the domain forbade a contract with zero
+        units; it did not, and only reading the constructor caught it.
+      - Docker must be running so the Testcontainers integration tests execute. A skipped test is
+        a finding, never a pass.
   archive:
     - Warn before merging destructive deltas
     - Cross-check merged specs against linked domain Engram observations for contradictions
+    - NEVER archive a change whose verify report still has unresolved CRITICAL findings. Close
+      them, re-verify, and only then archive.
+    - Amend the delta specs to record any rule that was implemented but never specified, so the
+      archived specification never knows less than the code does.
 
 review_budget_lines: 800
 delivery_strategy: ask-on-risk
