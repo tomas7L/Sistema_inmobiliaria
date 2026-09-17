@@ -96,6 +96,41 @@ testing:
     `core` CI job on ubuntu-latest always has Docker, so the gate cannot be
     bypassed on the way to main.
 
+conventions:
+  - id: confirm-with-a-summary
+    established: 2026-09-16
+    rule: >
+      Every operation that moves money MUST show a summary of what is about to
+      happen before it is confirmed: the previous value, the inputs used, and
+      the resulting value. This is a system-wide principle, not a feature of any
+      one change — it applies to a rent adjustment, to marking a payment, to
+      issuing a receipt, and to anything that follows.
+    rationale: >
+      Confirmation is the exact point where a typing mistake becomes money
+      someone owes. One extra zero in an index multiplies a tenant's rent.
+      Showing the result before it is committed costs almost nothing and catches
+      the error while it is still free; afterwards there is an issued receipt
+      and an angry tenant.
+  - id: whole-peso-amounts
+    established: 2026-09-17
+    rule: >
+      Amounts charged to a tenant or rendered to an owner are whole pesos.
+      A computed amount is TRUNCATED, not rounded: 47,860.80 becomes 47,860.
+      Storage precision stays numeric(14,2) — the two are different things and
+      coexist. Never use floating point for money.
+    rationale: >
+      Evidence, not preference. Every figure on the agency's real receipt is a
+      whole peso: alquiler 507,000; tasa municipal 28,900; recargo 91,260; neto
+      650,542.00. And the owner receipt's honorarios line reads 47,860 where the
+      exact arithmetic gives 47,860.80 — the agency already truncates. Argentine
+      cent coins no longer circulate, so a centavo on an invoice is a figure
+      nobody can pay in cash.
+    open_question: >
+      Whether the agency rounds or truncates is inferred from a single data
+      point (the honorarios line). The team decided to truncate deliberately:
+      one peso does not change anything and it matches the observed behaviour.
+      Confirm with the agency owner when possible.
+
 rules:
   proposal:
     - Reference relevant domain Engram observations (topic_key `domain/*`) instead of restating them
