@@ -97,6 +97,27 @@ testing:
     bypassed on the way to main.
 
 conventions:
+  - id: branch-meaning
+    established: 2026-09-18
+    rule: >
+      `ramatomy` and `ramateo` are individual working branches, unprotected.
+      `develop` is the integration branch and the repository's default branch on
+      GitHub: every slice PR targets it. `main` advances once per change, when
+      that change closes verified and archived — it means "this passed review
+      and tests", never "whatever develop happened to hold". Promoting a change
+      to main is therefore one extra pull request (develop -> main) at the end of
+      each change, and the ruleset requires an approval on it like any other.
+    rationale: >
+      A branch whose meaning is never defined acquires one by accident. The
+      alternative considered was reserving main for the first release the agency
+      can actually run, but that would have left main empty for months, made a
+      public repository look abandoned, and created a special rule to remember
+      with no payoff until then. Advancing main per closed change gives it a real
+      and checkable meaning today.
+    note: >
+      `develop` became the default branch on 2026-09-18. Before that, every new
+      pull request defaulted to `main` as its base and had to be corrected by
+      hand — a recurring source of near-misses.
   - id: confirm-with-a-summary
     established: 2026-09-16
     rule: >

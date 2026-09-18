@@ -46,26 +46,27 @@ owner questions (H.2, H.3 below) — the chain strategy itself is already fixed 
 
 ## Slice 2 — Domain/Leasing arithmetic (PR 2, est. 450–540 lines)
 
-- [ ] 2.1 Create `CombinationRule` enum (`Single`, `Average`) — `src/Inmobiliaria.Domain/Leasing/CombinationRule.cs`
-- [ ] 2.2 Create `RoundingRule` enum (`TruncateToWholePeso`, one member) — `.../Leasing/RoundingRule.cs`
-- [ ] 2.3 Create `AdjustmentClauseIndex` join entity (AdjustmentClauseId, EconomicIndexId, Ordinal) — `.../Leasing/AdjustmentClauseIndex.cs`
-- [ ] 2.4 Create `AdjustmentClause` (ContractId unique, 1..N `AdjustmentClauseIndex`, `CombinationRule` derived from index count, `IntervalMonths` 1–60, `RoundingRule`) — `.../Leasing/AdjustmentClause.cs`
-- [ ] 2.5 Create `AdjustmentKind` enum (`Regular`, `Correction`) — `.../Leasing/AdjustmentKind.cs`
-- [ ] 2.6 Create `RentAdjustmentIndexValue` (ReferencedIndexId, ResolvedIndexId, BasePeriod, BaseLevel, EndPeriod, EndLevel, Variation — snapshotted by value, no FK to the live `IndexValue`) — `.../Leasing/RentAdjustmentIndexValue.cs`
-- [ ] 2.7 Create `RentAdjustment` (no public mutator/setter; factory bound to `Confirm(...)`; `(Kind == Correction) == (CorrectsAdjustmentId != null)`) — `.../Leasing/RentAdjustment.cs`
-- [ ] 2.8 Create `AdjustmentMath`: variation `(end/base - 1) * 100m`, `decimal.Round(.., 6)` once per index; coefficient = average of the rounded variations; returns pending (no coefficient) when base/end periods resolve to different indices (splice refused) — `.../Leasing/AdjustmentMath.cs`
-- [ ] 2.9 Create `AdjustmentProposal` (previous canon; per-index name/base/end period+level/variation; combination; coefficient; **both** untruncated and truncated new canon; effective date; months-late + "no retroactive charge" note) — `.../Leasing/AdjustmentProposal.cs`
-- [ ] 2.10 Create `AdjustmentSchedule`: due date = last confirmed effective date + `IntervalMonths`, else `StartDate + IntervalMonths`; first-of-month guard — `.../Leasing/AdjustmentSchedule.cs`
-- [ ] 2.11 Modify `Contract.cs`: add `AdjustmentClause?` navigation, private `_adjustments` list + `IReadOnlyCollection<RentAdjustment>`, `ConfirmAdjustment(AdjustmentProposal)` — **the single `decimal.Truncate` site**, calling the existing (unchanged) `ChangeMonthlyRent`
-- [ ] 2.12 **[Spec tests 1, 2]** `AdjustmentMathTests`: IPC 8,000→9,440 / RIPTE 1,200,000→1,344,000 average to 15%, $450,000→$517,500 (averaging raw levels must fail this test); ICL-only clause skips averaging
-- [ ] 2.13 **[Spec tests 3, 4, 5]** `AdjustmentMathTruncationTests`: 517,483.73→517,483; 47,860.80→47,860 (never 47,861); 517,483 stays 517,483, never lifted to 517,500
-- [ ] 2.14 **[Spec test 6, domain half]** Assert intermediate arithmetic stays `decimal` and is truncated exactly once, at `Contract.ConfirmAdjustment` — no progressive truncation
-- [ ] 2.15 **[Spec test 8]** `AdjustmentMathTests`: IPC present, RIPTE absent — coefficient stays null, never averaged from a partial set
-- [ ] 2.16 **[Spec tests 11, 12 — SCOPED, partial coverage]** `ContractAdjustmentLateConfirmationTests`: confirming late appends exactly one `RentAdjustment` and no other row (11, partial only); canon afterwards equals the new canon (12). Explicitly assert nothing about retroactive billing — no billing exists yet; **the current-account change owns the real "no retroactive charge" assertion and must re-prove it**
-- [ ] 2.17 **[Spec test 17]** `ContractShareSurvivesAdjustmentTests`: 60/40 two-unit contract keeps shares and 100% sum after `ConfirmAdjustment`
-- [ ] 2.18 **[Spec test 18]** `AdjustmentScheduleTests`: a 3-month-interval clause becomes due on its own schedule, never assumed semiannual
-- [ ] 2.19 **[Extra test, Decision 7]** `AdjustmentMathTests`: base period resolves to index A, end period resolves to index B (post-supersession) → refused, not computed
-- [ ] 2.20 Guardrail check: run `ArchitectureGuardTests` again after the `Contract.cs` edit
+- [x] 2.1 Create `CombinationRule` enum (`Single`, `Average`) — `src/Inmobiliaria.Domain/Leasing/CombinationRule.cs`
+- [x] 2.2 Create `RoundingRule` enum (`TruncateToWholePeso`, one member) — `.../Leasing/RoundingRule.cs`
+- [x] 2.3 Create `AdjustmentClauseIndex` join entity (AdjustmentClauseId, EconomicIndexId, Ordinal) — `.../Leasing/AdjustmentClauseIndex.cs`
+- [x] 2.4 Create `AdjustmentClause` (ContractId unique, 1..N `AdjustmentClauseIndex`, `CombinationRule` derived from index count, `IntervalMonths` 1–60, `RoundingRule`) — `.../Leasing/AdjustmentClause.cs`
+- [x] 2.5 Create `AdjustmentKind` enum (`Regular`, `Correction`) — `.../Leasing/AdjustmentKind.cs`
+- [x] 2.6 Create `RentAdjustmentIndexValue` (ReferencedIndexId, ResolvedIndexId, BasePeriod, BaseLevel, EndPeriod, EndLevel, Variation — snapshotted by value, no FK to the live `IndexValue`) — `.../Leasing/RentAdjustmentIndexValue.cs`
+- [x] 2.7 Create `RentAdjustment` (no public mutator/setter; factory bound to `Confirm(...)`; `(Kind == Correction) == (CorrectsAdjustmentId != null)`) — `.../Leasing/RentAdjustment.cs`
+- [x] 2.8 Create `AdjustmentMath`: variation `(end/base - 1) * 100m`, `decimal.Round(.., 6)` once per index; coefficient = average of the rounded variations; returns pending (no coefficient) when base/end periods resolve to different indices (splice refused) — `.../Leasing/AdjustmentMath.cs`
+- [x] 2.9 Create `AdjustmentProposal` (previous canon; per-index name/base/end period+level/variation; combination; coefficient; **both** untruncated and truncated new canon; effective date; months-late + "no retroactive charge" note) — `.../Leasing/AdjustmentProposal.cs`
+- [x] 2.10 Create `AdjustmentSchedule`: due date = last confirmed effective date + `IntervalMonths`, else `StartDate + IntervalMonths`; first-of-month guard — `.../Leasing/AdjustmentSchedule.cs`
+- [x] 2.11 Modify `Contract.cs`: add `AdjustmentClause?` navigation, private `_adjustments` list + `IReadOnlyCollection<RentAdjustment>`, `AttachAdjustmentClause`, and `ConfirmAdjustment`, which appends the adjustment and applies its already-truncated `NewCanon` through the existing, unchanged `ChangeMonthlyRent`.
+  **CORRECTED 2026-09-18:** this task previously named `Contract.ConfirmAdjustment` as the single `decimal.Truncate` site. That was wrong. Per design.md Decision 4 the single truncation site is **`RentAdjustment.Confirm`**, which truncates before `Contract` ever sees the figure. The implementation follows the design; this task text did not, and the verification phase would otherwise have checked the code against a false statement.
+- [x] 2.12 **[Spec tests 1, 2]** `AdjustmentMathTests`: IPC 8,000→9,440 / RIPTE 1,200,000→1,344,000 average to 15%, $450,000→$517,500 (averaging raw levels must fail this test); ICL-only clause skips averaging
+- [x] 2.13 **[Spec tests 3, 4, 5]** `AdjustmentMathTruncationTests`: 517,483.73→517,483; 47,860.80→47,860 (never 47,861); 517,483 stays 517,483, never lifted to 517,500
+- [x] 2.14 **[Spec test 6, domain half]** Assert intermediate arithmetic stays `decimal` and is truncated exactly once, inside `RentAdjustment.Confirm` — no progressive truncation
+- [x] 2.15 **[Spec test 8]** `AdjustmentMathTests`: IPC present, RIPTE absent — coefficient stays null, never averaged from a partial set
+- [x] 2.16 **[Spec tests 11, 12 — SCOPED, partial coverage]** `ContractAdjustmentLateConfirmationTests`: confirming late appends exactly one `RentAdjustment` and no other row (11, partial only); canon afterwards equals the new canon (12). Explicitly assert nothing about retroactive billing — no billing exists yet; **the current-account change owns the real "no retroactive charge" assertion and must re-prove it**
+- [x] 2.17 **[Spec test 17]** `ContractShareSurvivesAdjustmentTests`: 60/40 two-unit contract keeps shares and 100% sum after `ConfirmAdjustment`
+- [x] 2.18 **[Spec test 18]** `AdjustmentScheduleTests`: a 3-month-interval clause becomes due on its own schedule, never assumed semiannual
+- [x] 2.19 **[Extra test, Decision 7]** `AdjustmentMathTests`: base period resolves to index A, end period resolves to index B (post-supersession) → refused, not computed
+- [x] 2.20 Guardrail check: run `ArchitectureGuardTests` again after the `Contract.cs` edit
 
 ## Slice 3 — EF configurations + migration (PR 3, est. 420–520 lines)
 
