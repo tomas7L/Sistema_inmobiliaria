@@ -26,6 +26,16 @@ public sealed class AdjustmentClause
     public CombinationRule Combination =>
         _indices.Count == 1 ? CombinationRule.Single : CombinationRule.Average;
 
+    /// <summary>
+    /// EF Core materialization only. EF writes the mapped properties through their backing
+    /// fields and rebuilds <see cref="Indices"/> from the persisted rows, so it must not go
+    /// through the public constructor — that one takes a list of index ids, which is not a
+    /// mapped property and which EF therefore cannot bind.
+    /// </summary>
+    private AdjustmentClause()
+    {
+    }
+
     public AdjustmentClause(
         Guid id,
         Guid contractId,

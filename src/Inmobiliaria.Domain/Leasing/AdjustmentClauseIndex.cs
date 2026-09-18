@@ -13,6 +13,15 @@ public sealed class AdjustmentClauseIndex
     public Guid EconomicIndexId { get; }
     public int Ordinal { get; }
 
+    /// <summary>
+    /// EF Core materialization only. Every new type reachable from a mapped entity needs this,
+    /// including one whose constructor parameters look bindable: EF refused this constructor
+    /// too, and the integration tests are what proved it.
+    /// </summary>
+    private AdjustmentClauseIndex()
+    {
+    }
+
     internal AdjustmentClauseIndex(Guid adjustmentClauseId, Guid economicIndexId, int ordinal)
     {
         if (ordinal < 0)

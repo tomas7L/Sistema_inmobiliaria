@@ -20,6 +20,15 @@ public sealed class RentAdjustmentIndexValue
     public decimal EndLevel { get; }
     public decimal Variation { get; }
 
+    /// <summary>
+    /// EF Core materialization only. <see cref="IndexPeriod"/> is a value type EF maps as a
+    /// complex type, and a constructor parameter can never be bound to one, so EF must build the
+    /// instance empty and write every mapped member through its backing field.
+    /// </summary>
+    private RentAdjustmentIndexValue()
+    {
+    }
+
     public RentAdjustmentIndexValue(
         Guid referencedIndexId,
         Guid resolvedIndexId,

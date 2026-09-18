@@ -70,6 +70,13 @@ owner questions (H.2, H.3 below) — the chain strategy itself is already fixed 
 
 ## Slice 3 — EF configurations + migration (PR 3, est. 420–520 lines)
 
+- [ ] 3.0 **DO THIS FIRST.** Delete the four `modelBuilder.Ignore<...>()` calls from
+  `InmobiliariaDbContext.OnModelCreating`. Slice 2 added them because `Contract` gained navigations
+  to types that had no mapping yet, so EF discovered them by convention and failed model validation.
+  **If they are left in place, every configuration written below is silently ignored and the
+  migration generates nothing for these tables** — a failure that produces no error at all, which is
+  the worst kind. Removing them is what makes these four types persistent.
+
 - [ ] 3.1 Create `EconomicIndexConfiguration`: partial unique index on `name` `WHERE discontinued_from IS NULL`; CHECK `successor_index_id <> id` — `src/Inmobiliaria.Infrastructure/Persistence/Configurations/EconomicIndexConfiguration.cs`
 - [ ] 3.2 Create `IndexValueConfiguration`: UNIQUE `(economic_index_id, period)`; CHECK `level > 0`; `level numeric(18,6)` (index level, not money); `HasConversion` for `IndexPeriod` → `date` with CHECK `EXTRACT(DAY FROM period) = 1`
 - [ ] 3.3 Create `AdjustmentClauseConfiguration`: UNIQUE `contract_id`; CHECK `combination IN ('Single','Average')`; CHECK `interval_months BETWEEN 1 AND 60`

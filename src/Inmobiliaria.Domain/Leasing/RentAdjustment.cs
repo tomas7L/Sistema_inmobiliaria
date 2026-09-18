@@ -19,6 +19,16 @@ public sealed class RentAdjustment
     public DateTimeOffset ConfirmedAt { get; }
     public IReadOnlyList<RentAdjustmentIndexValue> IndexValues { get; }
 
+    /// <summary>
+    /// EF Core materialization only. EF writes the mapped properties through their backing
+    /// fields and rebuilds <see cref="IndexValues"/> from the persisted rows. It cannot use the
+    /// constructor below, because a constructor parameter can never be bound to a navigation.
+    /// </summary>
+    private RentAdjustment()
+    {
+        IndexValues = [];
+    }
+
     private RentAdjustment(
         Guid id,
         Guid contractId,
