@@ -2,9 +2,9 @@
 
 ## Scope of this batch
 
-Slice 1 (`Domain/Indices`, PR 1) — tasks 1.1–1.9 — and Slice 2 (`Domain/Leasing` arithmetic +
-`Contract` wiring, PR 2) — tasks 2.1–2.20 — are both complete. Slices 3–4 are untouched: no EF
-configurations, migration, or worklist read model exist in this change.
+Slice 1 (`Domain/Indices`, PR 1) — tasks 1.1–1.9 —, Slice 2 (`Domain/Leasing` arithmetic +
+`Contract` wiring, PR 2) — tasks 2.1–2.20 —, and Slice 3 (EF configurations + migration, PR 3) —
+tasks 3.0–3.16 — are all complete. Slice 4 (worklist read model + adapter) is untouched.
 
 ## Slice 1 — Completed Tasks
 
@@ -166,11 +166,133 @@ Risks below — this is reported honestly rather than undercounted.
 None in the implemented code. The line-count overage above is a delivery-process issue, not a
 code defect.
 
-## Remaining Tasks (not in this batch's scope)
+## Slice 3 — Completed Tasks
 
-- [ ] Slice 3 — EF configurations + migration (PR 3, tasks 3.1–3.16)
-- [ ] Slice 4 — Worklist read model + adapter (PR 4, tasks 4.1–4.9)
-- [ ] Human follow-ups H.1–H.5 (non-code)
+- [x] 3.0 Deleted the four `modelBuilder.Ignore<...>()` calls from `InmobiliariaDbContext.OnModelCreating`
+- [x] 3.1 `EconomicIndexConfiguration` — partial unique index on `name` `WHERE discontinued_from IS NULL`; CHECK `successor_index_id <> id`
+- [x] 3.2 `IndexValueConfiguration` — UNIQUE `(economic_index_id, period)`; CHECK `level > 0`; `level numeric(18,6)`; `IndexPeriod` → `date` conversion with CHECK `EXTRACT(DAY FROM period) = 1`
+- [x] 3.3 `AdjustmentClauseConfiguration` — UNIQUE `contract_id` (via the 1:1 relationship, not a separate index); CHECK `interval_months BETWEEN 1 AND 60` — `combination` column NOT created, see deviation below
+- [x] 3.4 `AdjustmentClauseIndexConfiguration` — composite key `(adjustment_clause_id, economic_index_id)`
+- [x] 3.5 `RentAdjustmentConfiguration` — `previous_canon`/`new_canon` `numeric(14,2)`; `coefficient numeric(12,6)`; CHECK `(kind='Correction') = (corrects_adjustment_id IS NOT NULL)`; CHECK day-of-month = 1 on `effective_date`; `SetAfterSaveBehavior(PropertySaveBehavior.Throw)` looped over every property
+- [x] 3.6 `RentAdjustmentIndexValueConfiguration` — composite key `(rent_adjustment_id, referenced_index_id)` via a shadow `RentAdjustmentId` FK property (the entity has no id/FK property of its own by design); `base_level`/`end_level` `numeric(18,6)`; `variation numeric(12,6)`
+- [x] 3.7 `InmobiliariaDbContext.cs` modified: removed the four `Ignore<>()` calls, registered six new `DbSet<T>`s (not five, see deviation below)
+- [x] 3.8 Generated migration `AddRentAdjustments` via `dotnet ef migrations add` — confirmed **six `CREATE TABLE`s, zero `ALTER TABLE`** (not five, see deviation below)
+- [x] 3.9 Hand-edited the migration's `Up`/`Down`: appended a plain `BEFORE UPDATE OR DELETE ON rent_adjustments` trigger + function that unconditionally raises (NOT a deferred constraint trigger, per design.md Decision 6's explicit distinction from the share-sum trigger); `Down` drops trigger then function first
+- [x] 3.10 Guardrail: `20260913215911_InitialSchema.cs` and its `.Designer.cs` are byte-for-byte unmodified (`git diff` empty); `InmobiliariaDbContextModelSnapshot.cs` diff is purely additive (zero removed lines), confirming no pre-existing table definition changed
+- [x] 3.11 `SchemaConstraintTests.NumericColumnPrecision_MatchesMoneyAndIndexLevelConventions` — spec test 6 integration half: reads `information_schema.columns`, asserts `numeric(14,2)` on `previous_canon`/`new_canon` and `numeric(18,6)` on `level`/`base_level`/`end_level`
+- [x] 3.12 `SchemaConstraintTests.AppendOnlyTrigger_RejectsRawUpdateAndDelete` — spec test 13: raw SQL `UPDATE` and `DELETE` on `rent_adjustments` both throw `PostgresException`
+- [x] 3.13 `SchemaConstraintTests.CorrectingAnIndexValue_LeavesTheConfirmedAdjustmentUnchangedAndAppendsACorrection` — spec test 14: correcting an `IndexValue.Level` after a confirmed adjustment leaves the original `rent_adjustments` row's `Coefficient`/`Kind`/`CorrectsAdjustmentId` unchanged; a second, `Correction`-kind row coexists naming the first as `CorrectsAdjustmentId`
+- [x] 3.14 Guardrail: `PostgresFixture` unchanged (`git diff` empty after reverting temporary debug logging) — still calls `Database.MigrateAsync()`, never `EnsureCreated()`, still pinned to `postgres:17.6`
+- [x] 3.15 Guardrail: `dotnet test Inmobiliaria.Core.slnf -c Release` runs both `Inmobiliaria.Domain.Tests` and `Inmobiliaria.Infrastructure.Tests`; no `.slnf` edit needed
+- [x] 3.16 Guardrail: grepped the full diff and every new file for `password`/`secret`/connection-string patterns — none found
+
+## Slice 3 — Files Changed
+
+| File | Action | What Was Done |
+|---|---|---|
+| `src/Inmobiliaria.Infrastructure/Persistence/Configurations/IndexPeriodValueConverter.cs` | Created | Shared `ValueConverter<IndexPeriod, DateOnly>` (nullable and non-nullable), reused by three configurations |
+| `src/Inmobiliaria.Infrastructure/Persistence/Configurations/EconomicIndexConfiguration.cs` | Created | `economic_indices`: partial unique index, self-successor CHECK |
+| `src/Inmobiliaria.Infrastructure/Persistence/Configurations/IndexValueConfiguration.cs` | Created | `index_values`: UNIQUE `(economic_index_id, period)`, `level > 0` CHECK, day-1 CHECK |
+| `src/Inmobiliaria.Infrastructure/Persistence/Configurations/AdjustmentClauseConfiguration.cs` | Created | `adjustment_clauses`: 1:1 with `Contract` (unique FK), interval CHECK, `Combination` ignored |
+| `src/Inmobiliaria.Infrastructure/Persistence/Configurations/AdjustmentClauseIndexConfiguration.cs` | Created | `adjustment_clause_indices`: composite key, FKs to `AdjustmentClause` (cascade) and `EconomicIndex` (restrict) |
+| `src/Inmobiliaria.Infrastructure/Persistence/Configurations/RentAdjustmentConfiguration.cs` | Created | `rent_adjustments`: money/coefficient precision, two CHECKs, after-save-throw on every property |
+| `src/Inmobiliaria.Infrastructure/Persistence/Configurations/RentAdjustmentIndexValueConfiguration.cs` | Created | `rent_adjustment_index_values`: shadow-FK composite key, level precision |
+| `src/Inmobiliaria.Infrastructure/Persistence/Configurations/ContractConfiguration.cs` | Modified | Added `builder.Navigation(c => c.Adjustments).UsePropertyAccessMode(PropertyAccessMode.Field)` (+1 line) |
+| `src/Inmobiliaria.Infrastructure/Persistence/InmobiliariaDbContext.cs` | Modified | Removed the four `Ignore<>()` calls; added six `DbSet<T>` properties |
+| `src/Inmobiliaria.Infrastructure/Persistence/Migrations/20260918233049_AddRentAdjustments.cs` | Created | Six `CREATE TABLE`s (EF-generated) + hand-written append-only trigger SQL in `Up`/`Down` (authored) |
+| `src/Inmobiliaria.Infrastructure/Persistence/Migrations/20260918233049_AddRentAdjustments.Designer.cs` | Created | EF-generated, fully boilerplate |
+| `src/Inmobiliaria.Infrastructure/Persistence/Migrations/InmobiliariaDbContextModelSnapshot.cs` | Modified | EF-generated, purely additive diff |
+| `tests/Inmobiliaria.Infrastructure.Tests/SchemaConstraintTests.cs` | Modified | Added two seeding helpers + 3 new tests (spec tests 6/13/14) |
+
+Authored lines (excluding EF-generated `CREATE TABLE`/`CREATE INDEX`/`.Designer.cs`/model-snapshot
+boilerplate): 7 new configuration files (329) + `ContractConfiguration.cs` (+1) +
+`InmobiliariaDbContext.cs` (+11/−17, net −6 but 28 changed) + `SchemaConstraintTests.cs` (+180) +
+hand-written trigger SQL in the migration's `Up`/`Down` (~30) ≈ **568 changed lines**, against the
+tasks.md/design.md estimate of 420–520 for PR3. Reported honestly — see Risks below; the
+implementation was already complete, tested, and working by the time the count was totalled, so it
+was finished and reported rather than discarded mid-task, consistent with how Slice 2's own
+overage was handled.
+
+## Slice 3 — Deviations from Design (IMPORTANT for verify)
+
+1. **Six tables, not five.** `design.md`'s summary prose ("five new EF configurations", "the
+   migration issues five `CREATE TABLE`s") and `tasks.md`'s own task 3.7/3.8 text ("register the
+   five new `DbSet<T>`s", "confirm the diff is exactly five `CREATE TABLE`s") both say **five**.
+   But `design.md`'s own Decision 3 table — the detailed mapping table, which the orchestrator
+   prompt named as "the authority... on the mapping" — lists **six** distinct tables with full
+   column specs: `economic_indices`, `index_values`, `adjustment_clauses`,
+   `adjustment_clause_indices`, `rent_adjustments`, `rent_adjustment_index_values`. Both join
+   tables (`adjustment_clause_indices`, `rent_adjustment_index_values`) are explicitly described
+   with their own composite keys and columns, exactly like the already-existing `contract_units`/
+   `contract_parties` join tables from lease-contract (which also each get their own table and
+   `DbSet`, per the six *existing* configurations already in this codebase). There is no way to
+   satisfy the spec's requirements (one clause holding 1..N ordered indices; one adjustment holding
+   N snapshotted per-index values) in fewer than six physical tables without inventing an
+   unrequested JSON-column mapping that design.md never mentions and that would contradict the
+   explicit relational column types (`numeric(18,6)` etc.) it gives for those very fields.
+   Followed the detailed Decision 3 table (six tables) over the summary prose's miscount (five),
+   per the instruction to follow design.md as the mapping authority; flagging the internal
+   inconsistency rather than silently picking one. The generated migration is exactly six
+   `CREATE TABLE`s and zero `ALTER TABLE` — confirmed by reading the generated file.
+2. **`AdjustmentClause.Combination` is not a stored column.** `design.md` Decision 3 lists
+   `adjustment_clauses.combination text` with `CHECK combination IN ('Single','Average')`, and
+   task 3.3 asks for that CHECK. But `AdjustmentClause.Combination` (from Slice 2) is a pure
+   expression-bodied getter (`_indices.Count == 1 ? Single : Average`) with no setter and no
+   backing field of its own — EF cannot materialize a value into it on load, since there is
+   nowhere to write it. Mapping it as a real column would require adding a backing field to
+   `AdjustmentClause.cs`, a domain change outside this slice's EF-configuration-only scope (Slice 3
+   tasks are exclusively "EF configs + migration"; no domain file is listed). `builder.Ignore(c =>
+   c.Combination)` is used instead: the value is always correctly re-derived at runtime from the
+   loaded `Indices` collection, with zero risk of a stored copy going stale against the rows that
+   are the actual source of truth. The `combination` column and its CHECK do not exist in the
+   migration. Flagged for verify: this is an intentional, justified gap, not an oversight, and it
+   should be raised with the design as either (a) accept the derived-only reading, or (b) a small
+   Slice-2-territory domain follow-up to give `Combination` a constructor-set backing field if a
+   physical CHECK is genuinely required later.
+3. **`ReferencedIndexId`/`ResolvedIndexId` on `RentAdjustmentIndexValue` have no FK constraint to
+   `economic_indices`.** Design explicitly frames them as "ids for display and traceability only
+   — the numbers themselves are copies, never re-derived," which reads as a soft reference rather
+   than a hard relational integrity requirement. Left as plain `uuid` columns to keep the mapping
+   simple and avoid two ambiguous same-target relationships needing extra disambiguation. Not
+   requested by task 3.6 either way; noted as a minor, deliberate simplification.
+4. **A real EF Core gotcha surfaced and was fixed in the test, not the domain**: appending a
+   second `RentAdjustment` to an *already-tracked* `Contract`'s `_adjustments` field (as
+   `Contract.ConfirmAdjustment` does, with zero EF awareness by design) is not automatically
+   inferred as an `Added` entity by EF's `DetectChanges` — a newly-discovered entity with a
+   non-default, client-assigned `Guid` key reached only through a collection-navigation diff (not
+   through an explicit `context.Add(...)`) defaults to `Unchanged`, since EF cannot distinguish
+   "freshly constructed" from "already exists." The parent `RentAdjustment` insert then gets
+   silently dropped from the batch while its child `rent_adjustment_index_values` row still
+   attempts to insert, failing its foreign key — no exception at all until that FK violation.
+   `SchemaConstraintTests.CorrectingAnIndexValue_LeavesTheConfirmedAdjustmentUnchangedAndAppendsACorrection`
+   fixes this with an explicit `context.RentAdjustments.Add(correction);` before the second
+   `SaveChangesAsync`. **This is a real, load-bearing finding for the future application/use-case
+   layer** (out of scope for this change per design.md's scope guard): any code that confirms a
+   correction (or any second adjustment) against a `Contract` that is already tracked in the same
+   `DbContext` lifetime MUST make the same explicit `Add` call, or the correction will silently
+   fail to persist its parent row. Recorded here so the eventual worklist/confirmation UI change
+   does not rediscover this the hard way.
+5. Everything else matches `design.md`'s Decision 1 (levels not variations), Decision 2 (`IndexPeriod`
+   → `date` with day-1 CHECK), Decision 3 (remaining columns/precisions), Decision 5 (no `contracts`
+   column, FK lives on `adjustment_clauses.contract_id`), and Decision 6 (plain, non-deferred
+   `BEFORE UPDATE OR DELETE` trigger — explicitly not the share-sum trigger's shape) as written.
+
+## Slice 3 — Issues Found
+
+None beyond the two deviations above (six-vs-five table count, `Combination` not persisted), both
+of which are legitimate design/tasks gaps rather than implementation defects, and the EF
+change-tracking gotcha (deviation 4), which is fixed and documented rather than an open issue.
+
+## Work Unit Evidence (Slice 3)
+
+| Evidence | Value |
+|---|---|
+| Focused test command and exact result | `dotnet test tests/Inmobiliaria.Infrastructure.Tests -c Release --filter "FullyQualifiedName~SchemaConstraint"` → 15/15 passed, 0 skipped (Docker was available; every `[SkippableFact]` ran for real, not skipped) |
+| Full solution build | `dotnet build Inmobiliaria.sln -c Release` → 0 warnings, 0 errors |
+| Full test suite | `dotnet test Inmobiliaria.Core.slnf -c Release` → Domain.Tests 52/52 passed; Infrastructure.Tests 15/15 passed; 0 skipped, 0 failed across both projects |
+| Architecture guard | `dotnet test tests/Inmobiliaria.Domain.Tests -c Release --filter "FullyQualifiedName~ArchitectureGuard"` → 1/1 passed |
+| Runtime harness command/scenario and exact result | `dotnet ef migrations add AddRentAdjustments -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure` (design-time, no live DB — per `DesignTimeDbContextFactory`) generated cleanly with zero model-validation errors; the three `SchemaConstraintTests` additions above then exercised the generated schema for real against `postgres:17.6` via Testcontainers (append-only trigger, correction coexistence, `information_schema.columns` precision) — `dotnet ef database update` was deliberately never run against any real/Supabase connection, per the hard constraint not to touch the live database |
+| Rollback boundary | `dotnet ef migrations remove -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure` (never applied to any real database, so no `database update` rollback is needed); delete the 7 new `Configurations/*.cs` files, the 2 new `Migrations/20260918233049_AddRentAdjustments*.cs` files; revert `InmobiliariaDbContext.cs`, `ContractConfiguration.cs`, `InmobiliariaDbContextModelSnapshot.cs`, and `SchemaConstraintTests.cs`; PR1/PR2 (pure domain, never persisted before this slice) are entirely unaffected |
 
 ## Work Unit Evidence (Slice 2)
 
@@ -183,7 +305,7 @@ code defect.
 | Runtime harness | N/A — pure domain, no DB, no Testcontainers boundary in this slice |
 | Rollback boundary | Revert the `Contract.cs` diff; delete every new `Leasing/Adjustment*.cs`, `Leasing/CombinationRule.cs`, `Leasing/RoundingRule.cs`, `Leasing/RentAdjustment*.cs` file and its matching test file; PR1 (`Indices/*`) is unaffected |
 
-## Workload / PR Boundary
+## Workload / PR Boundary (Slice 2)
 
 - Mode: chained PR slice (`stacked-to-main`, target branch `develop` per session preflight)
 - Current work unit: Unit 2 — Clause + adjustment arithmetic + `Contract` wiring (PR 2)
@@ -196,7 +318,28 @@ code defect.
   Slice 1 (5 domain files there vs. 10 here, plus the `Contract` wiring and 7 test files with
   the numbered spec-test evidence tasks 2.12–2.19 explicitly require).
 
+## Workload / PR Boundary (Slice 3)
+
+- Mode: chained PR slice (`stacked-to-main`, target branch `develop` per session preflight)
+- Current work unit: Unit 3 — EF configurations + migration + trigger (PR 3)
+- Boundary: starts from Slice 2's persisted-nowhere domain (already merged) and ends with the
+  full domain graph mapped and migrated — six `CREATE TABLE`s, the append-only trigger, and three
+  new integration tests proving spec tests 6/13/14 against a real `postgres:17.6`; `dotnet ef
+  database update` deliberately never run against any live/Supabase connection
+- Estimated review budget impact: **≈568 changed lines against the 420–520 PR3 estimate** (7 new
+  configuration files: 329; `ContractConfiguration.cs`: +1; `InmobiliariaDbContext.cs`: +11/−17;
+  `SchemaConstraintTests.cs`: +180; hand-written migration trigger SQL: ≈30 — EF-generated
+  `CREATE TABLE`/`CREATE INDEX`/`.Designer.cs`/model-snapshot content excluded per instructions).
+  About 9% over the top of the estimated range, driven mainly by the two join-table configurations
+  and the shadow-FK handling for `RentAdjustmentIndexValue` that `design.md`'s own "five tables"
+  summary undercounted (see Deviation 1) plus three real integration tests. Reported honestly per
+  the same convention as Slice 2's overage; the work was already complete and fully tested by the
+  time the count was totalled, so it was finished rather than discarded mid-task.
+
 ## Status
 
-9/9 Slice 1 tasks + 20/20 Slice 2 tasks complete (29/49 total across all four slices). Ready for
-verify on Slices 1–2, or for a delivery decision on PR2's size before it is opened (see Risks).
+9/9 Slice 1 tasks + 20/20 Slice 2 tasks + 17/17 Slice 3 tasks complete (46/55 total across all four
+slices — corrected denominator: 9+20+17+9=55 code tasks; the prior "29/49" note undercounted it).
+Ready for verify on Slices 1–3, or for a delivery decision on PR2's and PR3's size before either is
+opened (see Risks). Slice 4 (worklist read model + adapter, tasks 4.1–4.9) and the non-code human
+follow-ups H.1–H.5 remain.
