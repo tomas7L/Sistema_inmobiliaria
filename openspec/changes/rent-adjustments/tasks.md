@@ -70,29 +70,29 @@ owner questions (H.2, H.3 below) — the chain strategy itself is already fixed 
 
 ## Slice 3 — EF configurations + migration (PR 3, est. 420–520 lines)
 
-- [ ] 3.0 **DO THIS FIRST.** Delete the four `modelBuilder.Ignore<...>()` calls from
+- [x] 3.0 **DO THIS FIRST.** Delete the four `modelBuilder.Ignore<...>()` calls from
   `InmobiliariaDbContext.OnModelCreating`. Slice 2 added them because `Contract` gained navigations
   to types that had no mapping yet, so EF discovered them by convention and failed model validation.
   **If they are left in place, every configuration written below is silently ignored and the
   migration generates nothing for these tables** — a failure that produces no error at all, which is
   the worst kind. Removing them is what makes these four types persistent.
 
-- [ ] 3.1 Create `EconomicIndexConfiguration`: partial unique index on `name` `WHERE discontinued_from IS NULL`; CHECK `successor_index_id <> id` — `src/Inmobiliaria.Infrastructure/Persistence/Configurations/EconomicIndexConfiguration.cs`
-- [ ] 3.2 Create `IndexValueConfiguration`: UNIQUE `(economic_index_id, period)`; CHECK `level > 0`; `level numeric(18,6)` (index level, not money); `HasConversion` for `IndexPeriod` → `date` with CHECK `EXTRACT(DAY FROM period) = 1`
-- [ ] 3.3 Create `AdjustmentClauseConfiguration`: UNIQUE `contract_id`; CHECK `combination IN ('Single','Average')`; CHECK `interval_months BETWEEN 1 AND 60`
-- [ ] 3.4 Create `AdjustmentClauseIndexConfiguration`: composite key `(adjustment_clause_id, economic_index_id)`
-- [ ] 3.5 Create `RentAdjustmentConfiguration`: `previous_canon`/`new_canon` `numeric(14,2)`; `coefficient numeric(12,6)`; CHECK `(kind='Correction') = (corrects_adjustment_id IS NOT NULL)`; CHECK day=1 on `effective_date`; `SetAfterSaveBehavior(PropertySaveBehavior.Throw)` on every property
-- [ ] 3.6 Create `RentAdjustmentIndexValueConfiguration`: composite key `(rent_adjustment_id, referenced_index_id)`; `base_level`/`end_level` `numeric(18,6)` (levels, never `numeric(14,2)`); `variation numeric(12,6)`
-- [ ] 3.7 Modify `InmobiliariaDbContext.cs`: register the five new `DbSet<T>`s
-- [ ] 3.8 Generate migration: `dotnet ef migrations add AddRentAdjustments -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure`; confirm the diff is exactly **five `CREATE TABLE`s, zero `ALTER TABLE`**
-- [ ] 3.9 Hand-edit the generated migration's `Up`: append `migrationBuilder.Sql(...)` for the `BEFORE UPDATE OR DELETE ON rent_adjustments` trigger + function that unconditionally raises; `Down` drops trigger and function first — `.../Migrations/*_AddRentAdjustments.cs`
-- [ ] 3.10 **Guardrail**: diff `20260913215911_InitialSchema.cs`, its `.Designer.cs`, and `InmobiliariaDbContextModelSnapshot.cs` — confirm the pre-existing migration file is byte-for-byte unmodified (the snapshot legitimately grows, the historical migration must not change)
-- [ ] 3.11 **[Spec test 6, integration half]** `SchemaConstraintTests`: read `information_schema.columns`, assert `numeric(14,2)` on canon columns and `numeric(18,6)` on level columns
-- [ ] 3.12 **[Spec test 13]** `SchemaConstraintTests`: raw SQL `UPDATE` and `DELETE` on `rent_adjustments` MUST fail — proves the append-only trigger at the database level
-- [ ] 3.13 **[Spec test 14]** `SchemaConstraintTests`: correcting an `IndexValue.Level` after a confirmed adjustment leaves the original `rent_adjustments` row unchanged; a second correcting row coexists
-- [ ] 3.14 **Guardrail**: confirm `PostgresFixture` still calls `Database.Migrate()` (never `EnsureCreated()`) and the image stays pinned to `postgres:17.6` — verification only, no fixture edit expected
-- [ ] 3.15 **Guardrail**: `dotnet test Inmobiliaria.Core.slnf` still runs both test projects; no new test project was created this slice, so no `.slnf` edit is needed
-- [ ] 3.16 **Guardrail**: grep the full diff for connection strings/secrets before opening the PR — none expected, Testcontainers supplies its own
+- [x] 3.1 Create `EconomicIndexConfiguration`: partial unique index on `name` `WHERE discontinued_from IS NULL`; CHECK `successor_index_id <> id` — `src/Inmobiliaria.Infrastructure/Persistence/Configurations/EconomicIndexConfiguration.cs`
+- [x] 3.2 Create `IndexValueConfiguration`: UNIQUE `(economic_index_id, period)`; CHECK `level > 0`; `level numeric(18,6)` (index level, not money); `HasConversion` for `IndexPeriod` → `date` with CHECK `EXTRACT(DAY FROM period) = 1`
+- [x] 3.3 Create `AdjustmentClauseConfiguration`: UNIQUE `contract_id`; CHECK `interval_months BETWEEN 1 AND 60` — **`combination` column/CHECK NOT created, see apply-progress deviation note**
+- [x] 3.4 Create `AdjustmentClauseIndexConfiguration`: composite key `(adjustment_clause_id, economic_index_id)`
+- [x] 3.5 Create `RentAdjustmentConfiguration`: `previous_canon`/`new_canon` `numeric(14,2)`; `coefficient numeric(12,6)`; CHECK `(kind='Correction') = (corrects_adjustment_id IS NOT NULL)`; CHECK day=1 on `effective_date`; `SetAfterSaveBehavior(PropertySaveBehavior.Throw)` on every property
+- [x] 3.6 Create `RentAdjustmentIndexValueConfiguration`: composite key `(rent_adjustment_id, referenced_index_id)`; `base_level`/`end_level` `numeric(18,6)` (levels, never `numeric(14,2)`); `variation numeric(12,6)`
+- [x] 3.7 Modify `InmobiliariaDbContext.cs`: register the new `DbSet<T>`s — **six, not five, see apply-progress deviation note**
+- [x] 3.8 Generate migration: `dotnet ef migrations add AddRentAdjustments -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure`; confirm the diff is exactly **six `CREATE TABLE`s (not five — see apply-progress deviation note), zero `ALTER TABLE`**
+- [x] 3.9 Hand-edit the generated migration's `Up`: append `migrationBuilder.Sql(...)` for the `BEFORE UPDATE OR DELETE ON rent_adjustments` trigger + function that unconditionally raises; `Down` drops trigger and function first — `.../Migrations/*_AddRentAdjustments.cs`
+- [x] 3.10 **Guardrail**: diff `20260913215911_InitialSchema.cs`, its `.Designer.cs`, and `InmobiliariaDbContextModelSnapshot.cs` — confirm the pre-existing migration file is byte-for-byte unmodified (the snapshot legitimately grows, the historical migration must not change)
+- [x] 3.11 **[Spec test 6, integration half]** `SchemaConstraintTests`: read `information_schema.columns`, assert `numeric(14,2)` on canon columns and `numeric(18,6)` on level columns
+- [x] 3.12 **[Spec test 13]** `SchemaConstraintTests`: raw SQL `UPDATE` and `DELETE` on `rent_adjustments` MUST fail — proves the append-only trigger at the database level
+- [x] 3.13 **[Spec test 14]** `SchemaConstraintTests`: correcting an `IndexValue.Level` after a confirmed adjustment leaves the original `rent_adjustments` row unchanged; a second correcting row coexists
+- [x] 3.14 **Guardrail**: confirm `PostgresFixture` still calls `Database.Migrate()` (never `EnsureCreated()`) and the image stays pinned to `postgres:17.6` — verification only, no fixture edit expected
+- [x] 3.15 **Guardrail**: `dotnet test Inmobiliaria.Core.slnf` still runs both test projects; no new test project was created this slice, so no `.slnf` edit is needed
+- [x] 3.16 **Guardrail**: grep the full diff for connection strings/secrets before opening the PR — none expected, Testcontainers supplies its own
 
 ## Slice 4 — Worklist read model + adapter (PR 4, est. 380–460 lines)
 

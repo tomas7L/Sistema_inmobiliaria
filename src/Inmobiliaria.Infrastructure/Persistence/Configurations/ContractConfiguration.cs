@@ -54,5 +54,6 @@ public sealed class ContractConfiguration : IEntityTypeConfiguration<Contract>
 
         builder.Navigation(c => c.Parties).UsePropertyAccessMode(PropertyAccessMode.Field);
         builder.Navigation(c => c.Units).UsePropertyAccessMode(PropertyAccessMode.Field);
+        builder.Navigation(c => c.Adjustments).UsePropertyAccessMode(PropertyAccessMode.Field);
     }
 }
