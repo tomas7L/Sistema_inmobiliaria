@@ -34,6 +34,20 @@ public sealed class InmobiliariaDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // The rent-adjustment types exist in the domain but are not persisted yet: their EF
+        // configurations and their migration are the next slice. EF discovers types by
+        // convention through navigations, so the moment Contract gained `AdjustmentClause` and
+        // `Adjustments`, EF pulled all four into the model and failed validation on mappings
+        // that do not exist yet.
+        //
+        // Ignoring them states the current truth rather than working around it — in this slice
+        // they genuinely have no tables. The next slice deletes these four lines and adds the
+        // configurations in the same commit, so the diff reads as "these become persistent".
+        modelBuilder.Ignore<AdjustmentClause>();
+        modelBuilder.Ignore<AdjustmentClauseIndex>();
+        modelBuilder.Ignore<RentAdjustment>();
+        modelBuilder.Ignore<RentAdjustmentIndexValue>();
+
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(InmobiliariaDbContext).Assembly);
     }
 }

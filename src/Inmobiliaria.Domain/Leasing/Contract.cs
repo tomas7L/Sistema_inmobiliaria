@@ -12,6 +12,7 @@ public sealed class Contract
 {
     private readonly List<ContractParty> _parties = [];
     private readonly List<ContractUnit> _units = [];
+    private readonly List<RentAdjustment> _adjustments = [];
 
     public Guid Id { get; }
     public DateOnly StartDate { get; }
@@ -24,8 +25,16 @@ public sealed class Contract
     public ContractStatus Status { get; private set; }
     public EndReason? EndReason { get; private set; }
 
+    /// <summary>
+    /// A contract MAY have no adjustment clause at all (spec "Adjustment Clause Is Optional").
+    /// Absence is the absence of a row, never a null check on a stored column (design Decision
+    /// 5): this is a plain EF navigation, not a mapped column.
+    /// </summary>
+    public AdjustmentClause? AdjustmentClause { get; private set; }
+
     public IReadOnlyCollection<ContractParty> Parties => _parties;
     public IReadOnlyCollection<ContractUnit> Units => _units;
+    public IReadOnlyCollection<RentAdjustment> Adjustments => _adjustments;
 
     /// <summary>
     /// EF Core materialization only. EF writes the mapped properties through their backing
@@ -91,6 +100,48 @@ public sealed class Contract
         }
 
         MonthlyRent = monthlyRent;
+    }
+
+    /// <summary>
+    /// Attaches this contract's one <see cref="AdjustmentClause"/>. Rejects a clause recorded
+    /// for a different contract; a clause is created once and never reassigned here.
+    /// </summary>
+    public void AttachAdjustmentClause(AdjustmentClause clause)
+    {
+        ArgumentNullException.ThrowIfNull(clause);
+
+        if (clause.ContractId != Id)
+        {
+            throw new ArgumentException("An adjustment clause must belong to this contract.", nameof(clause));
+        }
+
+        AdjustmentClause = clause;
+    }
+
+    /// <summary>
+    /// Confirms a rent adjustment: appends a new <see cref="RentAdjustment"/> to the append-only
+    /// history and updates <see cref="MonthlyRent"/> to its already-truncated
+    /// <see cref="RentAdjustment.NewCanon"/> via the existing, unchanged
+    /// <see cref="ChangeMonthlyRent"/> — truncation itself happens exactly once, inside
+    /// <see cref="RentAdjustment.Confirm"/> (design Decision 4), before this method ever sees
+    /// the number. Per-unit shares are left untouched by <see cref="ChangeMonthlyRent"/>, so
+    /// they still sum to exactly 100% afterward (spec "Share Stored as Percentage, Never
+    /// Amount"). No retroactive charge is generated for a late confirmation — this method only
+    /// ever changes the canon going forward; billing does not exist in this change.
+    /// </summary>
+    public RentAdjustment ConfirmAdjustment(
+        Guid adjustmentId,
+        AdjustmentProposal proposal,
+        DateTimeOffset confirmedAt,
+        AdjustmentKind kind = AdjustmentKind.Regular,
+        Guid? correctsAdjustmentId = null)
+    {
+        var adjustment = RentAdjustment.Confirm(adjustmentId, Id, proposal, confirmedAt, kind, correctsAdjustmentId);
+
+        ChangeMonthlyRent(adjustment.NewCanon);
+        _adjustments.Add(adjustment);
+
+        return adjustment;
     }
 
     /// <summary>
