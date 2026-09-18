@@ -34,15 +34,15 @@ owner questions (H.2, H.3 below) — the chain strategy itself is already fixed 
 
 ## Slice 1 — Domain/Indices (PR 1, est. 400–480 lines)
 
-- [ ] 1.1 Create `IndexPeriod` readonly record struct (Year, Month, `AddMonths`) — `src/Inmobiliaria.Domain/Indices/IndexPeriod.cs`
-- [ ] 1.2 Create `EconomicIndex` (Id, Name, `DiscontinuedFrom?`, `SuccessorIndexId?`, `MarkDiscontinued(period, successor?)` rejecting self-reference) — `.../Indices/EconomicIndex.cs`
-- [ ] 1.3 Create `IndexValue` (Id, EconomicIndexId, Period, Level with `level > 0` guard, `Correct(newLevel)`) — `.../Indices/IndexValue.cs`
-- [ ] 1.4 Create `IndexResolution` result type: `Resolved(EconomicIndex)` / `Unresolved(reason)` — `.../Indices/IndexResolution.cs`
-- [ ] 1.5 Create `IndexResolver.Resolve(index, period)`: walk `SuccessorIndexId` while `period >= DiscontinuedFrom`, 8-hop cap — `.../Indices/IndexResolver.cs`
-- [ ] 1.6 **[Spec test 15]** `IndexResolverTests`: one successor hop resolves; period before discontinuation still uses the original index — `tests/Inmobiliaria.Domain.Tests/IndexResolverTests.cs`
-- [ ] 1.7 `EconomicIndexTests`: discontinuation with no successor still accepted; self-successor rejected
-- [ ] 1.8 `IndexValueTests`: level ≤ 0 rejected; `Correct` replaces level in place, id stable
-- [ ] 1.9 Guardrail check: run `ArchitectureGuardTests` — new files add no EF Core/Npgsql/WPF reference to `Inmobiliaria.Domain`
+- [x] 1.1 Create `IndexPeriod` readonly record struct (Year, Month, `AddMonths`) — `src/Inmobiliaria.Domain/Indices/IndexPeriod.cs`
+- [x] 1.2 Create `EconomicIndex` (Id, Name, `DiscontinuedFrom?`, `SuccessorIndexId?`, `MarkDiscontinued(period, successor?)` rejecting self-reference) — `.../Indices/EconomicIndex.cs`
+- [x] 1.3 Create `IndexValue` (Id, EconomicIndexId, Period, Level with `level > 0` guard, `Correct(newLevel)`) — `.../Indices/IndexValue.cs`
+- [x] 1.4 Create `IndexResolution` result type: `Resolved(EconomicIndex)` / `Unresolved(reason)` — `.../Indices/IndexResolution.cs`
+- [x] 1.5 Create `IndexResolver.Resolve(index, period)`: walk `SuccessorIndexId` while `period >= DiscontinuedFrom`, 8-hop cap — `.../Indices/IndexResolver.cs` (signature grew a third `catalog` parameter — see apply-progress deviation note)
+- [x] 1.6 **[Spec test 15]** `IndexResolverTests`: one successor hop resolves; period before discontinuation still uses the original index — `tests/Inmobiliaria.Domain.Tests/IndexResolverTests.cs`
+- [x] 1.7 `EconomicIndexTests`: discontinuation with no successor still accepted; self-successor rejected
+- [x] 1.8 `IndexValueTests`: level ≤ 0 rejected; `Correct` replaces level in place, id stable
+- [x] 1.9 Guardrail check: run `ArchitectureGuardTests` — new files add no EF Core/Npgsql/WPF reference to `Inmobiliaria.Domain`
 
 ## Slice 2 — Domain/Leasing arithmetic (PR 2, est. 450–540 lines)
 
