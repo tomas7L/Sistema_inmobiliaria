@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build
+    # WPF y WinForms solo compilan en Windows (SDK Microsoft.NET.Sdk.WindowsDesktop).
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restaurar dependencias
+        run: dotnet restore
+
+      - name: Compilar (Release)
+        run: dotnet build --configuration Release --no-restore
+
+  core:
+    name: core
+    # Filtro sin el proyecto WPF: compila y corre los tests en Linux. Es la mitad
+    # mecánica del guard de arquitectura Domain -> WPF/EF (ver design.md, Decision 1).
+    # No es un required check todavía: un admin del repo debe agregarlo al ruleset
+    # de GitHub manualmente una vez que corrió al menos una vez en un PR.
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restaurar dependencias
+        run: dotnet restore Inmobiliaria.Core.slnf
+
+      - name: Compilar (Release)
+        run: dotnet build Inmobiliaria.Core.slnf --configuration Release --no-restore
+
+      - name: Ejecutar tests
+        run: dotnet test Inmobiliaria.Core.slnf --configuration Release --no-build

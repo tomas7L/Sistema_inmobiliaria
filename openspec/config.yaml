@@ -1,0 +1,186 @@
+schema: spec-driven
+
+context: |
+  Sistema_inmobiliaria: WPF + MVVM desktop app (.NET 10 LTS, CommunityToolkit.Mvvm)
+  for a single real-estate agency (Del Lago), 2 trusted internal users.
+  Data: Supabase Postgres via EF Core + Npgsql directly from the WPF client (no API).
+  File storage: Supabase Storage (signed lease PDFs). Email: SMTP for notices.
+  No .sln/.csproj yet — deliberate, spec-first. Do not scaffold app code before specs.
+  PDF library and scheduler mechanism not yet chosen. See `open_decisions` below.
+
+open_decisions:
+  - id: credential-exposure
+    summary: >
+      Direct Npgsql connection ships the DB connection string on the client
+      machine, making UI-level Admin/Empleado role separation cosmetic.
+      Undecided: accept for 2 trusted users, or move to Supabase Auth with
+      real Postgres roles/RLS.
+  - id: scheduler-mechanism
+    summary: >
+      Automated notifications (60/30/15 days before due) must fire while the
+      desktop app is closed. Undecided: Supabase pg_cron + Edge Function, or
+      a console executable run as a Windows Scheduled Task.
+  - id: pdf-library
+    summary: PDF generation library not yet chosen.
+
+resolved_decisions:
+  - id: supabase-org
+    resolved: 2026-09-07
+    decision: >
+      This project gets its OWN Supabase organization. It does not share one
+      with the team's other (padel) system.
+    rationale: >
+      The padel system may grow enough to consume the shared organization-level
+      quota (MAU, bandwidth, storage) and leave this system without a database.
+      Isolating the risk is worth the extra organization.
+    note: >
+      Provisioned 2026-09-13 under a personal Supabase account as a temporary
+      measure, because the team could not access the shared account. The project
+      is to be transferred to a Volkode-owned organization before any real
+      agency data is stored. A transfer moves the project in place (project
+      settings -> transfer), requires the transferring user to be a member of
+      both organizations, and does not change the region. Region is the one
+      setting a transfer cannot fix, so it was chosen correctly up front.
+      Free plan allows 2 active free projects per ACCOUNT across all
+      organizations where the user is Owner or Admin, not per organization.
+  - id: postgres-version
+    resolved: 2026-09-13
+    decision: >
+      The provisioned Supabase project reports PostgreSQL 17.6
+      (x86_64-pc-linux-gnu). Pin the Testcontainers image to postgres:17.6.
+    rationale: >
+      The design forbids guessing this. Testing against a different major
+      version would reintroduce exactly the production-fidelity gap that
+      choosing Testcontainers over the EF InMemory provider was meant to close.
+  - id: data-api-disabled
+    resolved: 2026-09-13
+    decision: >
+      The Supabase Data API (PostgREST) is DISABLED on this project, along with
+      automatic exposure of new tables. Automatic RLS is off.
+    rationale: >
+      The WPF client connects directly through EF Core and Npgsql and never uses
+      supabase-js or the REST API, so an internet-facing HTTP surface over a
+      database holding tenant DNIs and lease contracts would be pure attack
+      surface with no benefit. RLS is off because the EF Core connection
+      authenticates as the table owner and bypasses it; RLS becomes relevant
+      only if `credential-exposure` is later resolved via Supabase Auth with
+      per-user Postgres roles, and would then be enabled deliberately per table.
+      A greyed-out PostgREST service in the dashboard is the expected result.
+
+strict_tdd: false
+
+testing:
+  status: available
+  framework: xunit
+  framework_chosen: 2026-09-07
+  framework_rationale: >
+    Used by the .NET team itself, so answers exist when something breaks; no
+    setup/teardown attributes (constructor + IDisposable is plain C#, one less
+    framework concept for a learning team); MIT licensed, matching the team's
+    free-software preference.
+  ef_testing_decision: >
+    design.md Decision 4, resolved 2026-09-13: Testcontainers for .NET
+    (Testcontainers.PostgreSql), image pinned to postgres:17.6 — the exact
+    version the provisioned Supabase project reports (resolved_decisions:
+    postgres-version). The EF InMemory provider was rejected upstream by the
+    proposal (it enforces no constraints and would pass tests that fail in
+    production) and was not revisited. Rejected alternative: a dedicated
+    Supabase test schema (shared-state risk between two developers running
+    tests concurrently, and a live production-grade credential in CI with no
+    fidelity benefit this change actually exercises). The fixture
+    (`tests/Inmobiliaria.Infrastructure.Tests/PostgresFixture.cs`) calls
+    `Database.Migrate()`, never `EnsureCreated()`, so the hand-written
+    deferred-trigger SQL from the migration is actually present when tests
+    run. Docker Desktop is not guaranteed on the office Windows PC, so the
+    fixture skips (does not fail) when the daemon is unreachable locally; the
+    `core` CI job on ubuntu-latest always has Docker, so the gate cannot be
+    bypassed on the way to main.
+
+conventions:
+  - id: confirm-with-a-summary
+    established: 2026-09-16
+    rule: >
+      Every operation that moves money MUST show a summary of what is about to
+      happen before it is confirmed: the previous value, the inputs used, and
+      the resulting value. This is a system-wide principle, not a feature of any
+      one change — it applies to a rent adjustment, to marking a payment, to
+      issuing a receipt, and to anything that follows.
+    rationale: >
+      Confirmation is the exact point where a typing mistake becomes money
+      someone owes. One extra zero in an index multiplies a tenant's rent.
+      Showing the result before it is committed costs almost nothing and catches
+      the error while it is still free; afterwards there is an issued receipt
+      and an angry tenant.
+  - id: whole-peso-amounts
+    established: 2026-09-17
+    rule: >
+      Amounts charged to a tenant or rendered to an owner are whole pesos.
+      A computed amount is TRUNCATED, not rounded: 47,860.80 becomes 47,860.
+      Storage precision stays numeric(14,2) — the two are different things and
+      coexist. Never use floating point for money.
+    rationale: >
+      Evidence, not preference. Every figure on the agency's real receipt is a
+      whole peso: alquiler 507,000; tasa municipal 28,900; recargo 91,260; neto
+      650,542.00. And the owner receipt's honorarios line reads 47,860 where the
+      exact arithmetic gives 47,860.80 — the agency already truncates. Argentine
+      cent coins no longer circulate, so a centavo on an invoice is a figure
+      nobody can pay in cash.
+    open_question: >
+      Whether the agency rounds or truncates is inferred from a single data
+      point (the honorarios line). The team decided to truncate deliberately:
+      one peso does not change anything and it matches the observed behaviour.
+      Confirm with the agency owner when possible.
+
+rules:
+  proposal:
+    - Reference relevant domain Engram observations (topic_key `domain/*`) instead of restating them
+    - Include rollback plan for risky changes
+    - Flag any of the four `open_decisions` above that the proposal touches, without resolving them silently
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+    - Domain terms without a clean English equivalent that appear on legal documents
+      (locador, locatario, codeudor, recargo, honorarios, tasa municipal, sellado
+      provincial, ICL, IPC, RIPTE) may be kept as domain vocabulary with an English
+      gloss on first use; structure, prose, and identifiers otherwise stay English
+  design:
+    - Document architecture decisions with rationale
+    - Model receipt/collection concepts as catalog + lines, not fixed columns
+      (per domain/cobranza-definiciones-confirmadas — buys the right to start
+      before all data questions are answered)
+  tasks:
+    - Group by phase, use hierarchical numbering
+    - Keep tasks completable in one session
+    - Respect the review budget declared in `review_budget_lines` below (ask-on-risk
+      delivery strategy); recommend chained PRs when a work unit is forecast to exceed it
+  apply:
+    guidelines:
+      - Follow existing code patterns once a first module exists
+      - Do not create a .sln/.csproj outside of an accepted change that explicitly scopes it
+    tdd: false
+    test_command: "dotnet test Inmobiliaria.Core.slnf --configuration Release"
+  verify:
+    test_command: "dotnet test Inmobiliaria.Core.slnf --configuration Release"
+    build_command: "dotnet build Inmobiliaria.sln --configuration Release"
+    coverage_threshold: 0
+    rules:
+      - Verify is MANDATORY for every change. It is never skipped because the tests pass or the
+        work "looks done" — the contract-and-parties verification found two real defects that a
+        green build had hidden.
+      - A requirement with no enforcing test is a FINDING, even when the code is correct. Say
+        plainly which requirements are untested rather than reporting them as covered.
+      - Check every claim a design document makes about an invariant against the actual
+        constructor and mutator code. design.md claimed the domain forbade a contract with zero
+        units; it did not, and only reading the constructor caught it.
+      - Docker must be running so the Testcontainers integration tests execute. A skipped test is
+        a finding, never a pass.
+  archive:
+    - Warn before merging destructive deltas
+    - Cross-check merged specs against linked domain Engram observations for contradictions
+    - NEVER archive a change whose verify report still has unresolved CRITICAL findings. Close
+      them, re-verify, and only then archive.
+    - Amend the delta specs to record any rule that was implemented but never specified, so the
+      archived specification never knows less than the code does.
+
+review_budget_lines: 800
+delivery_strategy: ask-on-risk
