@@ -96,15 +96,15 @@ owner questions (H.2, H.3 below) — the chain strategy itself is already fixed 
 
 ## Slice 4 — Worklist read model + adapter (PR 4, est. 380–460 lines)
 
-- [ ] 4.1 Create `MissingIndexValue` and `DueAdjustment` records — `src/Inmobiliaria.Domain/Leasing/DueAdjustment.cs`
-- [ ] 4.2 Create `IDueAdjustmentQuery` port: `Task<IReadOnlyList<DueAdjustment>> GetDueAsync(DateOnly asOf, CancellationToken ct = default)` — `.../Leasing/IDueAdjustmentQuery.cs`
-- [ ] 4.3 Create `DueAdjustmentQuery` adapter: query starts **from** `adjustment_clauses` (never `contracts`), joins `contracts` filtered `Status == Active`; computes coefficient/proposed canon only when every referenced index value resolves, else fills `Missing` and leaves `Coefficient`/`ProposedCanon` null — `src/Inmobiliaria.Infrastructure/Persistence/DueAdjustmentQuery.cs`
-- [ ] 4.4 **[Spec test 16]** `DueAdjustmentQueryTests`: a contract with no `AdjustmentClause` never appears in `GetDueAsync` — `tests/Inmobiliaria.Infrastructure.Tests/DueAdjustmentQueryTests.cs`
-- [ ] 4.5 **[Spec test 9]** `DueAdjustmentQueryTests`: three contracts awaiting IPC 2026-08 are returned, each naming IPC + period 2026-08 in `Missing`
-- [ ] 4.6 **[Spec test 7]** `DueAdjustmentQueryTests`: with the required value missing, `Coefficient`/`ProposedCanon` stay null and the previous canon is unaffected
-- [ ] 4.7 **[Spec test 10]** `DueAdjustmentQueryTests`: once IPC 2026-08 is entered, none of the three contracts appears as waiting
-- [ ] 4.8 Assert directly, in at least one test: `Coefficient is null ⟺ Missing.Count > 0`
-- [ ] 4.9 **Guardrail**: confirm CI's `build` and `core` job names are unchanged in `.github/workflows/ci.yml` — this slice adds files, not jobs
+- [x] 4.1 Create `MissingIndexValue` and `DueAdjustment` records — `src/Inmobiliaria.Domain/Leasing/DueAdjustment.cs`
+- [x] 4.2 Create `IDueAdjustmentQuery` port: `Task<IReadOnlyList<DueAdjustment>> GetDueAsync(DateOnly asOf, CancellationToken ct = default)` — `.../Leasing/IDueAdjustmentQuery.cs`
+- [x] 4.3 Create `DueAdjustmentQuery` adapter: query starts **from** `adjustment_clauses` (never `contracts`), joins `contracts` filtered `Status == Active`; computes coefficient/proposed canon only when every referenced index value resolves, else fills `Missing` and leaves `Coefficient`/`ProposedCanon` null — `src/Inmobiliaria.Infrastructure/Persistence/DueAdjustmentQuery.cs`
+- [x] 4.4 **[Spec test 16]** `DueAdjustmentQueryTests`: a contract with no `AdjustmentClause` never appears in `GetDueAsync` — `tests/Inmobiliaria.Infrastructure.Tests/DueAdjustmentQueryTests.cs`
+- [x] 4.5 **[Spec test 9]** `DueAdjustmentQueryTests`: three contracts awaiting IPC 2026-08 are returned, each naming IPC + period 2026-08 in `Missing`
+- [x] 4.6 **[Spec test 7]** `DueAdjustmentQueryTests`: with the required value missing, `Coefficient`/`ProposedCanon` stay null and the previous canon is unaffected
+- [x] 4.7 **[Spec test 10]** `DueAdjustmentQueryTests`: once IPC 2026-08 is entered, none of the three contracts appears as waiting
+- [x] 4.8 Assert directly, in at least one test: `Coefficient is null ⟺ Missing.Count > 0`
+- [x] 4.9 **Guardrail**: confirm CI's `build` and `core` job names are unchanged in `.github/workflows/ci.yml` — this slice adds files, not jobs
 
 ## Human Follow-Ups (non-code, not assigned to any agent)
 
