@@ -46,57 +46,65 @@ owner questions (H.2, H.3 below) — the chain strategy itself is already fixed 
 
 ## Slice 2 — Domain/Leasing arithmetic (PR 2, est. 450–540 lines)
 
-- [ ] 2.1 Create `CombinationRule` enum (`Single`, `Average`) — `src/Inmobiliaria.Domain/Leasing/CombinationRule.cs`
-- [ ] 2.2 Create `RoundingRule` enum (`TruncateToWholePeso`, one member) — `.../Leasing/RoundingRule.cs`
-- [ ] 2.3 Create `AdjustmentClauseIndex` join entity (AdjustmentClauseId, EconomicIndexId, Ordinal) — `.../Leasing/AdjustmentClauseIndex.cs`
-- [ ] 2.4 Create `AdjustmentClause` (ContractId unique, 1..N `AdjustmentClauseIndex`, `CombinationRule` derived from index count, `IntervalMonths` 1–60, `RoundingRule`) — `.../Leasing/AdjustmentClause.cs`
-- [ ] 2.5 Create `AdjustmentKind` enum (`Regular`, `Correction`) — `.../Leasing/AdjustmentKind.cs`
-- [ ] 2.6 Create `RentAdjustmentIndexValue` (ReferencedIndexId, ResolvedIndexId, BasePeriod, BaseLevel, EndPeriod, EndLevel, Variation — snapshotted by value, no FK to the live `IndexValue`) — `.../Leasing/RentAdjustmentIndexValue.cs`
-- [ ] 2.7 Create `RentAdjustment` (no public mutator/setter; factory bound to `Confirm(...)`; `(Kind == Correction) == (CorrectsAdjustmentId != null)`) — `.../Leasing/RentAdjustment.cs`
-- [ ] 2.8 Create `AdjustmentMath`: variation `(end/base - 1) * 100m`, `decimal.Round(.., 6)` once per index; coefficient = average of the rounded variations; returns pending (no coefficient) when base/end periods resolve to different indices (splice refused) — `.../Leasing/AdjustmentMath.cs`
-- [ ] 2.9 Create `AdjustmentProposal` (previous canon; per-index name/base/end period+level/variation; combination; coefficient; **both** untruncated and truncated new canon; effective date; months-late + "no retroactive charge" note) — `.../Leasing/AdjustmentProposal.cs`
-- [ ] 2.10 Create `AdjustmentSchedule`: due date = last confirmed effective date + `IntervalMonths`, else `StartDate + IntervalMonths`; first-of-month guard — `.../Leasing/AdjustmentSchedule.cs`
-- [ ] 2.11 Modify `Contract.cs`: add `AdjustmentClause?` navigation, private `_adjustments` list + `IReadOnlyCollection<RentAdjustment>`, `ConfirmAdjustment(AdjustmentProposal)` — **the single `decimal.Truncate` site**, calling the existing (unchanged) `ChangeMonthlyRent`
-- [ ] 2.12 **[Spec tests 1, 2]** `AdjustmentMathTests`: IPC 8,000→9,440 / RIPTE 1,200,000→1,344,000 average to 15%, $450,000→$517,500 (averaging raw levels must fail this test); ICL-only clause skips averaging
-- [ ] 2.13 **[Spec tests 3, 4, 5]** `AdjustmentMathTruncationTests`: 517,483.73→517,483; 47,860.80→47,860 (never 47,861); 517,483 stays 517,483, never lifted to 517,500
-- [ ] 2.14 **[Spec test 6, domain half]** Assert intermediate arithmetic stays `decimal` and is truncated exactly once, at `Contract.ConfirmAdjustment` — no progressive truncation
-- [ ] 2.15 **[Spec test 8]** `AdjustmentMathTests`: IPC present, RIPTE absent — coefficient stays null, never averaged from a partial set
-- [ ] 2.16 **[Spec tests 11, 12 — SCOPED, partial coverage]** `ContractAdjustmentLateConfirmationTests`: confirming late appends exactly one `RentAdjustment` and no other row (11, partial only); canon afterwards equals the new canon (12). Explicitly assert nothing about retroactive billing — no billing exists yet; **the current-account change owns the real "no retroactive charge" assertion and must re-prove it**
-- [ ] 2.17 **[Spec test 17]** `ContractShareSurvivesAdjustmentTests`: 60/40 two-unit contract keeps shares and 100% sum after `ConfirmAdjustment`
-- [ ] 2.18 **[Spec test 18]** `AdjustmentScheduleTests`: a 3-month-interval clause becomes due on its own schedule, never assumed semiannual
-- [ ] 2.19 **[Extra test, Decision 7]** `AdjustmentMathTests`: base period resolves to index A, end period resolves to index B (post-supersession) → refused, not computed
-- [ ] 2.20 Guardrail check: run `ArchitectureGuardTests` again after the `Contract.cs` edit
+- [x] 2.1 Create `CombinationRule` enum (`Single`, `Average`) — `src/Inmobiliaria.Domain/Leasing/CombinationRule.cs`
+- [x] 2.2 Create `RoundingRule` enum (`TruncateToWholePeso`, one member) — `.../Leasing/RoundingRule.cs`
+- [x] 2.3 Create `AdjustmentClauseIndex` join entity (AdjustmentClauseId, EconomicIndexId, Ordinal) — `.../Leasing/AdjustmentClauseIndex.cs`
+- [x] 2.4 Create `AdjustmentClause` (ContractId unique, 1..N `AdjustmentClauseIndex`, `CombinationRule` derived from index count, `IntervalMonths` 1–60, `RoundingRule`) — `.../Leasing/AdjustmentClause.cs`
+- [x] 2.5 Create `AdjustmentKind` enum (`Regular`, `Correction`) — `.../Leasing/AdjustmentKind.cs`
+- [x] 2.6 Create `RentAdjustmentIndexValue` (ReferencedIndexId, ResolvedIndexId, BasePeriod, BaseLevel, EndPeriod, EndLevel, Variation — snapshotted by value, no FK to the live `IndexValue`) — `.../Leasing/RentAdjustmentIndexValue.cs`
+- [x] 2.7 Create `RentAdjustment` (no public mutator/setter; factory bound to `Confirm(...)`; `(Kind == Correction) == (CorrectsAdjustmentId != null)`) — `.../Leasing/RentAdjustment.cs`
+- [x] 2.8 Create `AdjustmentMath`: variation `(end/base - 1) * 100m`, `decimal.Round(.., 6)` once per index; coefficient = average of the rounded variations; returns pending (no coefficient) when base/end periods resolve to different indices (splice refused) — `.../Leasing/AdjustmentMath.cs`
+- [x] 2.9 Create `AdjustmentProposal` (previous canon; per-index name/base/end period+level/variation; combination; coefficient; **both** untruncated and truncated new canon; effective date; months-late + "no retroactive charge" note) — `.../Leasing/AdjustmentProposal.cs`
+- [x] 2.10 Create `AdjustmentSchedule`: due date = last confirmed effective date + `IntervalMonths`, else `StartDate + IntervalMonths`; first-of-month guard — `.../Leasing/AdjustmentSchedule.cs`
+- [x] 2.11 Modify `Contract.cs`: add `AdjustmentClause?` navigation, private `_adjustments` list + `IReadOnlyCollection<RentAdjustment>`, `AttachAdjustmentClause`, and `ConfirmAdjustment`, which appends the adjustment and applies its already-truncated `NewCanon` through the existing, unchanged `ChangeMonthlyRent`.
+  **CORRECTED 2026-09-18:** this task previously named `Contract.ConfirmAdjustment` as the single `decimal.Truncate` site. That was wrong. Per design.md Decision 4 the single truncation site is **`RentAdjustment.Confirm`**, which truncates before `Contract` ever sees the figure. The implementation follows the design; this task text did not, and the verification phase would otherwise have checked the code against a false statement.
+- [x] 2.12 **[Spec tests 1, 2]** `AdjustmentMathTests`: IPC 8,000→9,440 / RIPTE 1,200,000→1,344,000 average to 15%, $450,000→$517,500 (averaging raw levels must fail this test); ICL-only clause skips averaging
+- [x] 2.13 **[Spec tests 3, 4, 5]** `AdjustmentMathTruncationTests`: 517,483.73→517,483; 47,860.80→47,860 (never 47,861); 517,483 stays 517,483, never lifted to 517,500
+- [x] 2.14 **[Spec test 6, domain half]** Assert intermediate arithmetic stays `decimal` and is truncated exactly once, inside `RentAdjustment.Confirm` — no progressive truncation
+- [x] 2.15 **[Spec test 8]** `AdjustmentMathTests`: IPC present, RIPTE absent — coefficient stays null, never averaged from a partial set
+- [x] 2.16 **[Spec tests 11, 12 — SCOPED, partial coverage]** `ContractAdjustmentLateConfirmationTests`: confirming late appends exactly one `RentAdjustment` and no other row (11, partial only); canon afterwards equals the new canon (12). Explicitly assert nothing about retroactive billing — no billing exists yet; **the current-account change owns the real "no retroactive charge" assertion and must re-prove it**
+- [x] 2.17 **[Spec test 17]** `ContractShareSurvivesAdjustmentTests`: 60/40 two-unit contract keeps shares and 100% sum after `ConfirmAdjustment`
+- [x] 2.18 **[Spec test 18]** `AdjustmentScheduleTests`: a 3-month-interval clause becomes due on its own schedule, never assumed semiannual
+- [x] 2.19 **[Extra test, Decision 7]** `AdjustmentMathTests`: base period resolves to index A, end period resolves to index B (post-supersession) → refused, not computed
+- [x] 2.20 Guardrail check: run `ArchitectureGuardTests` again after the `Contract.cs` edit
 
 ## Slice 3 — EF configurations + migration (PR 3, est. 420–520 lines)
 
-- [ ] 3.1 Create `EconomicIndexConfiguration`: partial unique index on `name` `WHERE discontinued_from IS NULL`; CHECK `successor_index_id <> id` — `src/Inmobiliaria.Infrastructure/Persistence/Configurations/EconomicIndexConfiguration.cs`
-- [ ] 3.2 Create `IndexValueConfiguration`: UNIQUE `(economic_index_id, period)`; CHECK `level > 0`; `level numeric(18,6)` (index level, not money); `HasConversion` for `IndexPeriod` → `date` with CHECK `EXTRACT(DAY FROM period) = 1`
-- [ ] 3.3 Create `AdjustmentClauseConfiguration`: UNIQUE `contract_id`; CHECK `combination IN ('Single','Average')`; CHECK `interval_months BETWEEN 1 AND 60`
-- [ ] 3.4 Create `AdjustmentClauseIndexConfiguration`: composite key `(adjustment_clause_id, economic_index_id)`
-- [ ] 3.5 Create `RentAdjustmentConfiguration`: `previous_canon`/`new_canon` `numeric(14,2)`; `coefficient numeric(12,6)`; CHECK `(kind='Correction') = (corrects_adjustment_id IS NOT NULL)`; CHECK day=1 on `effective_date`; `SetAfterSaveBehavior(PropertySaveBehavior.Throw)` on every property
-- [ ] 3.6 Create `RentAdjustmentIndexValueConfiguration`: composite key `(rent_adjustment_id, referenced_index_id)`; `base_level`/`end_level` `numeric(18,6)` (levels, never `numeric(14,2)`); `variation numeric(12,6)`
-- [ ] 3.7 Modify `InmobiliariaDbContext.cs`: register the five new `DbSet<T>`s
-- [ ] 3.8 Generate migration: `dotnet ef migrations add AddRentAdjustments -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure`; confirm the diff is exactly **five `CREATE TABLE`s, zero `ALTER TABLE`**
-- [ ] 3.9 Hand-edit the generated migration's `Up`: append `migrationBuilder.Sql(...)` for the `BEFORE UPDATE OR DELETE ON rent_adjustments` trigger + function that unconditionally raises; `Down` drops trigger and function first — `.../Migrations/*_AddRentAdjustments.cs`
-- [ ] 3.10 **Guardrail**: diff `20260913215911_InitialSchema.cs`, its `.Designer.cs`, and `InmobiliariaDbContextModelSnapshot.cs` — confirm the pre-existing migration file is byte-for-byte unmodified (the snapshot legitimately grows, the historical migration must not change)
-- [ ] 3.11 **[Spec test 6, integration half]** `SchemaConstraintTests`: read `information_schema.columns`, assert `numeric(14,2)` on canon columns and `numeric(18,6)` on level columns
-- [ ] 3.12 **[Spec test 13]** `SchemaConstraintTests`: raw SQL `UPDATE` and `DELETE` on `rent_adjustments` MUST fail — proves the append-only trigger at the database level
-- [ ] 3.13 **[Spec test 14]** `SchemaConstraintTests`: correcting an `IndexValue.Level` after a confirmed adjustment leaves the original `rent_adjustments` row unchanged; a second correcting row coexists
-- [ ] 3.14 **Guardrail**: confirm `PostgresFixture` still calls `Database.Migrate()` (never `EnsureCreated()`) and the image stays pinned to `postgres:17.6` — verification only, no fixture edit expected
-- [ ] 3.15 **Guardrail**: `dotnet test Inmobiliaria.Core.slnf` still runs both test projects; no new test project was created this slice, so no `.slnf` edit is needed
-- [ ] 3.16 **Guardrail**: grep the full diff for connection strings/secrets before opening the PR — none expected, Testcontainers supplies its own
+- [x] 3.0 **DO THIS FIRST.** Delete the four `modelBuilder.Ignore<...>()` calls from
+  `InmobiliariaDbContext.OnModelCreating`. Slice 2 added them because `Contract` gained navigations
+  to types that had no mapping yet, so EF discovered them by convention and failed model validation.
+  **If they are left in place, every configuration written below is silently ignored and the
+  migration generates nothing for these tables** — a failure that produces no error at all, which is
+  the worst kind. Removing them is what makes these four types persistent.
+
+- [x] 3.1 Create `EconomicIndexConfiguration`: partial unique index on `name` `WHERE discontinued_from IS NULL`; CHECK `successor_index_id <> id` — `src/Inmobiliaria.Infrastructure/Persistence/Configurations/EconomicIndexConfiguration.cs`
+- [x] 3.2 Create `IndexValueConfiguration`: UNIQUE `(economic_index_id, period)`; CHECK `level > 0`; `level numeric(18,6)` (index level, not money); `HasConversion` for `IndexPeriod` → `date` with CHECK `EXTRACT(DAY FROM period) = 1`
+- [x] 3.3 Create `AdjustmentClauseConfiguration`: UNIQUE `contract_id`; CHECK `interval_months BETWEEN 1 AND 60` — **`combination` column/CHECK NOT created, see apply-progress deviation note**
+- [x] 3.4 Create `AdjustmentClauseIndexConfiguration`: composite key `(adjustment_clause_id, economic_index_id)`
+- [x] 3.5 Create `RentAdjustmentConfiguration`: `previous_canon`/`new_canon` `numeric(14,2)`; `coefficient numeric(12,6)`; CHECK `(kind='Correction') = (corrects_adjustment_id IS NOT NULL)`; CHECK day=1 on `effective_date`; `SetAfterSaveBehavior(PropertySaveBehavior.Throw)` on every property
+- [x] 3.6 Create `RentAdjustmentIndexValueConfiguration`: composite key `(rent_adjustment_id, referenced_index_id)`; `base_level`/`end_level` `numeric(18,6)` (levels, never `numeric(14,2)`); `variation numeric(12,6)`
+- [x] 3.7 Modify `InmobiliariaDbContext.cs`: register the new `DbSet<T>`s — **six, not five, see apply-progress deviation note**
+- [x] 3.8 Generate migration: `dotnet ef migrations add AddRentAdjustments -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure`; confirm the diff is exactly **six `CREATE TABLE`s (not five — see apply-progress deviation note), zero `ALTER TABLE`**
+- [x] 3.9 Hand-edit the generated migration's `Up`: append `migrationBuilder.Sql(...)` for the `BEFORE UPDATE OR DELETE ON rent_adjustments` trigger + function that unconditionally raises; `Down` drops trigger and function first — `.../Migrations/*_AddRentAdjustments.cs`
+- [x] 3.10 **Guardrail**: diff `20260913215911_InitialSchema.cs`, its `.Designer.cs`, and `InmobiliariaDbContextModelSnapshot.cs` — confirm the pre-existing migration file is byte-for-byte unmodified (the snapshot legitimately grows, the historical migration must not change)
+- [x] 3.11 **[Spec test 6, integration half]** `SchemaConstraintTests`: read `information_schema.columns`, assert `numeric(14,2)` on canon columns and `numeric(18,6)` on level columns
+- [x] 3.12 **[Spec test 13]** `SchemaConstraintTests`: raw SQL `UPDATE` and `DELETE` on `rent_adjustments` MUST fail — proves the append-only trigger at the database level
+- [x] 3.13 **[Spec test 14]** `SchemaConstraintTests`: correcting an `IndexValue.Level` after a confirmed adjustment leaves the original `rent_adjustments` row unchanged; a second correcting row coexists
+- [x] 3.14 **Guardrail**: confirm `PostgresFixture` still calls `Database.Migrate()` (never `EnsureCreated()`) and the image stays pinned to `postgres:17.6` — verification only, no fixture edit expected
+- [x] 3.15 **Guardrail**: `dotnet test Inmobiliaria.Core.slnf` still runs both test projects; no new test project was created this slice, so no `.slnf` edit is needed
+- [x] 3.16 **Guardrail**: grep the full diff for connection strings/secrets before opening the PR — none expected, Testcontainers supplies its own
 
 ## Slice 4 — Worklist read model + adapter (PR 4, est. 380–460 lines)
 
-- [ ] 4.1 Create `MissingIndexValue` and `DueAdjustment` records — `src/Inmobiliaria.Domain/Leasing/DueAdjustment.cs`
-- [ ] 4.2 Create `IDueAdjustmentQuery` port: `Task<IReadOnlyList<DueAdjustment>> GetDueAsync(DateOnly asOf, CancellationToken ct = default)` — `.../Leasing/IDueAdjustmentQuery.cs`
-- [ ] 4.3 Create `DueAdjustmentQuery` adapter: query starts **from** `adjustment_clauses` (never `contracts`), joins `contracts` filtered `Status == Active`; computes coefficient/proposed canon only when every referenced index value resolves, else fills `Missing` and leaves `Coefficient`/`ProposedCanon` null — `src/Inmobiliaria.Infrastructure/Persistence/DueAdjustmentQuery.cs`
-- [ ] 4.4 **[Spec test 16]** `DueAdjustmentQueryTests`: a contract with no `AdjustmentClause` never appears in `GetDueAsync` — `tests/Inmobiliaria.Infrastructure.Tests/DueAdjustmentQueryTests.cs`
-- [ ] 4.5 **[Spec test 9]** `DueAdjustmentQueryTests`: three contracts awaiting IPC 2026-08 are returned, each naming IPC + period 2026-08 in `Missing`
-- [ ] 4.6 **[Spec test 7]** `DueAdjustmentQueryTests`: with the required value missing, `Coefficient`/`ProposedCanon` stay null and the previous canon is unaffected
-- [ ] 4.7 **[Spec test 10]** `DueAdjustmentQueryTests`: once IPC 2026-08 is entered, none of the three contracts appears as waiting
-- [ ] 4.8 Assert directly, in at least one test: `Coefficient is null ⟺ Missing.Count > 0`
-- [ ] 4.9 **Guardrail**: confirm CI's `build` and `core` job names are unchanged in `.github/workflows/ci.yml` — this slice adds files, not jobs
+- [x] 4.1 Create `MissingIndexValue` and `DueAdjustment` records — `src/Inmobiliaria.Domain/Leasing/DueAdjustment.cs`
+- [x] 4.2 Create `IDueAdjustmentQuery` port: `Task<IReadOnlyList<DueAdjustment>> GetDueAsync(DateOnly asOf, CancellationToken ct = default)` — `.../Leasing/IDueAdjustmentQuery.cs`
+- [x] 4.3 Create `DueAdjustmentQuery` adapter: query starts **from** `adjustment_clauses` (never `contracts`), joins `contracts` filtered `Status == Active`; computes coefficient/proposed canon only when every referenced index value resolves, else fills `Missing` and leaves `Coefficient`/`ProposedCanon` null — `src/Inmobiliaria.Infrastructure/Persistence/DueAdjustmentQuery.cs`
+- [x] 4.4 **[Spec test 16]** `DueAdjustmentQueryTests`: a contract with no `AdjustmentClause` never appears in `GetDueAsync` — `tests/Inmobiliaria.Infrastructure.Tests/DueAdjustmentQueryTests.cs`
+- [x] 4.5 **[Spec test 9]** `DueAdjustmentQueryTests`: three contracts awaiting IPC 2026-08 are returned, each naming IPC + period 2026-08 in `Missing`
+- [x] 4.6 **[Spec test 7]** `DueAdjustmentQueryTests`: with the required value missing, `Coefficient`/`ProposedCanon` stay null and the previous canon is unaffected
+- [x] 4.7 **[Spec test 10]** `DueAdjustmentQueryTests`: once IPC 2026-08 is entered, none of the three contracts appears as waiting
+- [x] 4.8 Assert directly, in at least one test: `Coefficient is null ⟺ Missing.Count > 0`
+- [x] 4.9 **Guardrail**: confirm CI's `build` and `core` job names are unchanged in `.github/workflows/ci.yml` — this slice adds files, not jobs
 
 ## Human Follow-Ups (non-code, not assigned to any agent)
 

@@ -1,3 +1,4 @@
+using Inmobiliaria.Domain.Indices;
 using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Domain.Parties;
 using Inmobiliaria.Domain.Units;
@@ -6,9 +7,10 @@ using Microsoft.EntityFrameworkCore;
 namespace Inmobiliaria.Infrastructure.Persistence;
 
 /// <summary>
-/// EF Core mapping onto the six target Postgres tables. Repository ports/adapters are not
-/// part of this change — see design.md Decision 2 and the scope guard in the technical
-/// approach.
+/// EF Core mapping onto the twelve target Postgres tables: the six from lease-contract plus
+/// the six added by rent-adjustments (economic-index and rent-adjustment capabilities).
+/// Repository ports/adapters are not part of either change — see design.md Decision 2 and the
+/// scope guard in the technical approach.
 /// </summary>
 public sealed class InmobiliariaDbContext : DbContext
 {
@@ -23,6 +25,12 @@ public sealed class InmobiliariaDbContext : DbContext
     public DbSet<ContractParty> ContractParties => Set<ContractParty>();
     public DbSet<ContractUnit> ContractUnits => Set<ContractUnit>();
     public DbSet<ContractDocument> ContractDocuments => Set<ContractDocument>();
+    public DbSet<EconomicIndex> EconomicIndices => Set<EconomicIndex>();
+    public DbSet<IndexValue> IndexValues => Set<IndexValue>();
+    public DbSet<AdjustmentClause> AdjustmentClauses => Set<AdjustmentClause>();
+    public DbSet<AdjustmentClauseIndex> AdjustmentClauseIndices => Set<AdjustmentClauseIndex>();
+    public DbSet<RentAdjustment> RentAdjustments => Set<RentAdjustment>();
+    public DbSet<RentAdjustmentIndexValue> RentAdjustmentIndexValues => Set<RentAdjustmentIndexValue>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {

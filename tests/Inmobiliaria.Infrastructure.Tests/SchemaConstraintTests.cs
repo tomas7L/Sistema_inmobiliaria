@@ -1,3 +1,4 @@
+using Inmobiliaria.Domain.Indices;
 using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Domain.Parties;
 using Inmobiliaria.Domain.Shared;
@@ -53,6 +54,185 @@ public sealed class SchemaConstraintTests
         context.Units.Add(unit);
 
         return NewContract(unit.Id, monthlyRent, honorariosPercentage);
+    }
+
+    /// <summary>
+    /// Seeds a contract with a single-index, `intervalMonths`-interval adjustment clause,
+    /// registering everything against <paramref name="context"/> but not yet saving.
+    /// </summary>
+    private static (Contract Contract, EconomicIndex Index) SeedContractWithClause(
+        InmobiliariaDbContext context,
+        int intervalMonths = 6,
+        decimal monthlyRent = 450_000m)
+    {
+        var unit = new PropertyUnit(Guid.NewGuid(), TestAddress(Guid.NewGuid().ToString("N")[..6]));
+        context.Units.Add(unit);
+
+        var contract = NewContract(unit.Id, monthlyRent);
+        context.Contracts.Add(contract);
+
+        var index = new EconomicIndex(Guid.NewGuid(), $"IPC-{Guid.NewGuid():N}");
+        context.EconomicIndices.Add(index);
+
+        var clause = new AdjustmentClause(
+            Guid.NewGuid(), contract.Id, [index.Id], intervalMonths, RoundingRule.TruncateToWholePeso);
+        context.AdjustmentClauses.Add(clause);
+        contract.AttachAdjustmentClause(clause);
+
+        return (contract, index);
+    }
+
+    /// <summary>
+    /// Confirms a single-index adjustment through the real domain pipeline —
+    /// <see cref="AdjustmentProposal"/> then <see cref="Contract.ConfirmAdjustment"/> — using the
+    /// average-of-variations formula directly, so the stored coefficient is independently
+    /// verifiable against a hand-computed expectation in the tests below.
+    /// </summary>
+    private static RentAdjustment ConfirmAdjustment(
+        Contract contract,
+        Guid indexId,
+        IndexPeriod basePeriod,
+        decimal baseLevel,
+        IndexPeriod endPeriod,
+        decimal endLevel,
+        DateOnly effectiveDate,
+        DateTimeOffset confirmedAt,
+        AdjustmentKind kind = AdjustmentKind.Regular,
+        Guid? correctsAdjustmentId = null)
+    {
+        var variation = decimal.Round(((endLevel / baseLevel) - 1m) * 100m, 6);
+        var snapshot = new RentAdjustmentIndexValue(indexId, indexId, basePeriod, baseLevel, endPeriod, endLevel, variation);
+        var proposal = new AdjustmentProposal(
+            contract.MonthlyRent, [snapshot], CombinationRule.Single, variation, effectiveDate);
+
+        return contract.ConfirmAdjustment(Guid.NewGuid(), proposal, confirmedAt, kind, correctsAdjustmentId);
+    }
+
+    [SkippableFact]
+    public async Task NumericColumnPrecision_MatchesMoneyAndIndexLevelConventions()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var context = _fixture.CreateDbContext();
+        var connection = context.Database.GetDbConnection();
+        await connection.OpenAsync();
+
+        async Task<(int Precision, int Scale)> ColumnPrecisionAsync(string table, string column)
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText =
+                """
+                SELECT numeric_precision, numeric_scale FROM information_schema.columns
+                WHERE table_name = @table AND column_name = @column
+                """;
+            command.Parameters.Add(new NpgsqlParameter("table", table));
+            command.Parameters.Add(new NpgsqlParameter("column", column));
+
+            await using var reader = await command.ExecuteReaderAsync();
+            Assert.True(await reader.ReadAsync(), $"Column {table}.{column} was not found.");
+
+            return (reader.GetInt32(0), reader.GetInt32(1));
+        }
+
+        // Canon columns: numeric(14,2), the money convention (spec test 6, integration half).
+        Assert.Equal((14, 2), await ColumnPrecisionAsync("rent_adjustments", "previous_canon"));
+        Assert.Equal((14, 2), await ColumnPrecisionAsync("rent_adjustments", "new_canon"));
+
+        // Level columns: numeric(18,6). An index level is not money (design.md Decision 1).
+        Assert.Equal((18, 6), await ColumnPrecisionAsync("index_values", "level"));
+        Assert.Equal((18, 6), await ColumnPrecisionAsync("rent_adjustment_index_values", "base_level"));
+        Assert.Equal((18, 6), await ColumnPrecisionAsync("rent_adjustment_index_values", "end_level"));
+    }
+
+    [SkippableFact]
+    public async Task AppendOnlyTrigger_RejectsRawUpdateAndDelete()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var context = _fixture.CreateDbContext();
+
+        var (contract, index) = SeedContractWithClause(context);
+        var adjustment = ConfirmAdjustment(
+            contract, index.Id,
+            new IndexPeriod(2026, 1), 8_000m,
+            new IndexPeriod(2026, 7), 9_440m,
+            new DateOnly(2026, 7, 1), DateTimeOffset.UtcNow);
+
+        await context.SaveChangesAsync();
+
+        // Raw SQL deliberately bypasses the change tracker and RentAdjustment's own lack of a
+        // public mutator: this proves the DATABASE trigger — not the domain — rejects the
+        // mutation at the database level (spec test 13).
+        await Assert.ThrowsAsync<PostgresException>(() =>
+            context.Database.ExecuteSqlInterpolatedAsync(
+                $"UPDATE rent_adjustments SET coefficient = 99 WHERE id = {adjustment.Id}"));
+
+        await Assert.ThrowsAsync<PostgresException>(() =>
+            context.Database.ExecuteSqlInterpolatedAsync(
+                $"DELETE FROM rent_adjustments WHERE id = {adjustment.Id}"));
+    }
+
+    [SkippableFact]
+    public async Task CorrectingAnIndexValue_LeavesTheConfirmedAdjustmentUnchangedAndAppendsACorrection()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var context = _fixture.CreateDbContext();
+
+        var (contract, index) = SeedContractWithClause(context);
+
+        var basePeriod = new IndexPeriod(2026, 1);
+        var endPeriod = new IndexPeriod(2026, 7);
+
+        var indexValue = new IndexValue(Guid.NewGuid(), index.Id, endPeriod, 9_440m);
+        context.IndexValues.Add(indexValue);
+
+        var original = ConfirmAdjustment(
+            contract, index.Id, basePeriod, 8_000m, endPeriod, 9_440m,
+            new DateOnly(2026, 7, 1), DateTimeOffset.UtcNow);
+
+        await context.SaveChangesAsync();
+
+        // The correction: IndexValue.Correct mutates the published level in place (spec
+        // "A Correction Produces a New Adjustment, Never a Rewrite") — the confirmed
+        // RentAdjustment above must remain exactly as it was.
+        indexValue.Correct(9_400m);
+
+        var correction = ConfirmAdjustment(
+            contract, index.Id, basePeriod, 8_000m, endPeriod, 9_400m,
+            new DateOnly(2026, 7, 1), DateTimeOffset.UtcNow,
+            AdjustmentKind.Correction, original.Id);
+
+        // EF Core gotcha, load-bearing here: `correction` was appended to `contract`'s
+        // already-tracked `_adjustments` field by domain code alone (Contract has zero EF
+        // references by design), not through `context.Add(...)`. A newly-appeared entity
+        // discovered only via DetectChanges' collection diff, carrying a non-default
+        // client-assigned Guid key, is NOT automatically inferred as Added — EF has no way to
+        // tell it apart from a row that already exists — so without this explicit call the
+        // second SaveChangesAsync silently omits the INSERT for `correction` itself while
+        // still attempting to insert its child rent_adjustment_index_values row, which then
+        // fails its foreign key. Any future application layer confirming a second adjustment
+        // against an already-tracked Contract needs this same explicit call.
+        context.RentAdjustments.Add(correction);
+
+        await context.SaveChangesAsync();
+
+        await using var readContext = _fixture.CreateDbContext();
+        var rows = await readContext.RentAdjustments
+            .Where(a => a.ContractId == contract.Id)
+            .ToListAsync();
+
+        Assert.Equal(2, rows.Count);
+
+        var reloadedOriginal = rows.Single(a => a.Id == original.Id);
+        Assert.Equal(AdjustmentKind.Regular, reloadedOriginal.Kind);
+        Assert.Null(reloadedOriginal.CorrectsAdjustmentId);
+        Assert.Equal(18m, reloadedOriginal.Coefficient);
+
+        var reloadedCorrection = rows.Single(a => a.Id == correction.Id);
+        Assert.Equal(AdjustmentKind.Correction, reloadedCorrection.Kind);
+        Assert.Equal(original.Id, reloadedCorrection.CorrectsAdjustmentId);
+        Assert.Equal(17.5m, reloadedCorrection.Coefficient);
     }
 
     [SkippableFact]
