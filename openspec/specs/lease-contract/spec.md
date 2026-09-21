@@ -199,10 +199,25 @@ enforce it rather than merely be documented as doing so.
 - WHEN it is constructed
 - THEN the contract MUST be created Active with one `ContractUnit` row
 
+### Requirement: Contract May Reference an Adjustment Clause
+
+A `Contract` MUST support an optional reference to a single `AdjustmentClause` describing how its canon is adjusted. A contract with no clause is a valid fixed-price lease.
+
+#### Scenario: Contract with a clause
+
+- GIVEN a contract whose lease states a semiannual IPC/RIPTE average adjustment
+- WHEN the contract is recorded with its `AdjustmentClause`
+- THEN the contract MUST expose that clause for due-date derivation and coefficient computation
+
+#### Scenario: Contract without a clause
+
+- GIVEN a contract whose lease has no adjustment language
+- WHEN the contract is recorded with no `AdjustmentClause`
+- THEN the contract MUST be valid and MUST be treated as fixed-price
+
 ### Requirement: Share Stored as Percentage, Never Amount
 
-`SharePercentage` MUST be stored as a percentage, never as a fixed monetary amount, so it survives
-a change to the total canon (adjusted semiannually by IPC/RIPTE) without recalculation.
+`SharePercentage` MUST be stored as a percentage, never as a fixed monetary amount, so it survives a change to the total canon (adjusted semiannually by IPC/RIPTE) without recalculation. This requirement applies specifically to canon changes that originate from a confirmed `RentAdjustment`, not only to an arbitrary manual `ChangeMonthlyRent` call, because a confirmed adjustment is the mechanism that actually reaches this code path in production.
 
 #### Scenario: Canon change leaves percentages untouched
 
@@ -210,6 +225,13 @@ a change to the total canon (adjusted semiannually by IPC/RIPTE) without recalcu
 - WHEN the contract's total canon is changed to $150,000
 - THEN the stored shares MUST remain 50% and 50%
 - AND MUST still sum to exactly 100%
+
+#### Scenario: Confirmed adjustment leaves percentages untouched
+
+- GIVEN a two-unit contract with shares 60% and 40%, and canon $450,000
+- WHEN a `RentAdjustment` is confirmed raising the canon to $517,500
+- THEN the stored shares MUST remain 60% and 40%
+- AND MUST still sum to exactly 100%, with no recalculation triggered by the adjustment
 
 ### Requirement: Deterministic Residue on Equal Split
 
@@ -258,3 +280,7 @@ capability stores the value only; it does not compute fees.
 - GIVEN a contract with an agreed honorarios rate of 8%
 - WHEN it is saved
 - THEN the stored value MUST be 8%
+
+## Tests
+
+1. **Shares survive an adjustment.** A two-unit contract at 60/40 keeps those percentages after a confirmed adjustment, still summing to exactly 100%. This is the existing lease-contract invariant, and the rent-adjustment change is the first thing that exercises it for real.
