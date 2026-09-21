@@ -115,6 +115,15 @@ public sealed class Contract
             throw new ArgumentException("An adjustment clause must belong to this contract.", nameof(clause));
         }
 
+        // The documentation above claimed a clause is never reassigned, and nothing enforced it.
+        // A silent replacement would change how every future adjustment is computed while leaving
+        // the already-confirmed history describing a formula the contract no longer has.
+        if (AdjustmentClause is not null && AdjustmentClause.Id != clause.Id)
+        {
+            throw new InvalidOperationException(
+                "This contract already has an adjustment clause; a clause is never reassigned.");
+        }
+
         AdjustmentClause = clause;
     }
 
