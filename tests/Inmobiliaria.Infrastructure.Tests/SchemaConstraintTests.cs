@@ -512,4 +512,70 @@ public sealed class SchemaConstraintTests
 
         await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
     }
+
+    [SkippableFact]
+    public async Task SameIndexAndPeriodTwice_RejectedByUniqueIndex()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var context = _fixture.CreateDbContext();
+
+        var index = new EconomicIndex(Guid.NewGuid(), $"IPC-{Guid.NewGuid():N}");
+        context.EconomicIndices.Add(index);
+
+        // One published value per index per period. Two rows for the same month would make the
+        // variation for any interval spanning it ambiguous, and nothing downstream could tell
+        // which one it should have used.
+        context.IndexValues.AddRange(
+            new IndexValue(Guid.NewGuid(), index.Id, new IndexPeriod(2026, 8), 8_000m),
+            new IndexValue(Guid.NewGuid(), index.Id, new IndexPeriod(2026, 8), 9_440m));
+
+        await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
+    }
+
+    [SkippableFact]
+    public async Task DuplicateActiveIndexName_RejectedByPartialUniqueIndex()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var context = _fixture.CreateDbContext();
+        var name = $"IPC-{Guid.NewGuid():N}";
+
+        context.EconomicIndices.AddRange(
+            new EconomicIndex(Guid.NewGuid(), name),
+            new EconomicIndex(Guid.NewGuid(), name));
+
+        await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
+    }
+
+    [SkippableFact]
+    public async Task DiscontinuedIndexFreesItsNameForASuccessor()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        var name = $"IPC-{Guid.NewGuid():N}";
+
+        await using (var writeContext = _fixture.CreateDbContext())
+        {
+            var retired = new EconomicIndex(Guid.NewGuid(), name);
+            retired.MarkDiscontinued(new IndexPeriod(2026, 3));
+            writeContext.EconomicIndices.Add(retired);
+            await writeContext.SaveChangesAsync();
+        }
+
+        // The unique index is partial — scoped to `discontinued_from IS NULL` — so a rebased
+        // index may reuse the retired one's name. This is the half of the constraint that makes
+        // the supersession chain usable at all; a plain unique index would forbid it.
+        await using var context = _fixture.CreateDbContext();
+        context.EconomicIndices.Add(new EconomicIndex(Guid.NewGuid(), name));
+
+        await context.SaveChangesAsync();
+
+        var carryingTheName = await context.EconomicIndices
+            .Where(i => i.Name == name)
+            .ToListAsync();
+
+        Assert.Equal(2, carryingTheName.Count);
+        Assert.Single(carryingTheName, i => i.DiscontinuedFrom is null);
+    }
 }
