@@ -102,7 +102,8 @@ library to choose, and no risk of choosing it badly.
 - A session-scoped `DbContext` factory port, and defined behaviour before anyone has logged in
 - The permission rule stated over **operations**, not screens (Approach §5)
 - Self-service password change via `ALTER ROLE ... PASSWORD`
-- A documented provisioning runbook for creating, deactivating and resetting users
+- In-application user management: the Admin creates, deactivates and resets users from a screen
+  (this line originally read "a documented provisioning runbook" — reversed, see Settled)
 - `ContractDocument.UploadedBy`: plain string → real foreign key to `AppUser`
 - `RentAdjustment`: gains `ConfirmedBy`, nullable, no backfill
 - A login window and the DI/host bootstrap it requires (Approach §6)
@@ -122,8 +123,8 @@ library to choose, and no risk of choosing it badly.
 - **Receipt and liquidación authorship** — those records do not exist yet. **The collection change
   MUST create receipts with an issuer from the start**, for the same reason `ConfirmedBy` is being
   added now rather than later.
-- **In-application user creation** — see Approach §4; it is a runbook, and the justification is
-  there.
+- ~~**In-application user creation**~~ — no longer out of scope. Approach §4 argued for a runbook
+  and was reversed; see Settled. It is in scope and it is why the size forecast grew.
 - **Password policy, lockout, MFA, email reset** — two users, one office, one machine.
 - **Navigation shell, menus, screen list** — the login window is the only screen this change adds.
 
@@ -190,7 +191,12 @@ mismatch is exactly the class of bug this change exists to eliminate, so the col
 `ContractDocument.UploadedBy` and `RentAdjustment.ConfirmedBy` point at. `username` is unique and
 equals `rolname`.
 
-### 4. Creating and removing users is a documented manual runbook
+### 4. Creating and removing users is a documented manual runbook — REVERSED, see Settled
+
+> This section records the reasoning as it stood before the 2026-09-21 decision round. The agency
+> chose in-application user management instead. The trade-off analysis below is kept because it is
+> why `CREATEROLE` on the Admin role had to be understood before accepting it, not because its
+> recommendation still holds.
 
 `CREATE ROLE` cannot run as an ordinary application user. Two ways to give it to the Admin:
 
@@ -216,7 +222,12 @@ would then quietly mean someone else.
 navigation and no screen to restrict, so a screen list written today would be invented. The team's
 call is the rule, not the list:
 
-> **Admin owns anything that moves money or writes append-only history. Empleado owns the rest.**
+> **Empleado owns every operational action. Admin adds exactly two things on top: user governance
+> and aggregate business reporting.**
+>
+> An earlier draft of this proposal reserved to Admin "anything that moves money or writes
+> append-only history". That clause was removed — the agency confirmed both people do the same
+> operational work, including collecting, issuing receipts and confirming adjustments.
 
 Translated into GRANTs over what exists today:
 
@@ -225,16 +236,18 @@ Translated into GRANTs over what exists today:
 | All twelve tables | `SELECT` | `SELECT` |
 | `parties`, `units`, `contract_parties`, `contract_units`, `contract_documents` | `INSERT`, `UPDATE` | same |
 | `economic_indices`, `index_values`, `adjustment_clauses`, `adjustment_clause_indices` | `INSERT`, `UPDATE` | same |
-| `contracts` | `INSERT`, `UPDATE` on all columns **except** the termination columns | plus `UPDATE (ended_at, end_reason)` |
-| `rent_adjustments`, `rent_adjustment_index_values` | none | `INSERT` |
-| `app_users` | `SELECT` only | `SELECT` only (writes are the runbook) |
+| `contracts` | `INSERT`, `UPDATE` on all columns, termination included | same |
+| `rent_adjustments`, `rent_adjustment_index_values` | `INSERT` | same |
+| `app_users` | `SELECT` only | `SELECT`, plus provisioning and deactivation through the privileged functions |
 
 Neither role gets `DELETE` anywhere, nor ownership, nor schema privileges.
 
-**Where GRANTs cannot reach, say so.** Column-level `UPDATE` separates contract termination
-cleanly. It will not separate every future operation — two operations that write the same columns of
-the same table are indistinguishable to Postgres. The spec MUST name each such case as
-UI-enforced-only rather than let the reader assume the database is holding it.
+**Where GRANTs cannot reach, say so.** The clearest case is aggregate business reporting: the
+Empleado legitimately reads `contracts` and the collection tables to do her work, so `SELECT
+sum(monthly_rent) FROM contracts` succeeds for her in any client and no `GRANT` can prevent it — an
+aggregate over permitted rows is not a privilege Postgres models. That exclusion is application-
+enforced only. The spec MUST name each such case as UI-enforced-only rather than let the reader
+assume the database is holding it.
 
 **Every future migration that creates a table MUST grant on it**, or the application fails at
 runtime for both roles. `ALTER DEFAULT PRIVILEGES` covers the `SELECT` baseline; writes stay
@@ -284,7 +297,7 @@ slice 4, it is real work, and it is named rather than smuggled in.
 | `.../Persistence/DesignTimeDbContextFactory.cs` | Unchanged | Documented as development-time only |
 | `.../Persistence/SessionDbContextFactory.cs` | New | The session-scoped factory port and its Npgsql adapter |
 | `src/Inmobiliaria.Desktop` | New | Login window, session, DI/host bootstrap |
-| `docs/` runbook | New | Create / deactivate / reset a user |
+| `src/Inmobiliaria.Desktop` user management screen | New | Create / deactivate / reset a user, in the application |
 | `openspec/specs/contract-documents` | Modified | Delta: uploader becomes a key; placeholder requirement removed |
 | `openspec/specs/rent-adjustment` | Modified | Delta: confirmed row records who confirmed; trigger gap narrowed |
 | `openspec/config.yaml` | Modified | `credential-exposure` → `resolved_decisions`; `data-api-disabled` rationale corrected; grant convention added |
