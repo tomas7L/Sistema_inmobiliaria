@@ -544,12 +544,22 @@ nowhere else. Rolling back reinstates the stored credential; that is stated in t
 not softened here. A developer applies the migration manually; the application never calls
 `Database.Migrate()`.
 
-**Size forecast — 1,910–2,410 authored lines, five chained PRs.**
+**Size forecast — 2,315–2,855 authored lines, five slices delivered as six chained PRs**
+(slice 2 splits into 2a and 2b).
 
-Two revisions have now moved this number, and they moved it in opposite directions. Removing the
-column-level termination restriction took roughly **110–120 lines off** the original 2,000–2,500.
-Removing the money clause puts about **20–30 lines back on**, which is the opposite of what one
-would expect from a restriction being deleted, so the arithmetic is itemised rather than asserted:
+**Correction.** Earlier revisions of this section carried a headline of 2,000–2,500, then
+1,910–2,410, reached by applying deltas to the previous headline. That headline never agreed with
+this document's own per-slice table, which sums to 2,315–2,855 — a gap of roughly 400 lines that
+two revisions carried forward because each one did arithmetic on the number above it instead of
+re-adding the slices. **The per-slice table is authoritative**; it is built bottom-up from the files
+each slice touches, while the headline was an estimate nobody re-derived. The delta arithmetic below
+is still correct as *relative* movement and is kept for that reason, but it must be read as applying
+to the per-slice figures, not to the old headline.
+
+Two revisions have moved the number, in opposite directions. Removing the column-level termination
+restriction took roughly **110–120 lines off**. Removing the money clause puts about **20–30 lines
+back on**, which is the opposite of what one would expect from a restriction being deleted, so the
+arithmetic is itemised rather than asserted:
 
 | Item | Lines |
 |---|---|
