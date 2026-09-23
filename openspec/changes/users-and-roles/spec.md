@@ -25,13 +25,14 @@ FACT** means it was proven, not decided.
 | 5 | The application role is read at login via `pg_has_role`; `AppUser` stores no role column, so nothing can drift from what the database enforces. | TEAM DECISION |
 | 6 | **The Admin manages users from inside the application** — creating them and resetting passwords — rather than through a developer-run runbook. | CONFIRMED BY USER |
 | 7 | **Deactivate, never delete.** `ALTER ROLE ... NOLOGIN`; the row stays; a username is never reused for a different person. | CONFIRMED BY USER |
-| 8 | **The Empleado sees everything except system governance (user management) and aggregate business reporting** (agency-level income, profitability, totals). | CONFIRMED BY USER |
+| 8 | **The Empleado does everything operational and is excluded from exactly two things:** system governance (user management) and aggregate business reporting (agency-level income, profitability, totals). Collecting rent, issuing receipts, terminating contracts and confirming adjustments are hers as much as the Admin's. | CONFIRMED BY USER |
 | 9 | A non-`postgres` role was proven to connect through Supavisor from the office network: the attempt returned `42501 permission denied`, meaning the pooler routed it and Postgres authenticated it before the grants refused the operation. Username format required by the pooler: `<role>.<projectref>`. | VERIFIED FACT |
 | 10 | `ContractDocument.UploadedBy` becomes a real foreign key to `AppUser`, replacing the placeholder string. | TEAM DECISION |
 | 11 | `RentAdjustment` gains `ConfirmedBy`, nullable, with no backfill — its append-only trigger rejects any `UPDATE`, so this is the last cheap moment to add the column. | TEAM DECISION |
 | 12 | Password-setting DDL (`CREATE ROLE`, `ALTER ROLE ... PASSWORD`) MUST escape the password server-side; it cannot be parameterised like ordinary application SQL. | TEAM DECISION |
 | 13 | A general audit log is out of scope. The collection change (not this one) MUST create receipts with an issuer from the start. | TEAM DECISION |
 | 14 | **A password set by someone other than its owner must be changed at that owner's next login.** Tracked by `AppUser.MustChangePassword`. It is an application convention for credential hygiene, NOT a security boundary — PostgreSQL authenticates before the application asks anything, so a direct client connection is unaffected by it. | CONFIRMED BY USER |
+| 15 | **The clause reserving to Admin "every operation that moves money or writes append-only history" is REMOVED.** It was never decided by the agency, it contradicted Decision 8 standing beside it, and the two people who use this system do the same operational work. Its removal is why `rent_adjustments` is now writable by both roles. | CONFIRMED BY USER |
 
 ## Table of Contents
 
@@ -291,11 +292,20 @@ PostgreSQL `GRANT`, not by application code, because a rule the UI merely hides 
 
 ### Requirement: The Operation Rule Is Stated Over Actions, Not Screens
 
-Admin MUST own every operation that moves money or writes append-only history. Empleado MUST own
-every other operational action, and MUST be excluded only from system governance (creating,
-deactivating, or resetting users) and aggregate business reporting (agency-level income,
-profitability, and totals). Empleado MUST retain the ability to see contracts, tenants, owners,
-rents, receipts, and the honorarios percentage printed on a receipt she issues herself.
+Empleado MUST own every operational action. Empleado MUST be excluded from exactly two things:
+system governance (creating, deactivating, or resetting users) and aggregate business reporting
+(agency-level income, profitability, and totals). There is no third exclusion.
+
+No operation is reserved to Admin for being financially sensitive. Collecting rent, issuing a
+receipt, and confirming a rent adjustment are ordinary operational work that **both** roles
+perform. Empleado MUST retain the ability to see and act on contracts, tenants, owners, rents,
+receipts, and the honorarios percentage printed on a receipt she issues herself.
+
+An earlier draft of this requirement also reserved to Admin "every operation that moves money or
+writes append-only history". That clause is **REMOVED, not merely unimplemented.** It was never
+decided by the agency, it contradicted the exclusion list standing beside it, and the two people who
+use this system do the same operational work. It MUST NOT be reintroduced by a reader who finds its
+absence surprising.
 
 #### Scenario: Empleado performs ordinary operational work
 
@@ -327,15 +337,16 @@ refused by PostgreSQL itself even when attempted through a client other than thi
 
 - GIVEN "maria" holds `inmobiliaria_empleado` and connects with **pgAdmin**, not this application,
   using her own credentials
-- WHEN she executes `INSERT INTO rent_adjustments (...) VALUES (...)` directly
-- THEN PostgreSQL MUST reject it with `permission denied for table rent_adjustments`
-- AND no row MUST be inserted — bypassing the application gained her nothing: she still had to
-  authenticate as herself, and she still carried only her own privileges
+- WHEN she executes `INSERT INTO app_users (...) VALUES (...)` directly, or invokes the function
+  that provisions a login role
+- THEN PostgreSQL MUST reject it with a permission error
+- AND no row MUST be written and no role MUST be created — bypassing the application gained her
+  nothing: she still had to authenticate as herself, and she still carried only her own privileges
 
 #### Scenario: An Admin performs the same operation directly and succeeds
 
 - GIVEN a user holding `inmobiliaria_admin` connects with any Postgres client
-- WHEN they execute the equivalent `INSERT INTO rent_adjustments (...)`
+- WHEN they execute the equivalent user-provisioning operation
 - THEN it MUST succeed, because the grant — not the application — is what allows it
 
 ### Requirement: Neither Application Role Can Disable the Append-Only Trigger
@@ -359,12 +370,15 @@ Where two distinct operations would write the same columns of the same table, an
 as enforced by the application UI only, rather than letting a reader assume database enforcement
 that does not exist.
 
-#### Scenario: Contract termination is separated at the column level
+#### Scenario: Aggregate business reporting is separated by the application only
 
-- GIVEN the `contracts` table's `ended_at` and `end_reason` columns are granted for `UPDATE` to
-  Admin only
-- WHEN an Empleado attempts to `UPDATE` specifically those columns
-- THEN PostgreSQL MUST reject it
+- GIVEN "maria" holds the Empleado role and is legitimately granted `SELECT` on `contracts` and on
+  the collection tables, because she needs those rows to do her daily work
+- WHEN she connects with pgAdmin and runs `SELECT sum(monthly_rent) FROM contracts`
+- THEN PostgreSQL MUST allow it, because the total is derived from rows she may already read and no
+  `GRANT` can forbid an aggregate over permitted rows
+- AND this specification MUST state plainly that the exclusion from aggregate reporting is enforced
+  by the application only, and MUST NOT claim database enforcement for it
 
 #### Scenario: An operation the database cannot distinguish is named, not implied
 
@@ -567,28 +581,36 @@ fake.
     `x'; DROP TABLE app_users; --` results in exactly that literal password, with `app_users` still
     present and unaffected afterward.
 22. **An Empleado performing an Admin-only write via pgAdmin is refused by the database.** Connecting
-    directly with an Empleado's own credentials and attempting
-    `INSERT INTO rent_adjustments (...)` returns `permission denied for table rent_adjustments`
-    and inserts nothing — proving enforcement does not depend on the application.
-23. **An Admin performing the same operation via any client succeeds.** The equivalent insert,
-    executed as `inmobiliaria_admin`, succeeds.
+    directly with an Empleado's own credentials and attempting to write `app_users` or to provision
+    a login role returns a permission error and changes nothing — proving enforcement does not
+    depend on the application. User governance is the only category of write she lacks.
+23. **An Admin performing the same operation via any client succeeds.** The equivalent
+    user-provisioning operation, executed as `inmobiliaria_admin`, succeeds.
 24. **Neither role can disable the append-only trigger.** `ALTER TABLE rent_adjustments DISABLE
     TRIGGER ...` is refused for both `inmobiliaria_admin` and `inmobiliaria_empleado`.
-25. **Contract termination columns are separated at the column level.** An Empleado's `UPDATE` of
-    `ended_at` or `end_reason` on `contracts` is refused; the Admin's succeeds.
-26. **No row-level restriction exists.** Both roles, granted `SELECT` on the same table, retrieve
+25. **An Empleado can terminate a contract.** Recording notice and ending a contract succeed as
+    Empleado — this is ordinary operational work, not an Admin-only operation, and no column-level
+    restriction stands in its way.
+26. **An Empleado can confirm a rent adjustment.** Confirming an adjustment succeeds as Empleado and
+    the new row records her in `ConfirmedBy` — a positive assertion, placed here so the removed
+    money clause cannot creep back in as an `INSERT` grant quietly withheld from her.
+27. **Aggregate reporting is not database-enforced, and the spec says so.** Connecting as Empleado
+    and running an aggregate over rows she may legitimately read succeeds at the database. The
+    exclusion is application-level, asserted here so the living specification never claims a
+    `GRANT` that cannot exist.
+28. **No row-level restriction exists.** Both roles, granted `SELECT` on the same table, retrieve
     every row in it.
-27. **A new table's GRANTs ship in the same migration.** After any migration that creates a table,
+29. **A new table's GRANTs ship in the same migration.** After any migration that creates a table,
     an integration test connects as each role and confirms it can perform exactly its intended
     operations on that table — none unreachable.
-28. **`UploadedBy` is a real foreign key.** `ContractDocument.UploadedBy` resolves to an `AppUser`
+30. **`UploadedBy` is a real foreign key.** `ContractDocument.UploadedBy` resolves to an `AppUser`
     row; the "plain identifier" requirement is absent from the living specification.
-29. **A `ContractDocument`'s uploader reference survives the uploader's deactivation.** The FK still
+31. **A `ContractDocument`'s uploader reference survives the uploader's deactivation.** The FK still
     resolves and displays the uploader's name after they are deactivated.
-30. **`ConfirmedBy` is added nullable with no backfill.** The migration adding the column to
+32. **`ConfirmedBy` is added nullable with no backfill.** The migration adding the column to
     `rent_adjustments` succeeds without issuing any `UPDATE` against existing rows.
-31. **A newly confirmed `RentAdjustment` records `ConfirmedBy`.** Confirming an adjustment as a
+33. **A newly confirmed `RentAdjustment` records `ConfirmedBy`.** Confirming an adjustment as a
     given user stores that user's reference on the new row.
-32. **The append-only trigger still rejects every update and delete after this change.** Re-run
+34. **The append-only trigger still rejects every update and delete after this change.** Re-run
     against the modified schema: a confirmed row cannot be altered or removed by either application
     role.
