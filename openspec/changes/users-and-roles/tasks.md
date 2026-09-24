@@ -41,14 +41,14 @@ inside PR 2b, not a separate PR — they gate PR 4, not PR 2b's own merge.
 
 ## Phase 1: Domain/Access (PR 1, est. 240–320 lines)
 
-- [ ] 1.1 Create `UserRole.cs` enum (`Admin`, `Empleado`) — `src/Inmobiliaria.Domain/Access/UserRole.cs`
-- [ ] 1.2 Create `AppUser.cs` (Id uuid, Username, DisplayName, IsActive, MustChangePassword; no password or role column) — `src/Inmobiliaria.Domain/Access/AppUser.cs`
-- [ ] 1.3 Create `IUserSession.cs` (UserId, Username, DisplayName, Role, MustChangePassword, `ClearMustChangePassword()`) — `src/Inmobiliaria.Domain/Access/IUserSession.cs`
-- [ ] 1.4 Create `UserSession.cs` implementing `IUserSession` — `src/Inmobiliaria.Domain/Access/UserSession.cs`
-- [ ] 1.5 `AppUserTests.cs`: constructor guards (null/whitespace username, display name) — `tests/Inmobiliaria.Domain.Tests/AppUserTests.cs`
-- [ ] 1.6 `UserSessionTests.cs`: `ClearMustChangePassword` flips the flag once and is idempotent — `tests/Inmobiliaria.Domain.Tests/UserSessionTests.cs`
-- [ ] 1.7 **[Guardrail]** Run `ArchitectureGuardTests`: `Domain/Access` adds no reference to EF Core, Npgsql, or WPF (design Decision 1)
-- [ ] 1.8 **[Isolation check]** `dotnet build` + `dotnet test tests/Inmobiliaria.Domain.Tests` on this branch alone
+- [x] 1.1 Create `UserRole.cs` enum (`Admin`, `Empleado`) — `src/Inmobiliaria.Domain/Access/UserRole.cs`
+- [x] 1.2 Create `AppUser.cs` (Id uuid, Username, DisplayName, IsActive, MustChangePassword; no password or role column) — `src/Inmobiliaria.Domain/Access/AppUser.cs`
+- [x] 1.3 Create `IUserSession.cs` (UserId, Username, DisplayName, Role, MustChangePassword, `ClearMustChangePassword()`) — `src/Inmobiliaria.Domain/Access/IUserSession.cs`
+- [x] 1.4 Create `UserSession.cs` implementing `IUserSession` — `src/Inmobiliaria.Domain/Access/UserSession.cs`
+- [x] 1.5 `AppUserTests.cs`: constructor guards (null/whitespace username, display name) — `tests/Inmobiliaria.Domain.Tests/AppUserTests.cs`
+- [x] 1.6 `UserSessionTests.cs`: `ClearMustChangePassword` flips the flag once and is idempotent — `tests/Inmobiliaria.Domain.Tests/UserSessionTests.cs`
+- [x] 1.7 **[Guardrail]** Run `ArchitectureGuardTests`: `Domain/Access` adds no reference to EF Core, Npgsql, or WPF (design Decision 1)
+- [x] 1.8 **[Isolation check]** `dotnet build` + `dotnet test tests/Inmobiliaria.Domain.Tests` on this branch alone
 
 ## Phase 2: EF Configuration + Entity Changes (PR 2a, est. 360–440 lines)
 
