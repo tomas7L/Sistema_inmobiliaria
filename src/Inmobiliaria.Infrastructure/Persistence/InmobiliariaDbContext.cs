@@ -1,3 +1,4 @@
+using Inmobiliaria.Domain.Access;
 using Inmobiliaria.Domain.Indices;
 using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Domain.Parties;
@@ -7,10 +8,12 @@ using Microsoft.EntityFrameworkCore;
 namespace Inmobiliaria.Infrastructure.Persistence;
 
 /// <summary>
-/// EF Core mapping onto the twelve target Postgres tables: the six from lease-contract plus
-/// the six added by rent-adjustments (economic-index and rent-adjustment capabilities).
-/// Repository ports/adapters are not part of either change — see design.md Decision 2 and the
-/// scope guard in the technical approach.
+/// EF Core mapping onto the thirteen target Postgres tables: the six from lease-contract, the
+/// six added by rent-adjustments (economic-index and rent-adjustment capabilities), and
+/// <c>app_users</c> added by users-and-roles — the FK target every other table points at when
+/// it needs to name a person (design Decision 8). Repository ports/adapters are not part of
+/// any of these changes — see design.md Decision 2 and the scope guard in the technical
+/// approach.
 /// </summary>
 public sealed class InmobiliariaDbContext : DbContext
 {
@@ -19,6 +22,7 @@ public sealed class InmobiliariaDbContext : DbContext
     {
     }
 
+    public DbSet<AppUser> AppUsers => Set<AppUser>();
     public DbSet<Party> Parties => Set<Party>();
     public DbSet<Unit> Units => Set<Unit>();
     public DbSet<Contract> Contracts => Set<Contract>();

@@ -31,7 +31,8 @@ public class AdjustmentMathTruncationTests
 
         Assert.Equal(517_483.73m, proposal.UntruncatedNewCanon);
 
-        var adjustment = RentAdjustment.Confirm(Guid.NewGuid(), Guid.NewGuid(), proposal, DateTimeOffset.UtcNow);
+        var adjustment = RentAdjustment.Confirm(
+            Guid.NewGuid(), Guid.NewGuid(), proposal, DateTimeOffset.UtcNow, Guid.NewGuid());
 
         Assert.Equal(517_483m, adjustment.NewCanon);
     }
@@ -43,7 +44,8 @@ public class AdjustmentMathTruncationTests
         // a computed 47,860.80 stores 47,860, never 47,861.
         var proposal = ProposalFor(47_860.80m);
 
-        var adjustment = RentAdjustment.Confirm(Guid.NewGuid(), Guid.NewGuid(), proposal, DateTimeOffset.UtcNow);
+        var adjustment = RentAdjustment.Confirm(
+            Guid.NewGuid(), Guid.NewGuid(), proposal, DateTimeOffset.UtcNow, Guid.NewGuid());
 
         Assert.Equal(47_860m, adjustment.NewCanon);
         Assert.NotEqual(47_861m, adjustment.NewCanon);
@@ -55,7 +57,8 @@ public class AdjustmentMathTruncationTests
         // Spec test 5: a computed 517,483 stays 517,483 and must never become 517,500.
         var proposal = ProposalFor(517_483m);
 
-        var adjustment = RentAdjustment.Confirm(Guid.NewGuid(), Guid.NewGuid(), proposal, DateTimeOffset.UtcNow);
+        var adjustment = RentAdjustment.Confirm(
+            Guid.NewGuid(), Guid.NewGuid(), proposal, DateTimeOffset.UtcNow, Guid.NewGuid());
 
         Assert.Equal(517_483m, adjustment.NewCanon);
         Assert.NotEqual(517_500m, adjustment.NewCanon);
@@ -81,7 +84,7 @@ public class AdjustmentMathTruncationTests
 
         Assert.Equal(114_285.714m, proposal.UntruncatedNewCanon);
 
-        contract.ConfirmAdjustment(Guid.NewGuid(), proposal, DateTimeOffset.UtcNow);
+        contract.ConfirmAdjustment(Guid.NewGuid(), proposal, DateTimeOffset.UtcNow, Guid.NewGuid());
 
         Assert.Equal(114_285m, contract.MonthlyRent);
     }

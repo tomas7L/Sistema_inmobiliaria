@@ -23,14 +23,15 @@ public class RentAdjustmentTests
     public void Confirm_CorrectionKindWithoutCorrectsId_IsRejected()
     {
         Assert.Throws<ArgumentException>(() => RentAdjustment.Confirm(
-            Guid.NewGuid(), Guid.NewGuid(), MinimalProposal(), DateTimeOffset.UtcNow, AdjustmentKind.Correction));
+            Guid.NewGuid(), Guid.NewGuid(), MinimalProposal(), DateTimeOffset.UtcNow, Guid.NewGuid(),
+            AdjustmentKind.Correction));
     }
 
     [Fact]
     public void Confirm_RegularKindWithCorrectsId_IsRejected()
     {
         Assert.Throws<ArgumentException>(() => RentAdjustment.Confirm(
-            Guid.NewGuid(), Guid.NewGuid(), MinimalProposal(), DateTimeOffset.UtcNow,
+            Guid.NewGuid(), Guid.NewGuid(), MinimalProposal(), DateTimeOffset.UtcNow, Guid.NewGuid(),
             AdjustmentKind.Regular, correctsAdjustmentId: Guid.NewGuid()));
     }
 
@@ -38,7 +39,7 @@ public class RentAdjustmentTests
     public void Confirm_CorrectionKindWithCorrectsId_IsAccepted()
     {
         var adjustment = RentAdjustment.Confirm(
-            Guid.NewGuid(), Guid.NewGuid(), MinimalProposal(), DateTimeOffset.UtcNow,
+            Guid.NewGuid(), Guid.NewGuid(), MinimalProposal(), DateTimeOffset.UtcNow, Guid.NewGuid(),
             AdjustmentKind.Correction, correctsAdjustmentId: Guid.NewGuid());
 
         Assert.Equal(AdjustmentKind.Correction, adjustment.Kind);

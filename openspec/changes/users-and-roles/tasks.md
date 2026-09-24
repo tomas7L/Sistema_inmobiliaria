@@ -52,17 +52,17 @@ inside PR 2b, not a separate PR — they gate PR 4, not PR 2b's own merge.
 
 ## Phase 2: EF Configuration + Entity Changes (PR 2a, est. 360–440 lines)
 
-- [ ] 2.1 Create `AppUserConfiguration.cs`: table `app_users`, `CHECK (username = lower(username))`, unique username — `src/Inmobiliaria.Infrastructure/Persistence/Configurations/AppUserConfiguration.cs`
-- [ ] 2.2 Modify `ContractDocument.cs`: replace `string UploadedBy` with `Guid UploadedByUserId`; drop `ThrowIfNullOrWhiteSpace`; reject `Guid.Empty` — `src/Inmobiliaria.Domain/Leasing/ContractDocument.cs`
-- [ ] 2.3 Modify `RentAdjustment.cs`: `Confirm(...)` gains a required, non-nullable `Guid confirmedBy` parameter — `src/Inmobiliaria.Domain/Leasing/RentAdjustment.cs`
-- [ ] 2.4 Modify `Contract.cs`: `ConfirmAdjustment` gains a required `Guid confirmedBy` parameter — `src/Inmobiliaria.Domain/Leasing/Contract.cs`
-- [ ] 2.5 Modify `ContractDocumentConfiguration.cs`: FK to `AppUser` (`ON DELETE RESTRICT`) replaces the text column; correct the doc comment — `src/Inmobiliaria.Infrastructure/Persistence/Configurations/ContractDocumentConfiguration.cs`
-- [ ] 2.6 Modify `RentAdjustmentConfiguration.cs`: map `confirmed_by` (nullable) + its FK; `SetAfterSaveBehavior(Throw)` loop already covers the new property with no new code — `src/Inmobiliaria.Infrastructure/Persistence/Configurations/RentAdjustmentConfiguration.cs`
-- [ ] 2.7 Modify `InmobiliariaDbContext.cs`: add `DbSet<AppUser>`; update the class comment for the thirteenth table — `src/Inmobiliaria.Infrastructure/Persistence/InmobiliariaDbContext.cs`
-- [ ] 2.8 Update all 26 existing call sites across the 5 affected test files for the two new required parameters — **no** `Guid? confirmedBy = null` shortcut (design Decision 8 rejects it) — `tests/Inmobiliaria.Domain.Tests/*`
-- [ ] 2.9 **[EF model check — not just build]** Run `dotnet ef dbcontext info -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure` (or an Infrastructure test that reads `context.Model`) to force `OnModelCreating` to validate before any migration exists. `dotnet build` alone does not catch EF model-validation failures — a prior slice in this project passed build and broke CI this exact way
-- [ ] 2.10 **[Guardrail]** Re-run `ArchitectureGuardTests` after the `Contract.cs`/`ContractDocument.cs`/`RentAdjustment.cs` edits
-- [ ] 2.11 **[Isolation check]** Build and run `Inmobiliaria.Domain.Tests` + `Inmobiliaria.Infrastructure.Tests` on this branch alone; no migration exists yet, so no Postgres-dependent test should be attempted here
+- [x] 2.1 Create `AppUserConfiguration.cs`: table `app_users`, `CHECK (username = lower(username))`, unique username — `src/Inmobiliaria.Infrastructure/Persistence/Configurations/AppUserConfiguration.cs`
+- [x] 2.2 Modify `ContractDocument.cs`: replace `string UploadedBy` with `Guid UploadedByUserId`; drop `ThrowIfNullOrWhiteSpace`; reject `Guid.Empty` — `src/Inmobiliaria.Domain/Leasing/ContractDocument.cs`
+- [x] 2.3 Modify `RentAdjustment.cs`: `Confirm(...)` gains a required, non-nullable `Guid confirmedBy` parameter — `src/Inmobiliaria.Domain/Leasing/RentAdjustment.cs`
+- [x] 2.4 Modify `Contract.cs`: `ConfirmAdjustment` gains a required `Guid confirmedBy` parameter — `src/Inmobiliaria.Domain/Leasing/Contract.cs`
+- [x] 2.5 Modify `ContractDocumentConfiguration.cs`: FK to `AppUser` (`ON DELETE RESTRICT`) replaces the text column; correct the doc comment — `src/Inmobiliaria.Infrastructure/Persistence/Configurations/ContractDocumentConfiguration.cs`
+- [x] 2.6 Modify `RentAdjustmentConfiguration.cs`: map `confirmed_by` (nullable) + its FK; `SetAfterSaveBehavior(Throw)` loop already covers the new property with no new code — `src/Inmobiliaria.Infrastructure/Persistence/Configurations/RentAdjustmentConfiguration.cs`
+- [x] 2.7 Modify `InmobiliariaDbContext.cs`: add `DbSet<AppUser>`; update the class comment for the thirteenth table — `src/Inmobiliaria.Infrastructure/Persistence/InmobiliariaDbContext.cs`
+- [x] 2.8 Update all 26 existing call sites across the 5 affected test files for the two new required parameters — **no** `Guid? confirmedBy = null` shortcut (design Decision 8 rejects it) — `tests/Inmobiliaria.Domain.Tests/*`
+- [x] 2.9 **[EF model check — not just build]** Run `dotnet ef dbcontext info -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure` (or an Infrastructure test that reads `context.Model`) to force `OnModelCreating` to validate before any migration exists. `dotnet build` alone does not catch EF model-validation failures — a prior slice in this project passed build and broke CI this exact way
+- [x] 2.10 **[Guardrail]** Re-run `ArchitectureGuardTests` after the `Contract.cs`/`ContractDocument.cs`/`RentAdjustment.cs` edits
+- [x] 2.11 **[Isolation check]** Build and run `Inmobiliaria.Domain.Tests` + `Inmobiliaria.Infrastructure.Tests` on this branch alone; no migration exists yet, so no Postgres-dependent test should be attempted here
 
 ## Phase 3: Migration, Roles, GRANTs (PR 2b, est. 365–455 lines)
 
@@ -76,6 +76,7 @@ inside PR 2b, not a separate PR — they gate PR 4, not PR 2b's own merge.
 - [ ] 3.8 **[Guardrail — scope guard]** Diff `20260913215911_InitialSchema.cs`, `20260918233049_AddRentAdjustments.cs` (and their `.Designer.cs`) against `HEAD`: confirm both are byte-for-byte unmodified and `ContractConfiguration.cs` is not touched
 - [ ] 3.9 **[Spec test 29]** `RolePermissionTests` (Testcontainers): after migration, connect as each role and confirm every table in `information_schema.tables` is reachable exactly per its intended grant — none silently unreachable
 - [ ] 3.10 **[Spec test 30]** `SchemaConstraintTests`: `contract_documents.uploaded_by` is gone; `uploaded_by_user_id` resolves to an `AppUser` row
+- [ ] 3.10b **[Carried over from PR 2a — this test WILL break when the migration lands]** `SchemaConstraintTests.InvalidDocumentKindCheckConstraint_Rejected` still raw-SQL-inserts `'tester'` into the text column `uploaded_by`. It is green today only because Docker is unreachable and it is skipped. Rewrite it against `uploaded_by_user_id`, inserting a real `AppUser` row first so the FK resolves. Do not delete the test — it proves the `kind` CHECK constraint, which is unrelated to this change and must keep working
 - [ ] 3.11 **[Spec test 32]** `SchemaConstraintTests`: `rent_adjustments.confirmed_by` is nullable; the migration issued no `UPDATE` against existing rows
 - [ ] 3.12 **[GATE — Design Decision 9 / Open Question, resolve before PR 4]** `RolePermissionTests` (Testcontainers): create a login role granted `inmobiliaria_admin` `WITH ADMIN OPTION` per the runbook (task 3.7); authenticated **as that role**, attempt `GRANT inmobiliaria_empleado TO <new_role>`. Record whether PostgreSQL 17 honors the inherited `ADMIN OPTION`. **If it fails**: stop — PR 4's provisioning function cannot rely on inheritance; the bootstrap runbook must instead grant `inmobiliaria_empleado ... WITH ADMIN OPTION` directly to every individual Admin login role, and PR 4 (Phase 5) is re-scoped accordingly before it starts
 - [ ] 3.13 **[GATE — Design Decision 4 / Open Question, resolve before PR 4]** Produce this exact read-only query for the user to run themselves against the live Supabase project with their own credentials — no agent connects to the database:

@@ -17,6 +17,17 @@ public sealed class RentAdjustment
     public AdjustmentKind Kind { get; }
     public Guid? CorrectsAdjustmentId { get; }
     public DateTimeOffset ConfirmedAt { get; }
+
+    /// <summary>
+    /// Who confirmed this adjustment. Nullable here and at the mapped column, because rows
+    /// that predate this column stay null forever under the append-only trigger — but
+    /// <see cref="Confirm"/>'s <c>confirmedBy</c> parameter is a required, non-nullable
+    /// <see cref="Guid"/> (design Decision 8): a NEW row that forgot to name its confirmer is
+    /// exactly the defect this asymmetry exists to prevent, so the compiler refuses it at the
+    /// one place a null could still be introduced.
+    /// </summary>
+    public Guid? ConfirmedBy { get; }
+
     public IReadOnlyList<RentAdjustmentIndexValue> IndexValues { get; }
 
     /// <summary>
@@ -39,6 +50,7 @@ public sealed class RentAdjustment
         AdjustmentKind kind,
         Guid? correctsAdjustmentId,
         DateTimeOffset confirmedAt,
+        Guid confirmedBy,
         IReadOnlyList<RentAdjustmentIndexValue> indexValues)
     {
         Id = id;
@@ -50,6 +62,7 @@ public sealed class RentAdjustment
         Kind = kind;
         CorrectsAdjustmentId = correctsAdjustmentId;
         ConfirmedAt = confirmedAt;
+        ConfirmedBy = confirmedBy;
         IndexValues = indexValues;
     }
 
@@ -64,6 +77,7 @@ public sealed class RentAdjustment
         Guid contractId,
         AdjustmentProposal proposal,
         DateTimeOffset confirmedAt,
+        Guid confirmedBy,
         AdjustmentKind kind = AdjustmentKind.Regular,
         Guid? correctsAdjustmentId = null)
     {
@@ -88,6 +102,7 @@ public sealed class RentAdjustment
             kind,
             correctsAdjustmentId,
             confirmedAt,
+            confirmedBy,
             proposal.IndexValues);
     }
 }

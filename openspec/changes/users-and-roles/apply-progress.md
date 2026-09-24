@@ -70,7 +70,7 @@ No database connection was opened; no migration command was run.
 
 ### Remaining Tasks (later PRs, not part of this batch)
 
-- [ ] Phase 2 (PR 2a): EF Configuration + Entity Changes
+- [x] Phase 2 (PR 2a): EF Configuration + Entity Changes — see below
 - [ ] Phase 3 (PR 2b): Migration, Roles, GRANTs
 - [ ] Phase 4 (PR 3): Infrastructure/Access Ports and Adapters
 - [ ] Phase 5 (PR 4): In-App Provisioning, Reset, Deactivation
@@ -87,7 +87,108 @@ No database connection was opened; no migration command was run.
 - Estimated review budget impact: well under the 800-line session budget; actual diff is ~180 lines
   of production code + tests, below even the design's own 240–320 line estimate for this slice
 
-### Status
+### Status (PR 1)
 
 8/8 Phase 1 tasks complete. Ready for verify (or for the orchestrator to proceed to PR 2a / Phase 2
 once the user has reviewed and merged this PR).
+
+---
+
+## PR 2a — Phase 2: EF Configuration + Entity Changes — COMPLETE (11/11 tasks)
+
+- [x] 2.1 `AppUserConfiguration.cs` — table `app_users`, `CHECK (username = lower(username))`, unique username index
+- [x] 2.2 `ContractDocument.cs` — `string UploadedBy` replaced by `Guid UploadedByUserId`; `ThrowIfNullOrWhiteSpace` dropped, `Guid.Empty` rejected
+- [x] 2.3 `RentAdjustment.Confirm(...)` — gained a required, non-nullable `Guid confirmedBy` parameter
+- [x] 2.4 `Contract.ConfirmAdjustment` — gained a required, non-nullable `Guid confirmedBy` parameter
+- [x] 2.5 `ContractDocumentConfiguration.cs` — FK to `AppUser` (`ON DELETE RESTRICT`) replaces the text column
+- [x] 2.6 `RentAdjustmentConfiguration.cs` — mapped nullable `confirmed_by` + its FK; existing `SetAfterSaveBehavior(Throw)` loop covers it with no new code
+- [x] 2.7 `InmobiliariaDbContext.cs` — added `DbSet<AppUser>`; class comment now documents the thirteenth table
+- [x] 2.8 Updated every existing call site of `RentAdjustment.Confirm` / `Contract.ConfirmAdjustment` / `new ContractDocument(...)` across 5 test files — no default-value shortcut used
+- [x] 2.9 **[EF model check]** `dotnet ef dbcontext info` succeeded offline (placeholder connection string in `DesignTimeDbContextFactory`, never connected) AND a new permanent regression test (`EfModelValidationTests.cs`) was added, because `.github/workflows/ci.yml` never invokes `dotnet ef` — without this test the model-validation gap would stay uncaught by CI going forward
+- [x] 2.10 **[Guardrail]** `ArchitectureGuardTests` re-run green after the entity edits
+- [x] 2.11 **[Isolation check]** Full solution build + both test projects run on this branch alone; zero Postgres-dependent tests attempted (no migration exists yet)
+
+### Files Changed (PR 2a)
+
+| File | Action | What Was Done |
+|------|--------|----------------|
+| `src/Inmobiliaria.Infrastructure/Persistence/Configurations/AppUserConfiguration.cs` | Created | `app_users` table config: PK, `username`/`display_name` required, `is_active`/`must_change_password` defaults, lowercase CHECK, unique index on `username` |
+| `src/Inmobiliaria.Domain/Leasing/ContractDocument.cs` | Modified | `UploadedByUserId` (Guid, rejects `Guid.Empty`) replaces the plain-string `UploadedBy` |
+| `src/Inmobiliaria.Domain/Leasing/RentAdjustment.cs` | Modified | `ConfirmedBy` is `Guid?` (nullable — matches the nullable column, holds pre-column rows as null forever); `Confirm(...)`'s `confirmedBy` parameter is the non-nullable `Guid` that enforces the asymmetry at every new call site |
+| `src/Inmobiliaria.Domain/Leasing/Contract.cs` | Modified | `ConfirmAdjustment` gained the same required, non-nullable `Guid confirmedBy` parameter, forwarded to `RentAdjustment.Confirm` |
+| `src/Inmobiliaria.Infrastructure/Persistence/Configurations/ContractDocumentConfiguration.cs` | Modified | `uploaded_by_user_id` FK to `AppUser`, `ON DELETE RESTRICT`; doc comment corrected |
+| `src/Inmobiliaria.Infrastructure/Persistence/Configurations/RentAdjustmentConfiguration.cs` | Modified | `confirmed_by` column mapping (nullable, no `IsRequired()`) + FK to `AppUser`, `ON DELETE RESTRICT` |
+| `src/Inmobiliaria.Infrastructure/Persistence/InmobiliariaDbContext.cs` | Modified | `DbSet<AppUser> AppUsers`; class doc comment updated for the 13-table count |
+| `tests/Inmobiliaria.Domain.Tests/RentAdjustmentTests.cs` | Modified | 3 call sites of `RentAdjustment.Confirm` given a `Guid.NewGuid()` `confirmedBy` argument |
+| `tests/Inmobiliaria.Domain.Tests/AdjustmentMathTruncationTests.cs` | Modified | 3 `RentAdjustment.Confirm` + 1 `contract.ConfirmAdjustment` call sites updated |
+| `tests/Inmobiliaria.Domain.Tests/ContractShareSurvivesAdjustmentTests.cs` | Modified | 1 `contract.ConfirmAdjustment` call site updated |
+| `tests/Inmobiliaria.Domain.Tests/ContractAdjustmentLateConfirmationTests.cs` | Modified | 2 `contract.ConfirmAdjustment` call sites updated |
+| `tests/Inmobiliaria.Infrastructure.Tests/SchemaConstraintTests.cs` | Modified | Local `ConfirmAdjustment` test helper given a `confirmedBy` parameter forwarded as `Guid.NewGuid()`; 2 `new ContractDocument(...)` call sites given a `Guid.NewGuid()` uploader instead of a string |
+| `tests/Inmobiliaria.Infrastructure.Tests/EfModelValidationTests.cs` | Created | Forces `OnModelCreating` via `context.Model` against a syntactically-valid, never-opened Npgsql connection string — the permanent CI-visible half of task 2.9 |
+
+### Deviations from Design
+
+1. **`RentAdjustment.ConfirmedBy`'s CLR type is `Guid?`, not `Guid`.** design.md's Decision 8 prose
+   focuses entirely on the `Confirm(...)` **parameter** being required and non-nullable; it does not
+   explicitly state the entity property's own CLR type. A non-nullable `Guid` property mapped to a
+   nullable `confirmed_by uuid NULL` column would throw at read time for the existing (pre-column)
+   rows the design itself says stay null forever, so the property had to be `Guid?` for the domain
+   model to be able to represent — and EF to be able to read — those rows at all. The asymmetry the
+   task description calls out (non-nullable parameter, nullable column) is implemented as: non-nullable
+   `Guid confirmedBy` parameter on `Confirm`/`ConfirmAdjustment`, nullable `Guid? ConfirmedBy` property
+   and column. This is the only way the stated asymmetry compiles and reads real data correctly.
+2. **Added `EfModelValidationTests.cs`, a file design.md/tasks.md does not name.** Task 2.9 offered two
+   routes — `dotnet ef dbcontext info`, or an Infrastructure test reading `context.Model`. The first
+   route succeeded locally (the existing `DesignTimeDbContextFactory` placeholder connection string
+   already lets it run with no live database), so strictly the fallback wasn't required. It was added
+   anyway because `.github/workflows/ci.yml`'s `core` job runs only `dotnet build` + `dotnet test` —
+   never `dotnet ef` — so without this test the exact CI-breaking gap task 2.9 exists to close (a
+   green build, an invalid EF model, no automated check ever catching it) would still be open on every
+   future PR. This is additive, not a scope violation: it touches no production file and needed no new
+   package (Npgsql was already a test-project dependency via `PostgresFixture.cs`).
+3. **`SchemaConstraintTests.cs` needed edits even though tasks.md names only `tests/Inmobiliaria.Domain.Tests/*`
+   as the "5 affected test files".** In fact 4 of the 5 files with `Confirm`/`ConfirmAdjustment` call
+   sites are under `Domain.Tests`, and the 5th (`SchemaConstraintTests.cs`) lives under
+   `Infrastructure.Tests` — it has its own local `ConfirmAdjustment` wrapper plus 2 `new
+   ContractDocument(...)` calls. Both had to change for the solution to compile; tasks.md's path is
+   read as informative, not as an exhaustive path restriction, since task 2.11 requires the whole
+   solution to build.
+
+### Known Residual Gap (not this PR's scope, flagged for PR 2b)
+
+`SchemaConstraintTests.InvalidDocumentKindCheckConstraint_Rejected` still issues a raw SQL `INSERT`
+naming the literal column `uploaded_by` (the pre-migration name). This is deliberately left alone:
+the test is Postgres-dependent (skips without Docker), no migration exists yet in this PR, and fixing
+the literal SQL to `uploaded_by_user_id` requires knowing the exact legacy-row UUID and column shape
+PR 2b's migration will actually create. Until PR 2b lands, this raw SQL simply never executes in this
+environment (Docker unreachable ⇒ `[SkippableFact]` skips it) — but a developer running this test
+suite with Docker *before* PR 2b merges would see it fail against the still-current (pre-migration)
+schema for an unrelated reason (the EF model now expects `uploaded_by_user_id`/`app_users`, which
+don't exist until PR 2b's migration runs). This is the expected, named consequence of splitting slice
+2 into 2a/2b (tasks.md's own Suggested Work Units table), not a defect introduced here.
+
+### Issues Found
+
+None new. No pre-existing test broke. `dotnet build Inmobiliaria.sln` is clean (0 warnings, 0 errors).
+
+### Scope Compliance
+
+Confirmed: no migration file created, `ContractDocumentConfiguration.cs` was touched only for the
+planned FK change (not `ContractConfiguration.cs`, which remains untouched), and no
+`Infrastructure/Access` file was created. `git status --porcelain` shows only the 11 Phase 2
+production/test files above, plus `tasks.md` and this `apply-progress.md`.
+
+### Work Unit Evidence
+
+| Evidence | Value |
+|---|---|
+| `dotnet build Inmobiliaria.sln` | 0 Warning(s), 0 Error(s) |
+| `dotnet test tests/Inmobiliaria.Domain.Tests` | **67 passed, 0 failed, 0 skipped** |
+| `dotnet test tests/Inmobiliaria.Infrastructure.Tests` | **1 passed** (`EfModelValidationTests`), **22 skipped** (all Testcontainers-backed `SchemaConstraintTests`/`DueAdjustmentQueryTests` — Docker unreachable in this environment, by design, per `PostgresFixture`'s skip-not-fail behavior), **0 failed** |
+| `dotnet ef dbcontext info -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure` | Succeeded offline: printed context type, provider (`Npgsql.EntityFrameworkCore.PostgreSQL`), database name, and naming convention — no connection ever opened (`DesignTimeDbContextFactory`'s placeholder connection string) |
+| Rollback boundary | Revert `ContractDocument.cs`, `RentAdjustment.cs`, `Contract.cs`; delete `AppUserConfiguration.cs`, `EfModelValidationTests.cs`; revert `ContractDocumentConfiguration.cs`, `RentAdjustmentConfiguration.cs`, `InmobiliariaDbContext.cs`, and the 5 test files' call sites. PR 1 (`Domain/Access`) is unaffected — nothing in PR 2a modifies it |
+
+### Status (PR 2a)
+
+11/11 Phase 2 tasks complete. No migration created (out of scope — PR 2b). Ready for the orchestrator
+to proceed to PR 2b (Phase 3: Migration, Roles, GRANTs) once this PR is reviewed and merged.

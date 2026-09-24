@@ -105,7 +105,8 @@ public sealed class SchemaConstraintTests
         var proposal = new AdjustmentProposal(
             contract.MonthlyRent, [snapshot], CombinationRule.Single, variation, effectiveDate);
 
-        return contract.ConfirmAdjustment(Guid.NewGuid(), proposal, confirmedAt, kind, correctsAdjustmentId);
+        return contract.ConfirmAdjustment(
+            Guid.NewGuid(), proposal, confirmedAt, Guid.NewGuid(), kind, correctsAdjustmentId);
     }
 
     [SkippableFact]
@@ -467,10 +468,10 @@ public sealed class SchemaConstraintTests
         context.ContractDocuments.AddRange(
             new ContractDocument(
                 Guid.NewGuid(), contract.Id, "leases/original.pdf", "original.pdf",
-                "application/pdf", DateTimeOffset.UtcNow, "agent@example.com", DocumentKind.Original),
+                "application/pdf", DateTimeOffset.UtcNow, Guid.NewGuid(), DocumentKind.Original),
             new ContractDocument(
                 Guid.NewGuid(), contract.Id, "leases/addendum-1.pdf", "addendum-1.pdf",
-                "application/pdf", DateTimeOffset.UtcNow, "agent@example.com", DocumentKind.Addendum));
+                "application/pdf", DateTimeOffset.UtcNow, Guid.NewGuid(), DocumentKind.Addendum));
 
         await context.SaveChangesAsync();
 

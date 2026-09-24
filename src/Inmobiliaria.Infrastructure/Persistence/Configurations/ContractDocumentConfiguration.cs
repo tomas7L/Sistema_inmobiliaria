@@ -1,3 +1,4 @@
+using Inmobiliaria.Domain.Access;
 using Inmobiliaria.Domain.Leasing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -5,8 +6,11 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 namespace Inmobiliaria.Infrastructure.Persistence.Configurations;
 
 /// <summary>
-/// contract-documents: One-to-Many, Document Metadata, Uploader as Plain Identifier.
-/// <c>uploaded_by</c> is a plain text column — no FK, since no user entity exists yet.
+/// contract-documents: One-to-Many, Document Metadata, Uploader as a Relational Reference.
+/// <c>uploaded_by_user_id</c> is a real FK to <see cref="AppUser"/> now that
+/// <c>Domain/Access</c> exists (design Decision 8) — the plain-text placeholder this used to
+/// be is gone. <c>ON DELETE RESTRICT</c>: deleting a user must never cascade into documents,
+/// and users are never deleted anyway (deactivated only).
 /// </summary>
 public sealed class ContractDocumentConfiguration : IEntityTypeConfiguration<ContractDocument>
 {
@@ -31,13 +35,18 @@ public sealed class ContractDocumentConfiguration : IEntityTypeConfiguration<Con
             .HasMaxLength(24)
             .IsRequired();
 
-        builder.Property(d => d.UploadedBy)
-            .HasColumnName("uploaded_by")
+        builder.Property(d => d.UploadedByUserId)
+            .HasColumnName("uploaded_by_user_id")
             .IsRequired();
 
         builder.HasOne<Contract>()
             .WithMany()
             .HasForeignKey(d => d.ContractId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne<AppUser>()
+            .WithMany()
+            .HasForeignKey(d => d.UploadedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
