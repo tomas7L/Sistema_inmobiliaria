@@ -178,6 +178,16 @@ operation shows a summary before it is confirmed. If the calculation yields $415
 is charged; it is never rounded up to a tidier figure. This is distinct from monetary precision —
 money stores two decimals, so $517,483.7291 becomes $517,483.73 — and the two coexist.
 
+> ⚠️ **SUPERSEDED — do not implement the sentence above.** It was written before this change's own
+> design Decision 4 settled truncation. The charged amount is **truncated to a whole peso**, so
+> $517,483.7291 becomes **$517,483**, not $517,483.73. Storage precision stays `numeric(14,2)`;
+> that part is still correct — what changed is the charged figure. The rule as it stands is in
+> `openspec/specs/rent-adjustment/spec.md`, "Whole-Peso Canon, Truncated, With No Commercial
+> Rounding", confirmed by the agency owner on 2026-09-23.
+>
+> The original sentence is left in place on purpose: this file is the record of what the team
+> believed on 2026-09-21, not a description of the system.
+
 The confirmation summary (previous canon, index values used, coefficient, new canon) is a **general
 principle of this system, not a feature of this change**. Confirmation is the exact point where a
 typing mistake becomes money someone owes: one extra zero in an index multiplies the rent. Showing

@@ -269,6 +269,31 @@ total canon reopens the split for edit.
 `Contract` MUST store a nullable honorarios (agency management fee) percentage rate. This
 capability stores the value only; it does not compute fees.
 
+> **"Honorarios" names TWO different things in this agency. This requirement is about the first.**
+>
+> 1. **Honorarios de administración** — a **PERCENTAGE** of the rent (8%, 6%, it varies by owner),
+>    paid by the **owner**, **every month** for the life of the contract, printed on the owner's
+>    part of the receipt. This requirement, and every other use of "honorarios" written before
+>    2026-09-23, means this one.
+> 2. **Honorarios contractuales** — a fixed **AMOUNT** for handling the contract, paid by the
+>    **tenant**, **once**, in **1 to 6 fixed instalments** that never adjust. Paying in full is
+>    simply one instalment, not a separate case. It is printed on the tenant's part of the monthly
+>    receipt, never the owner's. Confirmed 2026-09-23 and **not modelled anywhere yet**; it belongs
+>    to the collection change.
+>
+> The contrast that matters: the owner's is a **rate** that rides the rent upward as it adjusts;
+> the tenant's is an **amount** fixed at signing that never moves. Storing either one the other
+> way round would be wrong.
+>
+> Anything added later MUST disambiguate which of the two it means. See
+> `openspec/domain/respuestas-del-dueno.md`.
+>
+> **OPEN — where the administration rate belongs.** It is stored here, on `Contract`, because the
+> administration mandate is cláusula DÉCIMA SEXTA *of the lease itself* rather than a separate
+> agreement. But the rate is negotiated with the **owner**, so an owner holding several contracts
+> carries the same rate copied into each one with nothing binding the copies together. The team is
+> reviewing this. It is recorded as an open question, not a settled decision, and may change.
+
 #### Scenario: Honorarios unassigned
 
 - GIVEN a contract is recorded without a known honorarios rate
