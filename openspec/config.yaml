@@ -146,13 +146,28 @@ conventions:
       exact arithmetic gives 47,860.80 — the agency already truncates. Argentine
       cent coins no longer circulate, so a centavo on an invoice is a figure
       nobody can pay in cash.
-    open_question: >
-      Whether the agency rounds or truncates is inferred from a single data
-      point (the honorarios line). The team decided to truncate deliberately:
-      one peso does not change anything and it matches the observed behaviour.
-      Confirm with the agency owner when possible.
+    confirmed: >
+      2026-09-23, by the agency owner. The rule stands and is no longer an
+      inference. Two things that sound contradictory are both true and describe
+      different moments: the printed document truncates (the 47,860 line above),
+      and the agency then rounds the PHYSICAL CASH at the register. The owner's
+      words: they round it themselves, and a decimal result does not bother
+      them. So truncation matches the paper, and the cash difference is settled
+      by hand exactly as it is today.
+    requested_extension: >
+      The owner asked, as an optional nicety and not a requirement, that the
+      system offer a rounding option. `RoundingRule` already has room for a
+      second member; this is additive and belongs to the collection change, not
+      here. See openspec/domain/respuestas-del-dueno.md.
 
 rules:
+  all_phases:
+    - Read `openspec/domain/respuestas-del-dueno.md` before writing any artifact that touches
+      receipts, collection, honorarios, adjustment indices, tenant balances or invoicing. It is the
+      record of what the agency owner actually confirmed, and of what we believed before he did.
+      Several facts in it contradict inferences made earlier from the two sample receipts.
+    - Never re-derive a domain fact from the sample receipts when that file already answers it.
+      Deriving from the receipts is what produced the inferences it corrects.
   proposal:
     - Reference relevant domain Engram observations (topic_key `domain/*`) instead of restating them
     - Include rollback plan for risky changes
