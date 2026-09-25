@@ -167,16 +167,16 @@ inside PR 2b, not a separate PR — they gate PR 4, not PR 2b's own merge.
 
 ## Phase 6: Desktop Bootstrap (PR 5, est. 400–500 lines)
 
-- [ ] 6.1 Add `CommunityToolkit.Mvvm` and `Microsoft.Extensions.DependencyInjection` package versions to `Directory.Packages.props`; add `Inmobiliaria.Desktop`'s first `Inmobiliaria.Infrastructure` project reference — `Directory.Packages.props`, `src/Inmobiliaria.Desktop/Inmobiliaria.Desktop.csproj`
-- [ ] 6.2 Create `LoginViewModel.cs` (`ObservableObject`; Username, Password, IsBusy, ErrorMessage, LoginCommand; depends only on `IAuthenticator`) — `src/Inmobiliaria.Desktop/LoginViewModel.cs`
-- [ ] 6.3 Create `LoginWindow.xaml` + `LoginWindow.xaml.cs` — `src/Inmobiliaria.Desktop/LoginWindow.xaml{,.cs}`
-- [ ] 6.4 Create `ChangePasswordViewModel.cs` (`IsForced` toggles cancel; depends on `IPasswordService`, `IUserSession`) — `src/Inmobiliaria.Desktop/ChangePasswordViewModel.cs`
-- [ ] 6.5 Create `ChangePasswordWindow.xaml` + `ChangePasswordWindow.xaml.cs` — `src/Inmobiliaria.Desktop/ChangePasswordWindow.xaml{,.cs}`
-- [ ] 6.6 Modify `App.xaml.cs`: `OnStartup` calls `AddPreLoginServices()`, shows `LoginWindow` modally; on `MustChangePassword` shows `ChangePasswordWindow` modally before constructing `MainWindow`; a cancelled forced change disposes the session and returns to `LoginWindow`
-- [ ] 6.7 **[Spec test 15 — construction-order half]** Add a test in `Inmobiliaria.Infrastructure.Tests` (NOT a WPF/Desktop test — Desktop cannot gate the `core` job) asserting over the bootstrap construction sequence that with `MustChangePassword = true`, the path cannot reach `MainWindow`/anything else until the change succeeds
-- [ ] 6.8 Modify `openspec/config.yaml`: move `credential-exposure` to `resolved_decisions`; correct the `data-api-disabled` rationale; add the "every new table ships its GRANTs" convention entry
-- [ ] 6.9 **[Guardrail]** Confirm `Inmobiliaria.Desktop.csproj`'s new Infrastructure reference exposes no EF/Npgsql type to XAML outside the bootstrap composition root
-- [ ] 6.10 **[Isolation check]** Build the full solution and run `Inmobiliaria.Core.slnf` (Linux `core` job) and the Windows `build` job on this branch alone, on top of PR1–PR4 merged
+- [x] 6.1 Add `CommunityToolkit.Mvvm` and `Microsoft.Extensions.DependencyInjection` package versions to `Directory.Packages.props`; add `Inmobiliaria.Desktop`'s first `Inmobiliaria.Infrastructure` project reference — `Directory.Packages.props`, `src/Inmobiliaria.Desktop/Inmobiliaria.Desktop.csproj`
+- [x] 6.2 Create `LoginViewModel.cs` (`ObservableObject`; Username, Password, IsBusy, ErrorMessage, LoginCommand; depends only on `IAuthenticator`) — `src/Inmobiliaria.Desktop/LoginViewModel.cs`
+- [x] 6.3 Create `LoginWindow.xaml` + `LoginWindow.xaml.cs` — `src/Inmobiliaria.Desktop/LoginWindow.xaml{,.cs}`
+- [x] 6.4 Create `ChangePasswordViewModel.cs` (`IsForced` toggles cancel; depends on `IPasswordService`, `IUserSession`) — `src/Inmobiliaria.Desktop/ChangePasswordViewModel.cs`
+- [x] 6.5 Create `ChangePasswordWindow.xaml` + `ChangePasswordWindow.xaml.cs` — `src/Inmobiliaria.Desktop/ChangePasswordWindow.xaml{,.cs}`
+- [x] 6.6 Modify `App.xaml.cs`: `OnStartup` calls `AddPreLoginServices()`, shows `LoginWindow` modally; on `MustChangePassword` shows `ChangePasswordWindow` modally before constructing `MainWindow`; a cancelled forced change disposes the session and returns to `LoginWindow`
+- [x] 6.7 **[Spec test 15 — construction-order half]** Add a test in `Inmobiliaria.Infrastructure.Tests` (NOT a WPF/Desktop test — Desktop cannot gate the `core` job) asserting over the bootstrap construction sequence that with `MustChangePassword = true`, the path cannot reach `MainWindow`/anything else until the change succeeds
+- [x] 6.8 Modify `openspec/config.yaml`: move `credential-exposure` to `resolved_decisions`; correct the `data-api-disabled` rationale; add the "every new table ships its GRANTs" convention entry
+- [x] 6.9 **[Guardrail]** Confirm `Inmobiliaria.Desktop.csproj`'s new Infrastructure reference exposes no EF/Npgsql type to XAML outside the bootstrap composition root
+- [x] 6.10 **[Isolation check]** Build the full solution and run `Inmobiliaria.Core.slnf` (Linux `core` job) and the Windows `build` job on this branch alone, on top of PR1–PR4 merged
 
 ## Human Follow-Ups (non-code, not assigned to any agent)
 
