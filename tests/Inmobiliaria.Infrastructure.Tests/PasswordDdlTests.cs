@@ -55,7 +55,7 @@ public sealed class PasswordDdlTests
             await authenticator.AuthenticateAsync(rawUsername, AccessTestSupport.DefaultPassword));
 
         var passwordService = new PostgresPasswordService(login.Factory, login.Session);
-        await passwordService.ChangeOwnPasswordAsync(payload);
+        await passwordService.ChangeOwnPasswordAsync(AccessTestSupport.DefaultPassword, payload);
         await login.Factory.DisposeAsync();
 
         // app_users still exists and is unaffected — no other table or statement executed

@@ -99,4 +99,47 @@ internal static class AccessTestSupport
 
         return new InmobiliariaDbContext(options);
     }
+
+    /// <summary>
+    /// Wraps a role's connection in an <see cref="ISessionDbContextFactory"/> — the same shape
+    /// <see cref="NpgsqlAuthenticator"/> hands a real login through — so
+    /// <see cref="PostgresUserProvisioning"/> and <see cref="PostgresPasswordService"/> can be
+    /// exercised exactly as PR 5's ViewModels eventually will, without going through a full
+    /// login handshake for a role the test already knows exists.
+    /// </summary>
+    public static ISessionDbContextFactory BuildSessionFactoryAs(
+        InmobiliariaDbContext superuserContext, string rawUsername, string? password = null)
+    {
+        var builder = new NpgsqlConnectionStringBuilder(
+            superuserContext.Database.GetDbConnection().ConnectionString)
+        {
+            Username = SupavisorUsername.For(rawUsername, TestProjectRef),
+            Password = password ?? DefaultPassword,
+        };
+
+        var dataSource = new NpgsqlDataSourceBuilder(builder.ConnectionString).Build();
+        return new SessionDbContextFactory(dataSource);
+    }
+
+    /// <summary>
+    /// Grants the exact bootstrap-runbook shape
+    /// (<c>docs/runbooks/bootstrap-first-admin.md</c>) to an already-provisioned Admin test
+    /// user: <c>CREATEROLE</c> plus <c>ADMIN OPTION</c> on BOTH group roles, granted directly by
+    /// the superuser connection. Required before that Admin can successfully call
+    /// <c>app_create_login_role</c> or <c>app_set_role_password</c> against ANOTHER role — task
+    /// 3.12 (PR 2b) proved a bare, non-admin-option Admin membership is not enough
+    /// (<c>RolePermissionTests.AdminOptionInheritance_ProvenNotAssumed</c>), and
+    /// <c>RolePermissionTests.Admin_DirectAppUsersWriteAndProvisioningFunction_BothSucceed</c>
+    /// (PR 3) already reproduces this same grant shape for the same reason.
+    /// </summary>
+    public static async Task GrantProvisioningCapabilityAsync(
+        InmobiliariaDbContext superuserContext, string rawAdminUsername)
+    {
+        var composedUsername = SupavisorUsername.For(rawAdminUsername, TestProjectRef);
+        string grantCreateRoleSql = $"ALTER ROLE \"{composedUsername}\" CREATEROLE;";
+        string grantAdminOptionSql =
+            $"GRANT inmobiliaria_admin, inmobiliaria_empleado TO \"{composedUsername}\" WITH ADMIN OPTION;";
+        await superuserContext.Database.ExecuteSqlRawAsync(grantCreateRoleSql);
+        await superuserContext.Database.ExecuteSqlRawAsync(grantAdminOptionSql);
+    }
 }

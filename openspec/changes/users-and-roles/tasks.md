@@ -122,19 +122,48 @@ inside PR 2b, not a separate PR — they gate PR 4, not PR 2b's own merge.
 
 ## Phase 5: In-App Provisioning, Reset, Deactivation (PR 4, est. 380–470 lines)
 
-- [ ] 5.1 Create `IUserProvisioning.cs` + `PostgresUserProvisioning.cs`: `CreateUser` (login role + `app_users` row as one transaction via `app_create_login_role`), `ResetPassword`, `Deactivate` (`app_set_role_login(name,false)` + `is_active=false`) — `src/Inmobiliaria.Infrastructure/Access/IUserProvisioning.cs`, `PostgresUserProvisioning.cs`
-- [ ] 5.2 **[Spec test 9]** `UserProvisioningTests` (Testcontainers): Admin creates a user as one unit — both the login role and `app_users` row exist; a forced rollback proves neither is orphaned
-- [ ] 5.3 **[Spec test 10]** `UserProvisioningTests`: `ALTER ROLE ... NOLOGIN` on an active user fails their next login attempt
-- [ ] 5.4 **[Spec test 11]** `UserProvisioningTests`: a deactivated user's `ContractDocument`/`RentAdjustment` rows remain readable and unchanged
-- [ ] 5.5 **[Spec test 12]** `UserProvisioningTests`: provisioning a username already assigned to a deactivated user is rejected or never produces a shared identity
-- [ ] 5.6 **[Spec test 14]** `UserProvisioningTests`: an Admin's reset on a different user takes effect only at that user's next login, proven by keeping their prior session alive across the reset
-- [ ] 5.7 **[Spec test 15 — database half]** `UserProvisioningTests`: provisioning a user sets `AppUser.MustChangePassword = true` (the "cannot reach anything else" half is proven in Phase 6, task 6.7, over the bootstrap construction order — this is the split named in design's Testing Strategy)
-- [ ] 5.8 **[Spec test 16]** `UserProvisioningTests`: after an Admin resets an active user's password, `MustChangePassword` is set and the next authentication requires a change first
-- [ ] 5.9 **[Spec test 17]** `UserProvisioningTests`: re-submitting the just-authenticated password as the "new" one is rejected; the pending requirement remains set
-- [ ] 5.10 **[Spec test 18]** `UserProvisioningTests`: a voluntary password change with nothing pending does not set `MustChangePassword`
-- [ ] 5.11 **[Spec test 31]** `UserProvisioningTests`: a `ContractDocument`'s uploader FK still resolves and displays the uploader's name after that uploader is deactivated
-- [ ] 5.12 **[Guardrail]** Confirm every test added in this phase lives under `tests/Inmobiliaria.Infrastructure.Tests/`
-- [ ] 5.13 **[Isolation check]** Build and run `Inmobiliaria.Infrastructure.Tests` on this branch alone, on top of PR1–PR3 merged, with none of PR5's Desktop code present
+- [x] 5.1 Create `IUserProvisioning.cs` + `PostgresUserProvisioning.cs`: `CreateUser` (login role + `app_users` row as one transaction via `app_create_login_role`), `ResetPassword`, `Deactivate` (`app_set_role_login(name,false)` + `is_active=false`) — `src/Inmobiliaria.Infrastructure/Access/IUserProvisioning.cs`, `PostgresUserProvisioning.cs`
+
+  **RESOLVED — the re-scope task 3.12 warned about, decided.** `CreateUserAsync` creates ONLY
+  Empleado accounts — there is no code path anywhere that provisions an Admin in-app. Forced by
+  `app_create_login_role`'s own frozen body (not editable from this PR — "No migration" is this
+  slice's hard boundary): its `GRANT %I TO %I` for the new role carries no `WITH ADMIN OPTION`,
+  for either group role, so a login role this function creates could never itself provision
+  anyone — an in-app Admin would hold every ordinary Admin grant and still be structurally unable
+  to do the one thing meant to set her apart. See `IUserProvisioning.cs`'s remarks and
+  `docs/runbooks/bootstrap-first-admin.md`'s new "PR 4's resolution" section. Proven by
+  `UserProvisioningTests.CreateUser_CreatesLoginRoleAndAppUsersRowAsOneUnit_AndAForcedFailureOrphansNeither`,
+  which asserts the created role is a member of `inmobiliaria_empleado` and explicitly NOT
+  `inmobiliaria_admin`.
+
+  **A second, previously undocumented PostgreSQL constraint surfaced running this phase's own
+  tests**: PostgreSQL restricts `ALTER ROLE` (password reset, NOLOGIN) on an EXISTING role to
+  that role's own creator (or a superuser) — `CREATEROLE` plus `ADMIN OPTION` alone is not enough
+  for a role the caller did not create. `ResetPasswordAsync`/`DeactivateAsync`'s XML doc remarks
+  record this; it is a non-issue in practice since this project has exactly one Admin, but it
+  shapes every test in this phase (the SAME provisioning instance must create the user it later
+  resets or deactivates).
+- [x] 5.2 **[Spec test 9]** `UserProvisioningTests` (Testcontainers): Admin creates a user as one unit — both the login role and `app_users` row exist; a forced rollback proves neither is orphaned
+- [x] 5.3 **[Spec test 10]** `UserProvisioningTests`: `ALTER ROLE ... NOLOGIN` on an active user fails their next login attempt
+- [x] 5.4 **[Spec test 11]** `UserProvisioningTests`: a deactivated user's `ContractDocument`/`RentAdjustment` rows remain readable and unchanged
+- [x] 5.5 **[Spec test 12]** `UserProvisioningTests`: provisioning a username already assigned to a deactivated user is rejected or never produces a shared identity
+- [x] 5.6 **[Spec test 14]** `UserProvisioningTests`: an Admin's reset on a different user takes effect only at that user's next login, proven by keeping their prior session alive across the reset
+- [x] 5.7 **[Spec test 15 — database half]** `UserProvisioningTests`: provisioning a user sets `AppUser.MustChangePassword = true` (the "cannot reach anything else" half is proven in Phase 6, task 6.7, over the bootstrap construction order — this is the split named in design's Testing Strategy)
+- [x] 5.8 **[Spec test 16]** `UserProvisioningTests`: after an Admin resets an active user's password, `MustChangePassword` is set and the next authentication requires a change first
+- [x] 5.9 **[Spec test 17]** `UserProvisioningTests`: re-submitting the just-authenticated password as the "new" one is rejected; the pending requirement remains set
+
+  **Deviation, recorded here**: this required extending `IPasswordService.ChangeOwnPasswordAsync`
+  with a new `currentPassword` parameter (an ordinal comparison against `newPassword`, checked
+  before anything binds to `app_set_role_password`). design.md's own Decision 6 prose describes
+  this comparison as happening client-side, in the forced-change ViewModel (PR 5) — but this
+  task explicitly assigns test 17 to `UserProvisioningTests` (Infrastructure, no UI), so the
+  rejection had to be enforceable and testable at this layer. Both call sites in PR 3's own
+  `AuthenticationTests.cs`/`PasswordDdlTests.cs` were updated to pass their already-known current
+  password; neither test's own assertions changed.
+- [x] 5.10 **[Spec test 18]** `UserProvisioningTests`: a voluntary password change with nothing pending does not set `MustChangePassword`
+- [x] 5.11 **[Spec test 31]** `UserProvisioningTests`: a `ContractDocument`'s uploader FK still resolves and displays the uploader's name after that uploader is deactivated
+- [x] 5.12 **[Guardrail]** Confirm every test added in this phase lives under `tests/Inmobiliaria.Infrastructure.Tests/`
+- [x] 5.13 **[Isolation check]** Build and run `Inmobiliaria.Infrastructure.Tests` on this branch alone, on top of PR1–PR3 merged, with none of PR5's Desktop code present
 
 ## Phase 6: Desktop Bootstrap (PR 5, est. 400–500 lines)
 

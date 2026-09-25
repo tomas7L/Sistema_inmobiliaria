@@ -560,3 +560,171 @@ the start of this PR (PR 1/2a/2b already committed as `48fb58d` and earlier):
 26/26 Phase 4 tasks complete. Ready for `sdd-verify`, or for the orchestrator to proceed to PR 4
 (Phase 5: In-App Provisioning, Reset, Deactivation) once task 3.13 (H.2) is resolved by the user and
 this PR is reviewed and merged — PR 4 also depends on task 3.12's already-recorded consequence (H.3).
+
+---
+
+## PR 4 — Phase 5: In-App Provisioning, Reset, Deactivation — COMPLETE (13/13 tasks)
+
+Task 3.13 (H.2) was resolved by the project owner on 2026-09-25 against the live Supabase
+project: `log_statement = ddl`, gate **passes** (see tasks.md task 3.13's own record). Task 3.12's
+`ADMIN OPTION` finding (H.3) is the load-bearing fact this PR resolves against, below.
+
+- [x] 5.1 Created `IUserProvisioning.cs` + `PostgresUserProvisioning.cs` (`CreateUserAsync`,
+      `ResetPasswordAsync`, `DeactivateAsync`) — see "The provisioning decision" section below
+- [x] 5.2–5.11 **[Spec tests 9, 10, 11, 12, 14, 15 (db half), 16, 17, 18, 31]** All ten in
+      `UserProvisioningTests.cs` (Testcontainers)
+- [x] 5.12 **[Guardrail]** Every new test lives under `tests/Inmobiliaria.Infrastructure.Tests/`
+      (`git status` confirms; no `Inmobiliaria.Desktop` file touched)
+- [x] 5.13 **[Isolation check]** `dotnet test Inmobiliaria.Core.slnf --configuration Release` —
+      **Domain.Tests: 69 passed, 0 failed, 0 skipped; Infrastructure.Tests: 60 passed, 0 failed, 0
+      skipped**, on top of PR1–PR3 merged, with none of PR5's Desktop code present
+
+### The provisioning decision this PR had to make (task the design gate H.3 left open)
+
+Task 3.12 proved `ADMIN OPTION` does not inherit through nested group membership. The prompt for
+this PR named two options: (1) the runbook grants `CREATEROLE` + `ADMIN OPTION` on both group
+roles directly to every Admin login role, or (2) creating an Admin is explicitly out of scope and
+only Empleado users can be created in-app. **Option 2 was chosen — creating an Admin in-app is
+out of scope; `PostgresUserProvisioning.CreateUserAsync` creates ONLY Empleado accounts.**
+
+This was not a preference between two equally-workable options — reading `app_create_login_role`'s
+own frozen SQL body (migration `20260924202549_AddUsersAndRoles.cs`, not editable from this PR)
+settled it before any C# was written. That function's `GRANT %I TO %I` for the newly created role
+carries no `WITH ADMIN OPTION` clause, for EITHER group role, regardless of which one is granted.
+Task 3.12 already proved a bare (non-admin-option) membership cannot grant role membership at all.
+The two facts together mean: **a login role `app_create_login_role` creates can never itself
+successfully provision anyone**, Empleado or Admin alike — it would always fail with `42501`,
+exactly like the second Admin in `RolePermissionTests.AdminOptionInheritance_ProvenNotAssumed`
+(PR 2b). Option 1, read literally ("grant it to every Admin login role"), is therefore only
+achievable by a HUMAN re-running the bootstrap runbook per additional Admin — the runbook can grant
+`ADMIN OPTION` directly (a superuser/owner-credential operation), but the in-app `CreateUserAsync`
+path structurally cannot, no matter which group role it targets. Rather than expose an in-app
+"create Admin" operation that would provision a role permanently unable to do the one thing
+supposed to distinguish her from an Empleado, this PR does not expose it at all — matching the
+spec's own literal example ("Admin creates a new employee") and keeping the API's shape honest
+about what it can actually do.
+
+Proof: `UserProvisioningTests.CreateUser_CreatesLoginRoleAndAppUsersRowAsOneUnit_AndAForcedFailureOrphansNeither`
+asserts the newly created role is a member of `inmobiliaria_empleado` **and explicitly NOT**
+`inmobiliaria_admin`, immediately after a successful `CreateUserAsync` call. `docs/runbooks/
+bootstrap-first-admin.md` gained a new "PR 4's resolution" section documenting the decision and
+the procedure for provisioning an additional Admin (re-run the runbook; still a human/runbook
+operation, never in-app).
+
+### A second finding, discovered running this phase's own tests (not previously documented anywhere in this change)
+
+PostgreSQL restricts `ALTER ROLE` (password change, `LOGIN`/`NOLOGIN`) on an **existing** role to
+that role's own creator, or a superuser — `CREATEROLE` plus `ADMIN OPTION` on the group role is
+NOT, by itself, sufficient for a role the caller did not personally create. This was discovered
+empirically: the first draft of `UserProvisioningTests` provisioned target users via the existing
+`AccessTestSupport.ProvisionUserAsync` helper (which creates the role through the Testcontainers
+**superuser** connection) and then called `ResetPasswordAsync`/`DeactivateAsync` as a *different*
+Admin test role — every one of those five tests failed with `42501: permission denied to alter
+role`, not any of the errors previously anticipated in tasks.md or design.md.
+
+**Consequence, applied and documented, not silently worked around**: in this application, every
+user is created via `CreateUserAsync`, called by whichever Admin is logged in — so
+`ResetPasswordAsync`/`DeactivateAsync` only succeed when the CALLING Admin is the SAME one who
+originally provisioned that user. This is a non-issue in practice (this project has exactly one
+Admin — design.md's own reasoning elsewhere already leans on that fact), but it is now stated
+plainly in `PostgresUserProvisioning.ResetPasswordAsync`/`DeactivateAsync`'s XML doc remarks and
+`IUserProvisioning.cs`'s interface docs, and every affected test was rewritten so the SAME
+`provisioning` instance both creates and later resets/deactivates its target user.
+
+### Deviation: `IPasswordService.ChangeOwnPasswordAsync` gained a `currentPassword` parameter
+
+Spec test 17 ("re-submitting the just-authenticated password as the new one is rejected") is
+assigned by tasks.md task 5.9 to `UserProvisioningTests` — Infrastructure, Testcontainers, no UI.
+design.md's own Decision 6 prose describes this rejection as an in-memory, client-side ordinal
+comparison happening in the forced-change `ChangePasswordViewModel` (PR 5, not yet built). Since
+the test must prove this at the Infrastructure layer with no ViewModel to compare against,
+`ChangeOwnPasswordAsync`'s signature grew a required `currentPassword` parameter: an ordinal
+comparison against `newPassword`, checked and rejected (throwing `InvalidOperationException`)
+BEFORE anything is ever bound to `app_set_role_password` — consistent with task 3.13's
+"validate before binding the password" principle, and cheaper than the DB-probe alternative
+considered and rejected below.
+
+`ChangeOwnPasswordAsync` also now calls `app_clear_must_change_password()` immediately after a
+successful `app_set_role_password` call, wrapped in the same explicit transaction, and updates
+the in-memory `IUserSession.MustChangePassword` flag via `ClearMustChangePassword()` — necessary
+for spec tests 16/18 to be provable at all (nothing else in the codebase yet calls this function;
+without it, `MustChangePassword` could never be cleared by any self-service change, forced or
+voluntary).
+
+**Alternative considered and rejected**: a "probe-connect with the candidate password" mechanism
+(open a throwaway connection using `newPassword` as if it were already live; success implies
+reuse). Rejected because it depends on recomposing `_session.Username` through
+`SupavisorUsername.For` — which is correct in production (where `_session.Username` is the bare,
+pooler-stripped rolname) but WRONG in the Testcontainers test environment (where, per PR 3's own
+Deviation 1, `_session.Username` already IS the fully composed value, since there is no real
+pooler to strip it back down). Recomposing it there would double the suffix and make the probe
+never resolve to a real role, so the rejection could never actually trigger in this test suite.
+The ordinal-comparison design has no such asymmetry and needed no new dependency.
+
+**Two existing PR 3 call sites updated for the new parameter** (no assertion in either test
+changed): `AuthenticationTests.SelfPasswordChange_KeepsTheAlreadyOpenSessionWorking` and
+`PasswordDdlTests.PasswordDdl_SetsTheExactLiteralPasswordWithNoInjection`, both now passing
+`AccessTestSupport.DefaultPassword` as `currentPassword`.
+
+### Files Changed (PR 4)
+
+| File | Action | What Was Done |
+|------|--------|----------------|
+| `src/Inmobiliaria.Infrastructure/Access/IUserProvisioning.cs` | Created | `CreateUserAsync` (returns the new `AppUser.Id`), `ResetPasswordAsync`, `DeactivateAsync` — full remarks on the Empleado-only decision and the ALTER-ROLE-creator constraint |
+| `src/Inmobiliaria.Infrastructure/Access/PostgresUserProvisioning.cs` | Created | Calls `app_create_login_role`/`app_set_role_password`/`app_set_role_login` with real EF/Npgsql parameters; validates non-secret inputs (username shape, target existence/active state) before any password-binding call; wraps each operation's two halves in one explicit transaction |
+| `src/Inmobiliaria.Domain/Access/AppUser.cs` | Modified | Added `Deactivate()` and `RequirePasswordChange()` mutator methods — needed by `PostgresUserProvisioning` and not previously exposed (only the constructor could set these flags) |
+| `src/Inmobiliaria.Infrastructure/Access/IPasswordService.cs` | Modified | `ChangeOwnPasswordAsync` gained a required `currentPassword` parameter (see Deviation above) |
+| `src/Inmobiliaria.Infrastructure/Access/PostgresPasswordService.cs` | Modified | Ordinal reject-reuse check; now also clears `must_change_password` (DB + in-memory) on every successful change, wrapped in one transaction |
+| `docs/runbooks/bootstrap-first-admin.md` | Modified | New "PR 4's resolution" section: in-app provisioning is Empleado-only; procedure for provisioning an additional Admin (re-run this runbook) |
+| `tests/Inmobiliaria.Infrastructure.Tests/UserProvisioningTests.cs` | Created | All ten spec tests (9, 10, 11, 12, 14, 15 db-half, 16, 17, 18, 31) |
+| `tests/Inmobiliaria.Infrastructure.Tests/AccessTestSupport.cs` | Modified | Added `BuildSessionFactoryAs` and `GrantProvisioningCapabilityAsync` helpers, reused by every `UserProvisioningTests` test |
+| `tests/Inmobiliaria.Infrastructure.Tests/AuthenticationTests.cs` | Modified | One call site updated for `ChangeOwnPasswordAsync`'s new parameter |
+| `tests/Inmobiliaria.Infrastructure.Tests/PasswordDdlTests.cs` | Modified | One call site updated for `ChangeOwnPasswordAsync`'s new parameter |
+| `tests/Inmobiliaria.Domain.Tests/AppUserTests.cs` | Modified | Two new tests for `Deactivate()`/`RequirePasswordChange()`, matching the existing idempotency-testing pattern in this file |
+
+### Issues Found
+
+None beyond the two findings documented above (both were investigated, resolved, and proven —
+not merely worked around). No pre-existing test broke.
+
+### Scope Compliance
+
+- No Desktop/WPF file touched anywhere (PR 5 scope) — confirmed via `git status`.
+- No migration created or modified; `20260924202549_AddUsersAndRoles.cs` untouched — confirmed via
+  `git status` showing no `Migrations/` changes in this PR.
+- `ContractConfiguration.cs` not touched.
+- The live Supabase project was never connected to.
+
+### Work Unit Evidence
+
+| Evidence | Value |
+|---|---|
+| `dotnet build Inmobiliaria.Core.slnf --configuration Release --no-incremental` | 0 Advertencia(s) (Warnings), 0 Errores (Errors) |
+| Focused test command and exact result | `dotnet test tests/Inmobiliaria.Infrastructure.Tests/Inmobiliaria.Infrastructure.Tests.csproj --configuration Release --filter "FullyQualifiedName~UserProvisioning"` → **10 passed, 0 failed, 0 skipped** |
+| Runtime harness command/scenario and exact result | `dotnet test Inmobiliaria.Core.slnf --configuration Release` (Docker up, Testcontainers `postgres:17.6`) → **Domain.Tests: 69 passed, 0 failed, 0 skipped; Infrastructure.Tests: 60 passed, 0 failed, 0 skipped** |
+| Rollback boundary | Delete `IUserProvisioning.cs`, `PostgresUserProvisioning.cs`, `UserProvisioningTests.cs`; revert `AppUser.cs`, `IPasswordService.cs`, `PostgresPasswordService.cs`, `AccessTestSupport.cs`, `AuthenticationTests.cs`, `PasswordDdlTests.cs`, `AppUserTests.cs`, and the runbook. PR1–PR3 (already committed) are fully unaffected — auth, roles, and permissions all still work with no provisioning code present |
+
+### Review Budget (PR 4 alone)
+
+Measured via `git diff --stat` (modified files, against the working tree at the start of this PR,
+PR1–PR3 already committed) + `wc -l` (new files):
+
+- **Modified files**: `docs/runbooks/bootstrap-first-admin.md` (+33), `AppUser.cs` (+27),
+  `IPasswordService.cs` (+14/−2), `PostgresPasswordService.cs` (+31/−1), `AppUserTests.cs` (+26),
+  `AccessTestSupport.cs` (+43), `AuthenticationTests.cs` (+1/−1), `PasswordDdlTests.cs` (+1/−1) —
+  **172 insertions, 6 deletions = 178 lines.**
+- **New files** (2 production + 1 test, all authored, no generated goldens): `IUserProvisioning.cs`
+  (61) + `PostgresUserProvisioning.cs` (173) + `UserProvisioningTests.cs` (395) = **629 lines.**
+- **Authored (risk-counted) total**: **178 + 629 = 807 lines.**
+- **Session budget**: 800 lines (`review_budget_lines`). **Over budget by 7 lines** — marginal,
+  but tasks.md's own forecast for this slice was 380–470, so the overage is substantial relative
+  to that estimate. Reported honestly rather than trimmed to fit: the two undocumented PostgreSQL
+  findings (Empleado-only provisioning forced by the frozen migration; the ALTER-ROLE-creator
+  restriction) both required test rewrites and XML-doc remarks that were not in the original
+  estimate, and the `IPasswordService` extension for spec test 17 touched two already-merged PR 3
+  files in addition to the two new provisioning files.
+
+### Status (PR 4)
+
+13/13 Phase 5 tasks complete. Ready for `sdd-verify`, or for the orchestrator to proceed to PR 5
+(Phase 6: Desktop Bootstrap) once this PR is reviewed and merged.

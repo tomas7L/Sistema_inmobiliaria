@@ -23,7 +23,7 @@ FACT** means it was proven, not decided.
 | 3 | Windows-identity authentication was considered and rejected — too unusual to explain to two users the moment something goes wrong. | TEAM DECISION |
 | 4 | Two PostgreSQL group roles (`inmobiliaria_admin`, `inmobiliaria_empleado`) with distinct GRANTs, written as SQL inside a versioned migration. | TEAM DECISION |
 | 5 | The application role is read at login via `pg_has_role`; `AppUser` stores no role column, so nothing can drift from what the database enforces. | TEAM DECISION |
-| 6 | **The Admin manages users from inside the application** — creating them and resetting passwords — rather than through a developer-run runbook. | CONFIRMED BY USER |
+| 6 | **The Admin manages users from inside the application** — creating them and resetting passwords — rather than through a developer-run runbook. **Narrowed during implementation by two limits PostgreSQL imposes:** in-application creation covers Empleado accounts only, and an Admin can reset only the password of a role they created. Both are proven, not assumed; see the requirement "Admin Provisions and Deactivates Users From Inside the Application". | CONFIRMED BY USER |
 | 7 | **Deactivate, never delete.** `ALTER ROLE ... NOLOGIN`; the row stays; a username is never reused for a different person. | CONFIRMED BY USER |
 | 8 | **The Empleado does everything operational and is excluded from exactly two things:** system governance (user management) and aggregate business reporting (agency-level income, profitability, totals). Collecting rent, issuing receipts, terminating contracts and confirming adjustments are hers as much as the Admin's. | CONFIRMED BY USER |
 | 9 | A non-`postgres` role was proven to connect through Supavisor from the office network: the attempt returned `42501 permission denied`, meaning the pooler routed it and Postgres authenticated it before the grants refused the operation. Username format required by the pooler: `<role>.<projectref>`. | VERIFIED FACT |
@@ -154,11 +154,28 @@ store a role column that duplicates this membership.
 
 ### Requirement: Admin Provisions and Deactivates Users From Inside the Application
 
-An Admin MUST be able to create a new user — a personal PostgreSQL login role together with its
-`AppUser` row, created as one unit — and to reset another user's password, from inside the
-application. Deactivating a user MUST use `ALTER ROLE ... NOLOGIN` (or equivalent) together with
-`AppUser.IsActive = false`, and MUST NOT delete the role or the row. A username, once assigned,
-MUST NOT be reused for a different person.
+An Admin MUST be able to create a new **Empleado** user — a personal PostgreSQL login role together
+with its `AppUser` row, created as one unit — and to reset the password of a user they created,
+from inside the application. Deactivating a user MUST use `ALTER ROLE ... NOLOGIN` (or equivalent)
+together with `AppUser.IsActive = false`, and MUST NOT delete the role or the row. A username, once
+assigned, MUST NOT be reused for a different person.
+
+> **Two limits PostgreSQL imposes, discovered by experiment and recorded here rather than left for
+> a reader to hit.** Both were proven against real PostgreSQL 17 during implementation; neither is
+> a design preference.
+>
+> 1. **Creating an Admin is a human runbook step, not an in-application action.**
+>    `app_create_login_role` issues `GRANT <group> TO <new_role>` with no `WITH ADMIN OPTION`, and
+>    `ADMIN OPTION` is never inherited through group membership — it is scoped per grant edge. An
+>    Admin created from inside the application would therefore be structurally unable to provision
+>    anyone, which is the one thing that distinguishes the role. In-application creation is limited
+>    to Empleado accounts; `docs/runbooks/bootstrap-first-admin.md` carries the procedure for every
+>    additional Admin.
+> 2. **An Admin can reset the password only of a role they themselves created.** PostgreSQL
+>    restricts `ALTER ROLE` on an existing role to that role's creator or a superuser, independent
+>    of any `CREATEROLE` or `ADMIN OPTION` the caller holds. With the single Admin this agency
+>    actually has, this is invisible. It becomes real the day a second Admin exists, and it is
+>    stated here so that day is not a surprise.
 
 #### Scenario: Admin creates a new employee
 
