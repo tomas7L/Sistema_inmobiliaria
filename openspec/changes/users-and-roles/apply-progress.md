@@ -192,3 +192,211 @@ production/test files above, plus `tasks.md` and this `apply-progress.md`.
 
 11/11 Phase 2 tasks complete. No migration created (out of scope — PR 2b). Ready for the orchestrator
 to proceed to PR 2b (Phase 3: Migration, Roles, GRANTs) once this PR is reviewed and merged.
+
+---
+
+## PR 2b — Phase 3: Migration, Roles, GRANTs — 13/14 TASKS COMPLETE (3.13 PENDING THE USER)
+
+**Context, not a re-plan**: PR 2a's own pull request failed CI — every Testcontainers test failed at
+`MigrateAsync` with `PendingModelChangesWarning` before reaching a single assertion, because EF Core
+refuses to migrate when the model has changes no migration covers. A model change and its migration
+are atomic; the 2a/2b split was structurally impossible to ship as two green PRs. **The user decided
+to merge 2a and 2b into one pull request.** PR 2a's code (already committed as `136b8c3`) is untouched
+here; this section documents only the Phase 3 work added on top, so the branch is green as a whole.
+
+- [x] 3.1 Generated `AddUsersAndRoles` via `dotnet ef migrations add` — scaffolded the naive shape
+      (drop `uploaded_by`, add `uploaded_by_user_id` with an `EF`-invented default, add `confirmed_by`,
+      create `app_users`)
+- [x] 3.2 Hand-edited `Up`'s `contract_documents` delta into the exact required order: `app_users`
+      table created first (needed by the seed insert and both FKs) → `uploaded_by_user_id uuid NULL`
+      added → legacy `AppUser` row seeded (`id = 00000000-0000-0000-0000-000000000001`,
+      `username = 'legacy'`, `is_active = false`) → `UPDATE ... SET uploaded_by_user_id = COALESCE(...)`
+      backfill by username join → `ALTER COLUMN ... SET NOT NULL` → `DROP COLUMN uploaded_by` → FK
+      `ON DELETE RESTRICT`
+- [x] 3.3 Hand-edited `Up`'s `rent_adjustments` delta: `ADD COLUMN confirmed_by uuid NULL` + FK
+      `ON DELETE RESTRICT`, no `UPDATE` anywhere near it — every existing row's value is left `NULL`
+- [x] 3.4 Roles created idempotently (`IF NOT EXISTS` inside a `DO $$` block, `NOLOGIN`); baseline
+      `GRANT USAGE ON SCHEMA public`, `GRANT SELECT ON ALL TABLES`, `ALTER DEFAULT PRIVILEGES` (no
+      `FOR ROLE`); every per-table `INSERT`/`UPDATE` grant from design Decision 9's table in one
+      `migrationBuilder.Sql(...)` block, including the single ungrouped `GRANT INSERT, UPDATE ON
+      contracts` statement — the only place in this migration that names `contracts`
+- [x] 3.5 Created all four functions exactly per design Decision 3/6:
+      `app_set_role_password(name, text)`, `app_create_login_role(name, text, name)`,
+      `app_set_role_login(name, boolean)` (none `SECURITY DEFINER`), and
+      `app_clear_must_change_password()` (the only `SECURITY DEFINER` one, `search_path` pinned to
+      `pg_catalog, public`); `EXECUTE` granted per design Decision 9's table
+      (`app_set_role_password`/`app_clear_must_change_password` to both roles; the provisioning pair
+      to `inmobiliaria_admin` only)
+- [x] 3.6 `Down` written in the exact fixed order: restore `uploaded_by text` and backfill usernames
+      back via join **first** → drop both FKs → drop `confirmed_by`/`uploaded_by_user_id` → `DROP
+      FUNCTION` all four → `REVOKE ALL` + `DROP ROLE IF EXISTS` the two **group** roles only → drop
+      `app_users` last
+- [x] 3.7 Created `docs/runbooks/bootstrap-first-admin.md`: one transaction (`CREATE ROLE ... LOGIN
+      PASSWORD`, `ALTER ROLE ... CREATEROLE`, `GRANT inmobiliaria_admin, inmobiliaria_empleado TO
+      <admin> WITH ADMIN OPTION`, matching `INSERT INTO app_users (..., must_change_password=true)`),
+      plus an explicit "If task 3.12 failed" section recording the actual tested consequence
+- [x] 3.8 **[Guardrail — scope guard]** `git diff HEAD` against all five scope-guarded files
+      (`20260913215911_InitialSchema.cs`, its `.Designer.cs`, `20260918233049_AddRentAdjustments.cs`,
+      its `.Designer.cs`, `ContractConfiguration.cs`) — every one returned empty output (byte-for-byte
+      unmodified); `grep -in "contracts"` on the new migration file matches exactly one line, the
+      `GRANT INSERT, UPDATE ON contracts` statement — no `ALTER TABLE contracts` anywhere
+- [x] 3.9 **[Spec test 29]** Created `RolePermissionTests.cs` with
+      `AllThirteenTables_AreSelectableByBothRoles` (Testcontainers): creates a throwaway login role
+      for each group role, connects as each, and runs `SELECT 1 FROM {table} LIMIT 0` against all
+      thirteen tables — none raised `42501 insufficient_privilege`
+- [x] 3.10 **[Spec test 30]** Added `UploadedByUserId_ResolvesToAppUserRow_AndPlainUploadedByColumnIsGone`
+      to `SchemaConstraintTests.cs`: confirms `uploaded_by` is absent from
+      `information_schema.columns`, then round-trips a real `ContractDocument` through a real
+      `AppUser` and confirms the FK resolves after a fresh read
+- [x] 3.10b Rewrote `InvalidDocumentKindCheckConstraint_Rejected`: seeds a real `AppUser` row first,
+      then raw-SQL-inserts against `uploaded_by_user_id` (not the now-gone `uploaded_by`) with the
+      seeded user's id — the test still proves only the unrelated `kind` CHECK constraint
+- [x] 3.11 **[Spec test 32]** Added `ConfirmedByColumn_IsNullable` to `SchemaConstraintTests.cs`:
+      confirms `is_nullable = 'YES'` for `rent_adjustments.confirmed_by` via
+      `information_schema.columns` — the observable, DB-side half of "no `UPDATE` was issued against
+      existing rows" (the source-level half is the migration's own `Up` method containing no such
+      `UPDATE`, per task 3.3)
+- [x] 3.12 **[GATE — RESOLVED]** See the "Task 3.12 finding" section below — tested, not assumed, and
+      the answer is **it fails**.
+- [ ] 3.13 **[GATE — PENDING THE USER — not attempted by an agent]** See the "Task 3.13 — action
+      required from the user" section below. The live Supabase project was never connected to.
+- [x] 3.14 **[Isolation check]** `dotnet test tests/Inmobiliaria.Infrastructure.Tests --filter
+      FullyQualifiedName~SchemaConstraint` against a fresh Testcontainers `postgres:17.6` instance:
+      **20 passed, 0 failed, 0 skipped** — this migration applies cleanly on top of
+      `20260918233049_AddRentAdjustments` alone, with no PR3/PR4/PR5 code present anywhere in the
+      solution
+
+### Task 3.12 finding — ADMIN OPTION does NOT inherit through nested group membership
+
+Tested against a real PostgreSQL 17.6 Testcontainers instance
+(`RolePermissionTests.AdminOptionInheritance_ProvenNotAssumed`), not assumed. The scenario actually
+proven is the one that matters for PR 4, not the trivial one: the bootstrap runbook's first Admin
+(who is granted `ADMIN OPTION` on **both** group roles directly) was never in question. What was
+tested is a **second** Admin, provisioned the way `app_create_login_role` (task 3.5) actually does
+it — a bare `GRANT inmobiliaria_admin TO second_admin` with **no** `WITH ADMIN OPTION` clause and no
+`CREATEROLE`. Authenticated as that second Admin, `GRANT inmobiliaria_empleado TO <any_role>` was
+attempted.
+
+**Result: it fails**, with `42501 insufficient_privilege`, exactly as design.md suspected it might.
+`ADMIN OPTION` is scoped per `(role, member)` grant edge in PostgreSQL 17; it is not transitively
+inherited through nested group membership, and the default `INHERIT` role attribute propagates only
+ordinary privileges (`SELECT`/`INSERT`/etc.), never the right to administer role membership.
+
+**Consequence, per tasks.md's own instruction**: PR 4's in-app provisioning function cannot rely on
+inheritance for any Admin created after the first. The bootstrap runbook
+(`docs/runbooks/bootstrap-first-admin.md`) now documents this in its "If task 3.12 failed" section:
+every individual Admin login role must be granted `inmobiliaria_admin, inmobiliaria_empleado ...
+WITH ADMIN OPTION` directly, at the moment it is created — not only the first one. This is a human
+decision point (tasks.md H.3), not something this PR resolves by itself; PR 4 (Phase 5) must be
+re-scoped accordingly before it starts.
+
+### Task 3.13 — action required from the user (not attempted by an agent)
+
+**No agent connected to the live Supabase project.** Per the hard boundary in this PR's instructions,
+this task produces the exact read-only query for the user to run themselves, with their own
+credentials, and states what each outcome means. The checkbox stays unticked until the user reports
+back.
+
+Run this against the live Supabase project (any authenticated session is enough — it reads
+`pg_settings`, nothing else):
+
+```sql
+SELECT name, setting FROM pg_settings
+ WHERE name IN ('log_statement', 'log_min_duration_statement', 'log_parameter_max_length');
+```
+
+| If `setting` comes back | Meaning | Action |
+|---|---|---|
+| `log_statement = 'none'` or `'mod'` | No DDL is logged | Ship PR 4/PR 5 as designed |
+| `log_statement = 'ddl'` | DDL statement text is logged | Already neutralized by design Decision 3 — the client issues `SELECT app_set_role_password(...)`, whose top-level command tag is `SELECT`, not DDL; the `ALTER ROLE` runs inside `EXECUTE` and is never a logged top-level statement. Ship as designed |
+| `log_statement = 'all'`, or `log_min_duration_statement = 0` | Every statement **and its bind parameters** are logged | **STOP.** The plaintext password reaches the log. Do not ship in-app password management until this is off, or adopt the documented SCRAM client-side-hashing escape hatch from design Decision 3 |
+| `setting = NULL` for any row | The GUC is masked for a non-superuser | Read the value from the Supabase dashboard instead (Project Settings → Database → Logs) |
+
+### Files Changed (PR 2b)
+
+| File | Action | What Was Done |
+|------|--------|----------------|
+| `src/Inmobiliaria.Infrastructure/Persistence/Migrations/20260924202549_AddUsersAndRoles.cs` | Created | Hand-edited migration: `app_users` table, both schema deltas in the required order, idempotent role creation, the full GRANT set, all four SQL functions, and a `Down` in the fixed reverse order |
+| `src/Inmobiliaria.Infrastructure/Persistence/Migrations/20260924202549_AddUsersAndRoles.Designer.cs` | Created | EF-generated model snapshot for this migration (generated, not hand-authored) |
+| `src/Inmobiliaria.Infrastructure/Persistence/Migrations/InmobiliariaDbContextModelSnapshot.cs` | Modified | EF-generated; regenerated by `dotnet ef migrations add` (generated, not hand-authored) |
+| `docs/runbooks/bootstrap-first-admin.md` | Created | The one bootstrap transaction, plus the task 3.12 contingency section |
+| `tests/Inmobiliaria.Infrastructure.Tests/RolePermissionTests.cs` | Created | Spec test 29 (`AllThirteenTables_AreSelectableByBothRoles`) and task 3.12's ADMIN OPTION experiment (`AdminOptionInheritance_ProvenNotAssumed`) |
+| `tests/Inmobiliaria.Infrastructure.Tests/SchemaConstraintTests.cs` | Modified | Added spec tests 30 (`UploadedByUserId_ResolvesToAppUserRow_AndPlainUploadedByColumnIsGone`) and 32 (`ConfirmedByColumn_IsNullable`); rewrote `InvalidDocumentKindCheckConstraint_Rejected` (task 3.10b) against the FK; added a `SeedAppUser` helper and fixed three pre-existing PR 2a tests (`AppendOnlyTrigger_RejectsRawUpdateAndDelete`, `CorrectingAnIndexValue_LeavesTheConfirmedAdjustmentUnchangedAndAppendsACorrection`, `OriginalAndAddendumDocuments_CoexistForOneContract`) whose `Guid.NewGuid()` placeholder user references now violate the real FK this migration adds — see Deviations below |
+
+### Deviations from Design / tasks.md
+
+1. **Three PR 2a tests needed fixing that neither design.md nor tasks.md named.** Only
+   `InvalidDocumentKindCheckConstraint_Rejected` was flagged (task 3.10b) as certain to break. In
+   practice, `AppendOnlyTrigger_RejectsRawUpdateAndDelete`,
+   `CorrectingAnIndexValue_LeavesTheConfirmedAdjustmentUnchangedAndAppendsACorrection`, and
+   `OriginalAndAddendumDocuments_CoexistForOneContract` all used `Guid.NewGuid()` as a stand-in
+   `confirmedBy`/`uploadedByUserId` value — harmless before this migration existed (no FK to
+   violate), a `23503` foreign-key violation now that one does. Fixed by adding a `SeedAppUser`
+   helper and threading a real, saved `AppUser.Id` through the shared `ConfirmAdjustment` test
+   helper (which gained a new required `confirmedByUserId` parameter) and into the two
+   `ContractDocument` constructions. This was discovered only by actually running the suite against
+   Testcontainers, which is exactly why task 3.14's isolation check exists.
+2. **Task 3.12's test scenario was rewritten from tasks.md's literal wording to test the real open
+   question.** tasks.md describes "a login role granted `inmobiliaria_admin` `WITH ADMIN OPTION` per
+   the runbook", then attempting the empleado grant — but the runbook grants `ADMIN OPTION` on
+   **both** roles directly, so that literal scenario would trivially succeed and prove nothing. The
+   test instead reproduces the scenario design.md's own prose is actually worried about: a **second**
+   Admin provisioned by `app_create_login_role`'s exact (non-admin-option) `GRANT`, which is where
+   the "inherited" question actually lives. Recorded here, not silently substituted.
+3. **`app_create_login_role`'s and `app_set_role_login`'s function bodies were written now (task
+   3.5) even though PR 3/PR 4 are the ones that will call them.** design.md's Decision 3 and Decision
+   9 both describe all four functions as part of the same migration, and task 3.5 explicitly lists
+   all four — this is not scope creep into PR 3/PR 4's own port/adapter code, only the SQL-side
+   functions the migration itself must ship with GRANTs already in place.
+
+### Issues Found
+
+None new beyond the three pre-existing tests fixed above (Deviation 1). `dotnet build
+Inmobiliaria.Core.slnf --configuration Release` is clean: 0 Warning(s), 0 Error(s).
+
+### Scope Compliance
+
+- No `Infrastructure/Access` port or adapter created (PR 3 scope — untouched).
+- No provisioning/reset/deactivation code created (PR 4 scope — untouched).
+- No Desktop code touched (PR 5 scope — untouched).
+- `ContractConfiguration.cs`: confirmed byte-for-byte unmodified (task 3.8).
+- No `ALTER TABLE contracts` anywhere in the new migration; `contracts` is reached only by the one
+  `GRANT INSERT, UPDATE ON contracts` statement (task 3.8, task 3.4).
+- Both pre-existing migrations and their `.Designer.cs` files: confirmed byte-for-byte unmodified
+  against `HEAD` (task 3.8).
+- The live Supabase project was never connected to; no credential for it was read, invented, or
+  assumed anywhere in this PR (task 3.13).
+
+### Work Unit Evidence
+
+| Evidence | Value |
+|---|---|
+| `dotnet build Inmobiliaria.Core.slnf --configuration Release` | 0 Warning(s), 0 Error(s) |
+| Focused test command and exact result | `dotnet test tests/Inmobiliaria.Infrastructure.Tests --filter FullyQualifiedName~SchemaConstraint` (Docker up) → **20 passed, 0 failed, 0 skipped** (task 3.14's own required command) |
+| Runtime harness command/scenario and exact result | `dotnet test tests/Inmobiliaria.Infrastructure.Tests --filter FullyQualifiedName~RolePermission` (Testcontainers `postgres:17.6`, real roles, real GRANTs) → **2 passed, 0 failed, 0 skipped** — spec test 29 and the task 3.12 experiment both ran against a real engine, not a fake |
+| Full suite, exact CI command | `dotnet test Inmobiliaria.Core.slnf --configuration Release` with Docker up → **Domain.Tests: 67 passed, 0 failed, 0 skipped; Infrastructure.Tests: 27 passed, 0 failed, 0 skipped** — zero tests skipped for Docker anywhere in either project |
+| Rollback boundary | Delete the two new migration files, `RolePermissionTests.cs`, and `docs/runbooks/bootstrap-first-admin.md`; revert `SchemaConstraintTests.cs` and `InmobiliariaDbContextModelSnapshot.cs`; run `dotnet ef database update 20260918233049_AddRentAdjustments` against any environment where this migration was applied. PR 1 and PR 2a (already committed as `136b8c3` and earlier) are fully unaffected — nothing in this PR modifies their files |
+
+### Review Budget (combined PR 2a + PR 2b, per the user's decision to ship one PR)
+
+Measured against `develop`'s actual merge-base (`ce447a8`), i.e. PR 2a (`136b8c3`, already committed)
+plus every uncommitted Phase 3 change in this working tree:
+
+- **Authored (risk-counted) lines**: **≈1,031** (additions + deletions), summed from every file below
+  except the two EF-generated ones.
+- **Generated goldens (excluded from authored risk, included in full snapshot)**: **831** lines —
+  `InmobiliariaDbContextModelSnapshot.cs` (72) and `20260924202549_AddUsersAndRoles.Designer.cs`
+  (759), both machine-generated by `dotnet ef migrations add` and never hand-edited.
+- **Session budget**: 800 lines (`review_budget_lines`). The authored total is **over budget by
+  ≈231 lines**, exactly as tasks.md's own Review Workload Forecast anticipated for PR 2a alone
+  before the merge decision (est. 360–440) plus PR 2b alone (est. 365–455) — the merge of the two
+  phases the user ordered was always going to land above a single 800-line session budget on its
+  own arithmetic. Reported honestly, not trimmed to fit.
+
+### Status (PR 2b)
+
+13/14 Phase 3 tasks complete. Task 3.13 is explicitly **pending the user** — its checkbox stays
+unticked until they run the query above against the live Supabase project and report back; no agent
+work item remains for it. Ready for `sdd-verify`, or for the orchestrator to hold PR 4 (Phase 5)
+until both task 3.12's consequence (H.3) and task 3.13's outcome (H.2) are addressed, per tasks.md's
+own gating.
