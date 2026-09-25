@@ -728,3 +728,178 @@ PR1–PR3 already committed) + `wc -l` (new files):
 
 13/13 Phase 5 tasks complete. Ready for `sdd-verify`, or for the orchestrator to proceed to PR 5
 (Phase 6: Desktop Bootstrap) once this PR is reviewed and merged.
+
+---
+
+## PR 5 — Phase 6: Desktop Bootstrap — COMPLETE (10/10 tasks)
+
+- [x] 6.1 `CommunityToolkit.Mvvm` (`8.4.2`) and `Microsoft.Extensions.DependencyInjection`
+      (`10.0.7`, matched to the already-pinned `Abstractions` version) added to
+      `Directory.Packages.props`; `Inmobiliaria.Desktop.csproj` gained its first
+      `Inmobiliaria.Infrastructure` project reference plus the two new `PackageReference`s
+- [x] 6.2 Created `LoginViewModel.cs` (`ObservableObject`, `CommunityToolkit.Mvvm` source
+      generators: `[ObservableProperty]` for `Username`/`Password`/`IsBusy`/`ErrorMessage`,
+      `[RelayCommand]` for `LoginCommand`); depends only on `IAuthenticator`
+- [x] 6.3 Created `LoginWindow.xaml` + `LoginWindow.xaml.cs` — plain controls (`TextBox`,
+      `PasswordBox`, one `Button`), no custom colours/fonts/theme, Spanish UI copy
+- [x] 6.4 Created `ChangePasswordViewModel.cs` — `IsForced` gates whether `CancelCommand` is
+      exercisable at all (`CanCancel() => IsForced`); depends on `IPasswordService`,
+      `IUserSession` (the latter surfaced as a read-only `DisplayName` property, so the
+      dependency is genuinely used, not merely accepted and ignored)
+- [x] 6.5 Created `ChangePasswordWindow.xaml` + `ChangePasswordWindow.xaml.cs` — three
+      `PasswordBox` controls, a Cancel button whose `Visibility` is bound to `IsForced` via the
+      built-in `BooleanToVisibilityConverter` (no custom converter written)
+- [x] 6.6 Modified `App.xaml.cs`: `OnStartup` (now `async void`, a deliberate WPF-lifecycle
+      pattern — see Deviations) builds the pre-login container via `AddPreLoginServices`, then
+      drives `LoginWindow` → (forced) `ChangePasswordWindow` → `MainWindow` through
+      `LoginBootstrap`'s stages; a cancelled/closed-without-success forced change disposes
+      `success.Factory` and loops back to a fresh `LoginWindow`, never falling through.
+      `App.xaml`'s `StartupUri` was removed (WPF would otherwise construct `MainWindow` before
+      any login ran) and `ShutdownMode="OnExplicitShutdown"` was added, so closing `LoginWindow`
+      or `ChangePasswordWindow` mid-sequence never ends the process before the next window in
+      the chain is shown — only `MainWindow.Closed` calls `Shutdown()`
+- [x] 6.7 **[Spec test 15 — construction-order half]** See "The two rules this slice exists to
+      prove" below — proven via a new pure state machine, not a WPF test
+- [x] 6.8 Modified `openspec/config.yaml`: `credential-exposure` moved from `open_decisions` to
+      `resolved_decisions` (resolved 2026-09-25, referencing this change's own spec decisions);
+      `data-api-disabled`'s rationale corrected (it previously claimed EF Core "authenticates as
+      the table owner" — no longer true now that every connection is an individual login role,
+      a member of one of the two group roles, and neither group role owns any table); added the
+      `new-table-ships-with-grants` convention entry
+- [x] 6.9 **[Guardrail]** Confirmed by `grep` across `src/Inmobiliaria.Desktop/**/*.cs` and
+      `**/*.xaml`: `Npgsql`/`EntityFrameworkCore`/`DbContext` appear in exactly one file,
+      `App.xaml.cs` (the composition root, which needs `Npgsql.SslMode` to build
+      `ConnectionEndpoint`) — one incidental match in `LoginViewModel.cs` is a doc-comment
+      sentence ("it knows nothing about Npgsql..."), not a type reference. No `.xaml` file
+      matches at all
+- [x] 6.10 **[Isolation check]** See Work Unit Evidence below — full solution build (Windows
+      `build` job's own command) and `Inmobiliaria.Core.slnf` test run (Linux `core` job's own
+      command), both on this branch alone, on top of PR1–PR4 merged
+
+### The two rules this slice exists to prove
+
+1. **A forced password change cannot be walked around.** `App.xaml.cs`'s `RunBootstrapAsync`
+   never constructs `MainWindow` before both gates pass: `LoginBootstrap.AfterAuthentication`
+   returns `AwaitingForcedPasswordChange` (never `ReadyForMainWindow`) whenever
+   `success.Session.MustChangePassword` is true, and `MainWindow` is only ever constructed after
+   the `if (stage == BootstrapStage.AwaitingForcedPasswordChange)` block completes without
+   hitting its own `continue`. Cancelling (`ChangePasswordViewModel.Cancel` when `IsForced`, or
+   closing the window via its chrome — both land on a `ShowDialog()` result other than `true`)
+   disposes `success.Factory` and loops back to a fresh `LoginWindow`; the `continue` statement
+   is the only path out of that branch besides falling through to `MainWindow`, and it can only
+   be reached from `BootstrapStage.Aborted`.
+2. **Task 6.7's test lives in `Inmobiliaria.Infrastructure.Tests`, not Desktop.** Rather than
+   leave the construction-order rule as WPF-only logic no Linux job could ever check, it was
+   extracted into a new pure state machine — `LoginBootstrap`/`BootstrapStage` — in
+   `Inmobiliaria.Infrastructure/Access` (no WPF, EF, or Npgsql reference). `App.xaml.cs` calls
+   the exact same type to drive its real windows, so the test
+   (`LoginBootstrapTests.MustChangePasswordPending_CannotReachMainWindow_UntilTheChangeSucceeds`
+   and its sibling `CancellingAForcedChange_AbortsInsteadOfFallingThroughToMainWindow`) is not a
+   parallel reimplementation of the rule — it exercises the production decision logic directly,
+   with a real `UserSession`/`AppUser` and a throwaway `ISessionDbContextFactory` stub that is
+   never actually opened.
+
+### Files Changed (PR 5)
+
+| File | Action | What Was Done |
+|------|--------|----------------|
+| `Directory.Packages.props` | Modified | Added `CommunityToolkit.Mvvm` (`8.4.2`) and `Microsoft.Extensions.DependencyInjection` (`10.0.7`) |
+| `src/Inmobiliaria.Desktop/Inmobiliaria.Desktop.csproj` | Modified | Added the two new `PackageReference`s and the first `ProjectReference` to `Inmobiliaria.Infrastructure` |
+| `src/Inmobiliaria.Desktop/appsettings.json` | Modified | Added a `Supabase` section (`Host`, `Port`, `Database`, `ProjectRef`, `SslMode`) — none of the five is a secret (design Decision 2); `Host`/`ProjectRef` ship as clearly-labeled placeholders (`REPLACE_WITH_...`) since no agent connects to the live Supabase project and the real values are not this PR's to invent |
+| `src/Inmobiliaria.Desktop/App.xaml` | Modified | Removed `StartupUri`; added `ShutdownMode="OnExplicitShutdown"` |
+| `src/Inmobiliaria.Desktop/App.xaml.cs` | Modified | The composition root: `AddPreLoginServices`, the `LoginWindow` → `ChangePasswordWindow` → `MainWindow` sequence, `appsettings.json`-backed `ConnectionEndpoint` loading via `JsonDocument` |
+| `src/Inmobiliaria.Desktop/LoginViewModel.cs` | Created | `Username`, `Password`, `IsBusy`, `ErrorMessage`, `LoginCommand`, `SuccessResult`, `LoginSucceeded` event |
+| `src/Inmobiliaria.Desktop/LoginWindow.xaml`, `.xaml.cs` | Created | Plain login form; `PasswordBox` relayed to the ViewModel in code-behind (WPF does not support binding `PasswordBox.Password`) |
+| `src/Inmobiliaria.Desktop/ChangePasswordViewModel.cs` | Created | `CurrentPassword`, `NewPassword`, `ConfirmNewPassword`, `IsBusy`, `ErrorMessage`, `IsForced`, `DisplayName`, `ChangeCommand`, `CancelCommand`, `PasswordChangeSucceeded`/`Cancelled` events |
+| `src/Inmobiliaria.Desktop/ChangePasswordWindow.xaml`, `.xaml.cs` | Created | Three `PasswordBox` controls; Cancel button visible only when `IsForced` |
+| `src/Inmobiliaria.Infrastructure/Access/LoginBootstrap.cs` | Created | `BootstrapStage` enum + `LoginBootstrap` static class — the pure construction-order state machine task 6.7 needs and `App.xaml.cs` actually drives its windows through |
+| `tests/Inmobiliaria.Infrastructure.Tests/LoginBootstrapTests.cs` | Created | Spec test 15's construction-order half (task 6.7): 4 test methods (one a `[Theory]` over 2 cases) |
+| `openspec/config.yaml` | Modified | `credential-exposure` → `resolved_decisions`; `data-api-disabled` rationale corrected; `new-table-ships-with-grants` convention added |
+
+### Deviations from Design / tasks.md
+
+1. **`LoginBootstrap`/`BootstrapStage` is a new production type neither design.md nor tasks.md
+   names by filename.** Task 6.7 requires the construction-order rule to be provable from
+   `Inmobiliaria.Infrastructure.Tests` (WPF cannot gate `core`), but design.md's own diagram
+   (Decision 10) only shows the sequence as prose/ASCII art, not as a type. Rather than write a
+   test that reimplements the rule in parallel (and could drift from what `App.xaml.cs` actually
+   does), the sequence was extracted into this one small, pure, dependency-free state machine
+   that both the real bootstrap and the test exercise identically.
+2. **`App.xaml.cs`'s `OnStartup`/`OnExit` are `async void`, and `ShutdownMode` was added.**
+   Neither design.md nor tasks.md specifies these — they are load-bearing implementation
+   details task 6.6 leaves to this PR's judgment. `async void` is the documented, accepted
+   pattern for WPF lifecycle overrides that must `await` something (there is no caller to
+   propagate a `Task` back to). `ShutdownMode="OnExplicitShutdown"` was necessary because the
+   default (`OnLastWindowClose`) would end the process the moment `LoginWindow` or a cancelled
+   `ChangePasswordWindow` closes — before the bootstrap loop gets a chance to show the next
+   window — which would have silently broken exactly the two-gate sequence this slice exists to
+   prove.
+3. **`appsettings.json`'s new `Supabase` section ships placeholder values for `Host` and
+   `ProjectRef`.** Design Decision 2 states these are non-secret, but the actual live values for
+   this project's Supabase instance are not something this PR's agent knows or is permitted to
+   invent (the hard boundary against connecting to or inventing facts about the live Supabase
+   project, carried from every earlier PR in this change). The placeholders are clearly labeled
+   (`REPLACE_WITH_...`) and documented in `App.xaml.cs`'s own doc comment; filling them in is a
+   deployment step for a human with access to the actual project, not a code change.
+4. **No `Microsoft.Extensions.Configuration` package was added.** Task 6.1 names only
+   `CommunityToolkit.Mvvm` and `Microsoft.Extensions.DependencyInjection` as the packages this
+   slice needs ("add nothing beyond what tasks 6.1–6.10 need"). `appsettings.json` is read
+   directly with `System.Text.Json.JsonDocument` (already part of the shared framework, no new
+   package) rather than the `IConfiguration` pattern a larger app would use.
+
+### Issues Found
+
+None. No pre-existing test broke; the full solution builds clean with `Inmobiliaria.Desktop`
+now fully wired (previously it built only because it was never asked to compile bootstrap code).
+
+### Scope Compliance
+
+- No navigation shell, no menus, no second application screen — `MainWindow.xaml` is untouched
+  content-wise (still the placeholder `TextBlock`), matching design's explicit scope guard.
+- No visual styling added anywhere: no custom colours, no theme resources, no fonts loaded —
+  every control uses its WPF default appearance; only layout (`Grid`/`StackPanel`/margins) and
+  Spanish label text were authored, per this PR's explicit instruction that visual design is out
+  of scope.
+- `IUserProvisioning` (PR 4) is never referenced from `Inmobiliaria.Desktop` — provisioning has
+  no UI in this slice, matching design's "no menus" scope guard.
+- No new test was placed under `Inmobiliaria.Desktop` — `LoginBootstrapTests.cs` lives under
+  `tests/Inmobiliaria.Infrastructure.Tests/`, confirmed by its file path and by `git status`.
+- The live Supabase project was never connected to; no credential or project-specific fact about
+  it was read or invented — the two placeholder config values are clearly labeled as such.
+
+### Work Unit Evidence
+
+| Evidence | Value |
+|---|---|
+| Focused test command and exact result | `dotnet test Inmobiliaria.Core.slnf --configuration Release` (task 6.7's own test filtered in — no separate `--filter` needed since `LoginBootstrapTests` requires no container and always runs) → **Domain.Tests: 69 passed, 0 failed, 0 skipped; Infrastructure.Tests: 65 passed, 0 failed, 0 skipped** (60 from PR 4 + 5 new `LoginBootstrapTests` cases: 4 methods, one a `[Theory]` over 2 `[InlineData]` cases) |
+| Runtime harness command/scenario and exact result | `dotnet build Inmobiliaria.sln --configuration Release --no-incremental` (the Windows `build` job's own command, full solution including `Inmobiliaria.Desktop` and its WPF/XAML compilation) → **0 Advertencia(s), 0 Errores** |
+| Rollback boundary | Revert `App.xaml`, `App.xaml.cs`, `Inmobiliaria.Desktop.csproj`, `appsettings.json`, `Directory.Packages.props`; delete `LoginViewModel.cs`, `LoginWindow.xaml{,.cs}`, `ChangePasswordViewModel.cs`, `ChangePasswordWindow.xaml{,.cs}`, `src/Inmobiliaria.Infrastructure/Access/LoginBootstrap.cs`, `tests/Inmobiliaria.Infrastructure.Tests/LoginBootstrapTests.cs`. PR1–PR4 (already committed) are fully unaffected — authentication, roles, permissions, and provisioning all still work with no Desktop UI present |
+
+### Review Budget (PR 5 alone)
+
+Measured via `git diff --stat` (modified files) + `wc -l` (new files), against the working tree
+at the start of this PR (PR1–PR4 already committed):
+
+- **Modified files**: `Directory.Packages.props` (+2), `App.xaml` (+6/−2), `App.xaml.cs`
+  (+128/−4), `Inmobiliaria.Desktop.csproj` (+6), `appsettings.json` (+7) — **149 insertions, 6
+  deletions = 155 lines.**
+- **New files** (5 production + 1 test in Desktop, 1 production + 1 test in Infrastructure, all
+  authored, no generated goldens): `ChangePasswordViewModel.cs` (126) + `ChangePasswordWindow.xaml`
+  (67) + `ChangePasswordWindow.xaml.cs` (56) + `LoginViewModel.cs` (95) + `LoginWindow.xaml` (45)
+  + `LoginWindow.xaml.cs` (40) + `LoginBootstrap.cs` (63) + `LoginBootstrapTests.cs` (87) =
+  **579 lines.**
+- **Authored (risk-counted) total**: **155 + 579 = 734 lines.**
+- **Session budget**: 800 lines (`review_budget_lines`). **Under budget by 66 lines** — within
+  tasks.md's own 400–500 estimate range's upper bound plus the extra `LoginBootstrap` state
+  machine and its test, which neither design.md nor tasks.md itemized by name but were needed to
+  satisfy task 6.7 without a WPF-only test.
+
+### Status (PR 5)
+
+10/10 Phase 6 tasks complete. **This is the final code slice of `users-and-roles`.** Ready for
+`sdd-verify` — all six planned PRs (1, 2a, 2b, 3, 4, 5) are now implemented, with task 3.13 (H.2)
+already resolved by the user and task 3.12's consequence (H.3) already resolved by PR 4's own
+design decision (Empleado-only in-app provisioning). Remaining open items are exactly the
+Human Follow-Ups tasks.md already lists (H.1: apply the migration to the live Supabase project;
+H.4: the carried-forward CHECK constraint follow-up for the collection change) — neither is an
+agent task.

@@ -9,12 +9,6 @@ context: |
   PDF library and scheduler mechanism not yet chosen. See `open_decisions` below.
 
 open_decisions:
-  - id: credential-exposure
-    summary: >
-      Direct Npgsql connection ships the DB connection string on the client
-      machine, making UI-level Admin/Empleado role separation cosmetic.
-      Undecided: accept for 2 trusted users, or move to Supabase Auth with
-      real Postgres roles/RLS.
   - id: scheduler-mechanism
     summary: >
       Automated notifications (60/30/15 days before due) must fire while the
@@ -24,6 +18,30 @@ open_decisions:
     summary: PDF generation library not yet chosen.
 
 resolved_decisions:
+  - id: credential-exposure
+    resolved: 2026-09-25
+    decision: >
+      Resolved by the users-and-roles change: each user authenticates with their OWN personal
+      PostgreSQL login role and password, never a shared application credential. There is no
+      connection string containing a password on disk to leak — the password is typed at login
+      and lives only in that session's memory for its lifetime (spec "No Database Credential
+      Stored on Disk, and No Supabase Auth"). Admin/Empleado separation is enforced by real
+      PostgreSQL GRANTs bound to two group roles (inmobiliaria_admin, inmobiliaria_empleado),
+      not by anything the UI merely hides — an Empleado connecting with pgAdmin instead of this
+      application, using her own credentials, still carries only her own role's privileges
+      (spec "Enforcement by Database GRANT — Bypassing the Application Gains Nothing").
+    rationale: >
+      This was exactly the tradeoff the original open decision named: "accept for 2 trusted
+      users, or move to Supabase Auth with real Postgres roles/RLS." The users-and-roles change
+      took neither option literally — Supabase Auth was considered and REJECTED (spec Decision
+      2; it would add a token exchange and an auth mapping this project has no other use for) —
+      but it delivers the substance the second option was reaching for: real per-user Postgres
+      roles instead of one shared, exposable credential. Row Level Security was also considered
+      and explicitly rejected, not merely deferred (spec "No Row-Level Restriction"): both
+      roles perform identical operational work over every row, so no row-level rule this
+      business needs exists to justify it. Table-level GRANT is the enforcement mechanism
+      instead, and spec tests 22–29 prove it holds even when the application is bypassed
+      entirely.
   - id: supabase-org
     resolved: 2026-09-07
     decision: >
@@ -61,11 +79,20 @@ resolved_decisions:
       The WPF client connects directly through EF Core and Npgsql and never uses
       supabase-js or the REST API, so an internet-facing HTTP surface over a
       database holding tenant DNIs and lease contracts would be pure attack
-      surface with no benefit. RLS is off because the EF Core connection
-      authenticates as the table owner and bypasses it; RLS becomes relevant
-      only if `credential-exposure` is later resolved via Supabase Auth with
-      per-user Postgres roles, and would then be enabled deliberately per table.
-      A greyed-out PostgREST service in the dashboard is the expected result.
+      surface with no benefit. RLS stays off, for a corrected reason: this
+      entry originally assumed every EF Core connection authenticates as the
+      table owner and bypasses RLS for that reason, and that the question would
+      be revisited once `credential-exposure` resolved via per-user Postgres
+      roles. `credential-exposure` has since resolved that way (see
+      `resolved_decisions`) — every connection now authenticates as an
+      individual personal login role, a member of `inmobiliaria_admin` or
+      `inmobiliaria_empleado`, and neither role owns any table (design
+      Decision 9). RLS was then considered on its own merits and explicitly
+      REJECTED, not deferred (spec "No Row-Level Restriction"): both roles do
+      identical operational work over every row, so no row-level rule this
+      business needs exists to justify it. Enforcement is by table-level GRANT
+      instead. A greyed-out PostgREST service in the dashboard remains the
+      expected result.
 
 strict_tdd: false
 
@@ -97,6 +124,21 @@ testing:
     bypassed on the way to main.
 
 conventions:
+  - id: new-table-ships-with-grants
+    established: 2026-09-25
+    rule: >
+      Any migration that creates a new table MUST grant, in that same migration, the baseline
+      SELECT and the deliberately chosen write privileges to both application PostgreSQL roles
+      (inmobiliaria_admin, inmobiliaria_empleado). A table with no grants MUST NOT ship in a
+      state where the application fails at runtime for both roles the moment either one queries
+      it.
+    rationale: >
+      Established by the users-and-roles change (spec "Every New Table Ships With Its GRANTs in
+      the Same Migration"), generalizing what that change's own migration already had to do for
+      the thirteen tables that existed before it plus the one it created. An ungranted table is
+      not a design question to defer to a follow-up — it is a defect that surfaces the moment
+      either role's session queries it, and the fix belongs in the same migration that created
+      the table, not in something a later PR has to remember to add.
   - id: branch-meaning
     established: 2026-09-18
     rule: >
@@ -171,7 +213,7 @@ rules:
   proposal:
     - Reference relevant domain Engram observations (topic_key `domain/*`) instead of restating them
     - Include rollback plan for risky changes
-    - Flag any of the four `open_decisions` above that the proposal touches, without resolving them silently
+    - Flag any `open_decisions` above that the proposal touches, without resolving them silently
   specs:
     - Use Given/When/Then for scenarios
     - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
