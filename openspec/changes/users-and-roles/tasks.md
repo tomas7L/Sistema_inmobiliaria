@@ -93,32 +93,32 @@ inside PR 2b, not a separate PR — they gate PR 4, not PR 2b's own merge.
 
 ## Phase 4: Infrastructure/Access Ports and Adapters (PR 3, est. 570–670 lines)
 
-- [ ] 4.1 Create `SupavisorUsername.cs`: `For(role, projectRef) => $"{role}.{projectRef}"` — `src/Inmobiliaria.Infrastructure/Access/SupavisorUsername.cs`
-- [ ] 4.2 Create `ConnectionEndpoint.cs` (Host/Port/Database/ProjectRef/SslMode from `appsettings.json`, no secret) — `.../Access/ConnectionEndpoint.cs`
-- [ ] 4.3 Create `IAuthenticator.cs` + `AuthenticationResult.cs` (`Success`/`Rejected`/`NotProvisioned`) — `.../Access/IAuthenticator.cs`, `AuthenticationResult.cs`
-- [ ] 4.4 Create `NpgsqlAuthenticator.cs`: builds the data source, handshake, `SELECT current_user, pg_has_role(...)`, loads the `app_users` row — `.../Access/NpgsqlAuthenticator.cs`
-- [ ] 4.5 Create `ISessionDbContextFactory.cs` + `SessionDbContextFactory.cs` — `.../Access/ISessionDbContextFactory.cs`, `SessionDbContextFactory.cs`
-- [ ] 4.6 Create `IPasswordService.cs` + `PostgresPasswordService.cs`: self password change via `SELECT app_set_role_password(@role,@pw)` with real Npgsql parameters — `.../Access/IPasswordService.cs`, `PostgresPasswordService.cs`
-- [ ] 4.7 Create `ApplicationServices.cs`: `AddPreLoginServices` extension; registers nothing DB-shaped before login — `.../Access/ApplicationServices.cs`
-- [ ] 4.8 Modify `DesignTimeDbContextFactory.cs`: add one doc sentence recording `INMOBILIARIA_DB` as development-time only — **no behavioral change**
-- [ ] 4.9 **[Spec tests 1, 6]** `CompositionGuardTests`: scan config files + runtime environment for a credential (none found); build the pre-login `ServiceCollection` and assert no descriptor assignable to `DbContext`/`NpgsqlDataSource`/`NpgsqlConnection`/`ISessionDbContextFactory` — `tests/Inmobiliaria.Infrastructure.Tests/CompositionGuardTests.cs`
-- [ ] 4.10 **[Spec test 1, cont.]** Lexical source guard: `MigrateAsync(`, `Migrate(`, `INMOBILIARIA_DB` appear only in `DesignTimeDbContextFactory.cs` and the test fixture
-- [ ] 4.11 **[Spec test 2]** `AuthenticationTests`: no Supabase Auth package reference in the project graph; login opens exactly one Npgsql connection
-- [ ] 4.12 **[Spec tests 3, 4, 5]** `AuthenticationTests` (Testcontainers): correct credentials authenticate; wrong password fails with a generic message; unknown username fails with identical wording
-- [ ] 4.13 **[Spec tests 7, 8]** `AuthenticationTests` (Testcontainers): role derives from `pg_has_role`, not a stored column; a database-side membership change takes effect on the next login with no app-side update
-- [ ] 4.14 **[Spec test 13]** `AuthenticationTests` (Testcontainers): self password change via `IPasswordService` succeeds; the already-open session keeps working without re-authenticating
-- [ ] 4.15 **[Spec test 19]** `PasswordDdlTests` (Testcontainers): a user with `MustChangePassword` pending, connecting directly, has privileges identical to any other time — the honest limit, not enforcement
-- [ ] 4.16 **[Spec tests 20, 21]** `PasswordDdlTests` (Testcontainers): `o'brien55` and `x'; DROP TABLE app_users; --` are each set as the exact literal password via `app_set_role_password`; `app_users` still exists; the payload string authenticates afterward
-- [ ] 4.17 **[Spec tests 22, 23]** `RolePermissionTests` (Testcontainers): as Empleado, a direct `INSERT INTO app_users` and a call to the provisioning function are each refused with no row/role created; the equivalent Admin operation succeeds
-- [ ] 4.18 **[Spec test 24]** `RolePermissionTests` (Testcontainers): `ALTER TABLE rent_adjustments DISABLE TRIGGER ...` refused for both roles
-- [ ] 4.19 **[Spec test 28]** `RolePermissionTests` (Testcontainers): both roles, granted `SELECT` on the same table, retrieve every row — no row-level policy filters either
-- [ ] 4.20 **[Spec test 25 — positive assertion, do not reduce to a smoke test]** `RolePermissionTests` (Testcontainers): as Empleado, `Contract.GiveNotice` **and** `Contract.End` both succeed end-to-end, writing `status`, `actual_end_date`, `end_reason`. This proves a grant exists; keep the full termination flow
-- [ ] 4.21 **[Spec test 26 — positive assertion, do not reduce to a smoke test]** `RolePermissionTests` (Testcontainers): as Empleado, confirm a rent adjustment against a seeded contract+clause+index values (reuse `SchemaConstraintTests`' `SeedContractWithClause` helper); assert the `rent_adjustments` row **and** `rent_adjustment_index_values` rows insert in one transaction with `confirmed_by` = her `AppUser` id — the standing guard against the removed money clause returning as an `INSERT` grant quietly withheld
-- [ ] 4.22 **[Spec test 27]** `RolePermissionTests` (Testcontainers): as Empleado, `SELECT sum(monthly_rent) FROM contracts` **succeeds** — asserts the exclusion is application-enforced only, never a claimed `GRANT`
-- [ ] 4.23 **[Spec test 33]** `RolePermissionTests` (Testcontainers): confirming an adjustment as any authenticated user stores that user's `AppUser` reference in `confirmed_by`
-- [ ] 4.24 **[Spec test 34]** `SchemaConstraintTests`: re-run the archived append-only assertions (raw SQL `UPDATE`/`DELETE` on `rent_adjustments`) against the modified schema — still refused for both roles
-- [ ] 4.25 **[Guardrail]** Confirm every test added in this phase lives under `tests/Inmobiliaria.Infrastructure.Tests/`, never `Inmobiliaria.Desktop` — Desktop is excluded from `Inmobiliaria.Core.slnf` and cannot gate the `core` CI job
-- [ ] 4.26 **[Isolation check]** Build and run `Inmobiliaria.Infrastructure.Tests` on this branch alone, on top of PR1+2a+2b merged, with none of PR4/PR5's code present
+- [x] 4.1 Create `SupavisorUsername.cs`: `For(role, projectRef) => $"{role}.{projectRef}"` — `src/Inmobiliaria.Infrastructure/Access/SupavisorUsername.cs`
+- [x] 4.2 Create `ConnectionEndpoint.cs` (Host/Port/Database/ProjectRef/SslMode from `appsettings.json`, no secret) — `.../Access/ConnectionEndpoint.cs`
+- [x] 4.3 Create `IAuthenticator.cs` + `AuthenticationResult.cs` (`Success`/`Rejected`/`NotProvisioned`) — `.../Access/IAuthenticator.cs`, `AuthenticationResult.cs`
+- [x] 4.4 Create `NpgsqlAuthenticator.cs`: builds the data source, handshake, `SELECT current_user, pg_has_role(...)`, loads the `app_users` row — `.../Access/NpgsqlAuthenticator.cs`
+- [x] 4.5 Create `ISessionDbContextFactory.cs` + `SessionDbContextFactory.cs` — `.../Access/ISessionDbContextFactory.cs`, `SessionDbContextFactory.cs`
+- [x] 4.6 Create `IPasswordService.cs` + `PostgresPasswordService.cs`: self password change via `SELECT app_set_role_password(@role,@pw)` with real Npgsql parameters — `.../Access/IPasswordService.cs`, `PostgresPasswordService.cs`
+- [x] 4.7 Create `ApplicationServices.cs`: `AddPreLoginServices` extension; registers nothing DB-shaped before login — `.../Access/ApplicationServices.cs`
+- [x] 4.8 Modify `DesignTimeDbContextFactory.cs`: add one doc sentence recording `INMOBILIARIA_DB` as development-time only — **no behavioral change**
+- [x] 4.9 **[Spec tests 1, 6]** `CompositionGuardTests`: scan config files + runtime environment for a credential (none found); build the pre-login `ServiceCollection` and assert no descriptor assignable to `DbContext`/`NpgsqlDataSource`/`NpgsqlConnection`/`ISessionDbContextFactory` — `tests/Inmobiliaria.Infrastructure.Tests/CompositionGuardTests.cs`
+- [x] 4.10 **[Spec test 1, cont.]** Lexical source guard: `MigrateAsync(`, `Migrate(`, `INMOBILIARIA_DB` appear only in `DesignTimeDbContextFactory.cs` and the test fixture
+- [x] 4.11 **[Spec test 2]** `AuthenticationTests`: no Supabase Auth package reference in the project graph; login opens exactly one Npgsql connection
+- [x] 4.12 **[Spec tests 3, 4, 5]** `AuthenticationTests` (Testcontainers): correct credentials authenticate; wrong password fails with a generic message; unknown username fails with identical wording
+- [x] 4.13 **[Spec tests 7, 8]** `AuthenticationTests` (Testcontainers): role derives from `pg_has_role`, not a stored column; a database-side membership change takes effect on the next login with no app-side update
+- [x] 4.14 **[Spec test 13]** `AuthenticationTests` (Testcontainers): self password change via `IPasswordService` succeeds; the already-open session keeps working without re-authenticating
+- [x] 4.15 **[Spec test 19]** `PasswordDdlTests` (Testcontainers): a user with `MustChangePassword` pending, connecting directly, has privileges identical to any other time — the honest limit, not enforcement
+- [x] 4.16 **[Spec tests 20, 21]** `PasswordDdlTests` (Testcontainers): `o'brien55` and `x'; DROP TABLE app_users; --` are each set as the exact literal password via `app_set_role_password`; `app_users` still exists; the payload string authenticates afterward
+- [x] 4.17 **[Spec tests 22, 23]** `RolePermissionTests` (Testcontainers): as Empleado, a direct `INSERT INTO app_users` and a call to the provisioning function are each refused with no row/role created; the equivalent Admin operation succeeds
+- [x] 4.18 **[Spec test 24]** `RolePermissionTests` (Testcontainers): `ALTER TABLE rent_adjustments DISABLE TRIGGER ...` refused for both roles
+- [x] 4.19 **[Spec test 28]** `RolePermissionTests` (Testcontainers): both roles, granted `SELECT` on the same table, retrieve every row — no row-level policy filters either
+- [x] 4.20 **[Spec test 25 — positive assertion, do not reduce to a smoke test]** `RolePermissionTests` (Testcontainers): as Empleado, `Contract.GiveNotice` **and** `Contract.End` both succeed end-to-end, writing `status`, `actual_end_date`, `end_reason`. This proves a grant exists; keep the full termination flow
+- [x] 4.21 **[Spec test 26 — positive assertion, do not reduce to a smoke test]** `RolePermissionTests` (Testcontainers): as Empleado, confirm a rent adjustment against a seeded contract+clause+index values (reuse `SchemaConstraintTests`' `SeedContractWithClause` helper); assert the `rent_adjustments` row **and** `rent_adjustment_index_values` rows insert in one transaction with `confirmed_by` = her `AppUser` id — the standing guard against the removed money clause returning as an `INSERT` grant quietly withheld
+- [x] 4.22 **[Spec test 27]** `RolePermissionTests` (Testcontainers): as Empleado, `SELECT sum(monthly_rent) FROM contracts` **succeeds** — asserts the exclusion is application-enforced only, never a claimed `GRANT`
+- [x] 4.23 **[Spec test 33]** `RolePermissionTests` (Testcontainers): confirming an adjustment as any authenticated user stores that user's `AppUser` reference in `confirmed_by`
+- [x] 4.24 **[Spec test 34]** `SchemaConstraintTests`: re-run the archived append-only assertions (raw SQL `UPDATE`/`DELETE` on `rent_adjustments`) against the modified schema — still refused for both roles
+- [x] 4.25 **[Guardrail]** Confirm every test added in this phase lives under `tests/Inmobiliaria.Infrastructure.Tests/`, never `Inmobiliaria.Desktop` — Desktop is excluded from `Inmobiliaria.Core.slnf` and cannot gate the `core` CI job
+- [x] 4.26 **[Isolation check]** Build and run `Inmobiliaria.Infrastructure.Tests` on this branch alone, on top of PR1+2a+2b merged, with none of PR4/PR5's code present
 
 ## Phase 5: In-App Provisioning, Reset, Deactivation (PR 4, est. 380–470 lines)
 

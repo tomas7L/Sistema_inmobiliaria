@@ -1,3 +1,10 @@
+using Inmobiliaria.Domain.Access;
+using Inmobiliaria.Domain.Indices;
+using Inmobiliaria.Domain.Leasing;
+using Inmobiliaria.Domain.Parties;
+using Inmobiliaria.Domain.Shared;
+using Inmobiliaria.Domain.Units;
+using Inmobiliaria.Infrastructure.Access;
 using Inmobiliaria.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -190,5 +197,268 @@ public sealed class RolePermissionTests
         Assert.NotNull(exception);
         var postgresException = Assert.IsType<PostgresException>(exception);
         Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, postgresException.SqlState);
+    }
+
+    /// <summary>Spec test 22: the ONLY asymmetry left. A direct write to <c>app_users</c> and a call to the provisioning function are both refused for Empleado, with no row and no role created.</summary>
+    [SkippableFact]
+    public async Task Empleado_DirectAppUsersWriteAndProvisioningFunction_BothRefused()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var superuserContext = _fixture.CreateDbContext();
+        await AccessTestSupport.ProvisionUserAsync(superuserContext, "empleado-gov", UserRole.Empleado);
+
+        await using var connection = AccessTestSupport.BuildRawConnectionAs(superuserContext, "empleado-gov");
+        await connection.OpenAsync();
+
+        await using (var insertCommand = connection.CreateCommand())
+        {
+            insertCommand.CommandText =
+                $"INSERT INTO app_users (id, username, display_name) " +
+                $"VALUES ('{Guid.NewGuid()}'::uuid, 'should-not-exist-{Guid.NewGuid():N}', 'nope')";
+            var exception = await Record.ExceptionAsync(() => insertCommand.ExecuteNonQueryAsync());
+            var postgresException = Assert.IsType<PostgresException>(exception);
+            Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, postgresException.SqlState);
+        }
+
+        await using (var provisionCommand = connection.CreateCommand())
+        {
+            provisionCommand.CommandText =
+                $"SELECT app_create_login_role('should-not-exist-{Guid.NewGuid():N}', 'x', 'inmobiliaria_empleado')";
+            var exception = await Record.ExceptionAsync(() => provisionCommand.ExecuteNonQueryAsync());
+            var postgresException = Assert.IsType<PostgresException>(exception);
+            Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, postgresException.SqlState);
+        }
+    }
+
+    /// <summary>Spec test 23: the Admin's equivalent of both test-22 operations succeeds — the grant, not the application, is what allows it.</summary>
+    [SkippableFact]
+    public async Task Admin_DirectAppUsersWriteAndProvisioningFunction_BothSucceed()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var superuserContext = _fixture.CreateDbContext();
+        await AccessTestSupport.ProvisionUserAsync(superuserContext, "admin-gov", UserRole.Admin);
+
+        // app_create_login_role is NOT SECURITY DEFINER (design Decision 3): it runs as the
+        // caller, so its internal CREATE ROLE and GRANT <group_role> still need the caller's
+        // own privileges — exactly the consequence task 3.12 proved (a bare, non-admin-option
+        // Admin membership is NOT enough) and the reason the bootstrap runbook grants its first
+        // Admin CREATEROLE plus ADMIN OPTION on BOTH group roles directly. Reproduced here
+        // verbatim so this test proves test 23's positive case using the same grant shape the
+        // runbook actually ships, rather than re-proving task 3.12's already-recorded negative
+        // one with a weaker setup.
+        var composedAdminUsername = SupavisorUsername.For("admin-gov", AccessTestSupport.TestProjectRef);
+        string grantCreateRoleSql = $"ALTER ROLE \"{composedAdminUsername}\" CREATEROLE;";
+        string grantAdminOptionSql =
+            $"GRANT inmobiliaria_admin, inmobiliaria_empleado TO \"{composedAdminUsername}\" WITH ADMIN OPTION;";
+        await superuserContext.Database.ExecuteSqlRawAsync(grantCreateRoleSql);
+        await superuserContext.Database.ExecuteSqlRawAsync(grantAdminOptionSql);
+
+        await using var connection = AccessTestSupport.BuildRawConnectionAs(superuserContext, "admin-gov");
+        await connection.OpenAsync();
+
+        await using (var insertCommand = connection.CreateCommand())
+        {
+            insertCommand.CommandText =
+                $"INSERT INTO app_users (id, username, display_name) " +
+                $"VALUES ('{Guid.NewGuid()}'::uuid, 'created-by-admin-{Guid.NewGuid():N}', 'created by admin')";
+            await insertCommand.ExecuteNonQueryAsync();
+        }
+
+        await using (var provisionCommand = connection.CreateCommand())
+        {
+            provisionCommand.CommandText =
+                $"SELECT app_create_login_role('admin-created-{Guid.NewGuid():N}', 'x', 'inmobiliaria_empleado')";
+            await provisionCommand.ExecuteNonQueryAsync();
+        }
+    }
+
+    /// <summary>Spec test 24: neither role owns any table, so neither can disable the append-only trigger — no extra revoke, only the absence of ownership.</summary>
+    [SkippableFact]
+    public async Task NeitherRole_CanDisableTheAppendOnlyTrigger()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var superuserContext = _fixture.CreateDbContext();
+        await AccessTestSupport.ProvisionUserAsync(superuserContext, "trigger24-empleado", UserRole.Empleado);
+        await AccessTestSupport.ProvisionUserAsync(superuserContext, "trigger24-admin", UserRole.Admin);
+
+        foreach (var rawUsername in new[] { "trigger24-empleado", "trigger24-admin" })
+        {
+            await using var connection = AccessTestSupport.BuildRawConnectionAs(superuserContext, rawUsername);
+            await connection.OpenAsync();
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = "ALTER TABLE rent_adjustments DISABLE TRIGGER ALL";
+
+            var exception = await Record.ExceptionAsync(() => command.ExecuteNonQueryAsync());
+            Assert.IsType<PostgresException>(exception);
+        }
+    }
+
+    /// <summary>Spec test 28: no Row-Level Security anywhere — both roles, granted SELECT on the same table, see every row.</summary>
+    [SkippableFact]
+    public async Task BothRoles_SeeEveryRowOfATableTheyMayRead()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var superuserContext = _fixture.CreateDbContext();
+        var partyA = new Party(Guid.NewGuid(), "Row", $"Visible-{Guid.NewGuid():N}");
+        var partyB = new Party(Guid.NewGuid(), "Row", $"Visible-{Guid.NewGuid():N}");
+        superuserContext.Parties.AddRange(partyA, partyB);
+        await superuserContext.SaveChangesAsync();
+
+        await AccessTestSupport.ProvisionUserAsync(superuserContext, "rls-empleado", UserRole.Empleado);
+        await AccessTestSupport.ProvisionUserAsync(superuserContext, "rls-admin", UserRole.Admin);
+
+        foreach (var rawUsername in new[] { "rls-empleado", "rls-admin" })
+        {
+            await using var connection = AccessTestSupport.BuildRawConnectionAs(superuserContext, rawUsername);
+            await connection.OpenAsync();
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = $"SELECT count(*) FROM parties WHERE id IN ('{partyA.Id}', '{partyB.Id}')";
+            var visibleCount = (long)(await command.ExecuteScalarAsync())!;
+
+            Assert.Equal(2, visibleCount);
+        }
+    }
+
+    /// <summary>
+    /// Spec test 25 — POSITIVE assertion, deliberately not a smoke test. As Empleado,
+    /// <c>Contract.GiveNotice</c> AND <c>Contract.End</c> both succeed end-to-end, writing
+    /// <c>status</c>, <c>actual_end_date</c> and <c>end_reason</c>. This is the standing guard
+    /// against the removed column-level termination restriction quietly returning.
+    /// </summary>
+    [SkippableFact]
+    public async Task Empleado_CanTerminateAContract_NoticeAndEndBothSucceed()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var superuserContext = _fixture.CreateDbContext();
+        await AccessTestSupport.ProvisionUserAsync(superuserContext, "empleado-term", UserRole.Empleado);
+
+        await using var empleadoContext = AccessTestSupport.BuildDbContextAs(superuserContext, "empleado-term");
+
+        var unit = new PropertyUnit(
+            Guid.NewGuid(), new Address("Fake Street", "1", "Springfield", "Buenos Aires", "1000"));
+        empleadoContext.Units.Add(unit);
+
+        var contract = new Contract(
+            Guid.NewGuid(), new DateOnly(2026, 1, 1), new DateOnly(2027, 12, 31),
+            100_000m, [new UnitShare(unit.Id, 100m)]);
+        empleadoContext.Contracts.Add(contract);
+        await empleadoContext.SaveChangesAsync();
+
+        contract.GiveNotice(new DateOnly(2026, 6, 1), new DateOnly(2026, 7, 1));
+        contract.End(EndReason.EarlyTerminationByTenant, new DateOnly(2026, 7, 1));
+        await empleadoContext.SaveChangesAsync();
+
+        await using var readContext = _fixture.CreateDbContext();
+        var reloaded = await readContext.Contracts.SingleAsync(c => c.Id == contract.Id);
+        Assert.Equal(ContractStatus.Ended, reloaded.Status);
+        Assert.Equal(new DateOnly(2026, 7, 1), reloaded.ActualEndDate);
+        Assert.Equal(EndReason.EarlyTerminationByTenant, reloaded.EndReason);
+    }
+
+    /// <summary>
+    /// Spec test 26 — POSITIVE assertion, mirroring test 25. As Empleado, confirming a rent
+    /// adjustment succeeds and the new row records her in <c>confirmed_by</c>; both
+    /// <c>rent_adjustments</c> and <c>rent_adjustment_index_values</c> insert in one
+    /// transaction, proving the paired grant of design Decision 9. The standing guard against
+    /// the removed money clause returning as an <c>INSERT</c> grant quietly withheld.
+    /// </summary>
+    [SkippableFact]
+    public async Task Empleado_CanConfirmARentAdjustment_WithConfirmedByRecorded()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var superuserContext = _fixture.CreateDbContext();
+        var empleadoUserId = await AccessTestSupport.ProvisionUserAsync(
+            superuserContext, "empleado-adjust", UserRole.Empleado);
+
+        var (contract, index) = SchemaConstraintTests.SeedContractWithClause(superuserContext);
+        superuserContext.IndexValues.Add(
+            new IndexValue(Guid.NewGuid(), index.Id, new IndexPeriod(2026, 7), 9_440m));
+        await superuserContext.SaveChangesAsync();
+
+        await using var empleadoContext = AccessTestSupport.BuildDbContextAs(superuserContext, "empleado-adjust");
+        var trackedContract = await empleadoContext.Contracts.SingleAsync(c => c.Id == contract.Id);
+
+        var adjustment = SchemaConstraintTests.ConfirmAdjustment(
+            trackedContract, index.Id,
+            new IndexPeriod(2026, 1), 8_000m,
+            new IndexPeriod(2026, 7), 9_440m,
+            new DateOnly(2026, 7, 1), DateTimeOffset.UtcNow, empleadoUserId);
+
+        // Same EF gotcha as PR 2b: a newly-appeared entity carrying a client-assigned key is
+        // not inferred as Added from a collection-diff alone.
+        empleadoContext.RentAdjustments.Add(adjustment);
+        await empleadoContext.SaveChangesAsync();
+
+        await using var readContext = _fixture.CreateDbContext();
+
+        // Loaded with `.Include`, deliberately. This test previously queried the child table by
+        // its shadow FK to work around RentAdjustment's materialization constructor handing EF a
+        // fixed-size array it could not append to. That is fixed at the source, and eager-loading
+        // here is what keeps it fixed: if the navigation is ever handed a fixed-size collection
+        // again, this line throws instead of the defect resurfacing in the collection change.
+        var reloadedAdjustment = await readContext.RentAdjustments
+            .Include(a => a.IndexValues)
+            .SingleAsync(a => a.Id == adjustment.Id);
+
+        Assert.Equal((Guid?)empleadoUserId, reloadedAdjustment.ConfirmedBy);
+        Assert.Single(reloadedAdjustment.IndexValues);
+    }
+
+    /// <summary>Spec test 27: the exclusion from aggregate business reporting is application-enforced only — no GRANT can forbid an aggregate over rows a role may already read.</summary>
+    [SkippableFact]
+    public async Task Empleado_AggregateOverContracts_SucceedsBecauseNoGrantCanForbidIt()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var superuserContext = _fixture.CreateDbContext();
+        await AccessTestSupport.ProvisionUserAsync(superuserContext, "empleado-agg", UserRole.Empleado);
+
+        await using var connection = AccessTestSupport.BuildRawConnectionAs(superuserContext, "empleado-agg");
+        await connection.OpenAsync();
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT sum(monthly_rent) FROM contracts";
+
+        // No exception: this is the whole point of the test (spec "Aggregate Business
+        // Reporting Is Separated By The Application Only").
+        await command.ExecuteScalarAsync();
+    }
+
+    /// <summary>Spec test 33: confirming an adjustment as ANY authenticated user (here, Admin — test 26 already covers Empleado) stores that user's reference in <c>confirmed_by</c>.</summary>
+    [SkippableFact]
+    public async Task ConfirmingAnAdjustment_AsAnyAuthenticatedUser_StoresHerAppUserReference()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var superuserContext = _fixture.CreateDbContext();
+        var adminUserId = await AccessTestSupport.ProvisionUserAsync(
+            superuserContext, "admin-adjust", UserRole.Admin);
+
+        var (contract, index) = SchemaConstraintTests.SeedContractWithClause(superuserContext);
+        await superuserContext.SaveChangesAsync();
+
+        await using var adminContext = AccessTestSupport.BuildDbContextAs(superuserContext, "admin-adjust");
+        var trackedContract = await adminContext.Contracts.SingleAsync(c => c.Id == contract.Id);
+
+        var adjustment = SchemaConstraintTests.ConfirmAdjustment(
+            trackedContract, index.Id,
+            new IndexPeriod(2026, 1), 8_000m,
+            new IndexPeriod(2026, 7), 9_200m,
+            new DateOnly(2026, 7, 1), DateTimeOffset.UtcNow, adminUserId);
+
+        adminContext.RentAdjustments.Add(adjustment);
+        await adminContext.SaveChangesAsync();
+
+        await using var readContext = _fixture.CreateDbContext();
+        var reloaded = await readContext.RentAdjustments.SingleAsync(a => a.Id == adjustment.Id);
+        Assert.Equal((Guid?)adminUserId, reloaded.ConfirmedBy);
     }
 }

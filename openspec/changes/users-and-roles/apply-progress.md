@@ -400,3 +400,163 @@ unticked until they run the query above against the live Supabase project and re
 work item remains for it. Ready for `sdd-verify`, or for the orchestrator to hold PR 4 (Phase 5)
 until both task 3.12's consequence (H.3) and task 3.13's outcome (H.2) are addressed, per tasks.md's
 own gating.
+
+---
+
+## PR 3 — Phase 4: Infrastructure/Access Ports and Adapters — COMPLETE (26/26 tasks)
+
+Task 3.13 remains explicitly pending the user (unchanged from PR 2b — not this PR's scope); it does
+not block PR 3, which needs only PR 2b's roles/functions/schema, all already in place.
+
+- [x] 4.1 `SupavisorUsername.cs` — `For(role, projectRef) => $"{role}.{projectRef}"`
+- [x] 4.2 `ConnectionEndpoint.cs` — record with `Host`, `Port`, `Database`, `ProjectRef`, `SslMode`; no secret
+- [x] 4.3 `IAuthenticator.cs` + `AuthenticationResult.cs` — closed `Success`/`Rejected`/`NotProvisioned` hierarchy
+- [x] 4.4 `NpgsqlAuthenticator.cs` — builds the data source, one handshake, `SELECT current_user, pg_has_role(...)`, loads `app_users`
+- [x] 4.5 `ISessionDbContextFactory.cs` + `SessionDbContextFactory.cs` — wraps the session's one `NpgsqlDataSource`
+- [x] 4.6 `IPasswordService.cs` + `PostgresPasswordService.cs` — `SELECT app_set_role_password(@role,@pw)` via `ExecuteSqlInterpolatedAsync` (real EF/Npgsql parameters)
+- [x] 4.7 `ApplicationServices.cs` — `AddPreLoginServices` extension; registers only `ConnectionEndpoint` + `IAuthenticator`
+- [x] 4.8 `DesignTimeDbContextFactory.cs` — one doc sentence added; **zero behavioral change** (confirmed by diff)
+- [x] 4.9 **[Spec tests 1, 6]** `CompositionGuardTests.cs`: config-file scan + runtime-environment scan (test 1) and pre-login `ServiceCollection` reflection scan for `DbContext`/`NpgsqlDataSource`/`NpgsqlConnection`/`ISessionDbContextFactory` (test 6)
+- [x] 4.10 **[Spec test 1, cont. — lexical guard]** `CompositionGuardTests.MigrateAndDesignTimeConnectionString_AppearOnlyInTheAllowedFile`: walks `src/`, asserts `MigrateAsync(`, `Migrate(`, `INMOBILIARIA_DB` appear only in `DesignTimeDbContextFactory.cs`
+- [x] 4.11 **[Spec test 2]** `AuthenticationTests.cs`: no Supabase/Gotrue assembly reference (reflection) + a lexical count confirming `NpgsqlAuthenticator.cs` calls `OpenConnectionAsync(` exactly once
+- [x] 4.12 **[Spec tests 3, 4, 5]** `AuthenticationTests.cs` (Testcontainers): correct credentials succeed; wrong password and unknown username both produce the same `Rejected` result type with zero distinguishing data
+- [x] 4.13 **[Spec tests 7, 8]** `AuthenticationTests.RoleIsDerivedFromPgHasRole_AndADatabaseSideChangeTakesEffectNextLogin` (Testcontainers): role changes from a direct `REVOKE`/`GRANT` take effect on the very next login, no `app_users` update
+- [x] 4.14 **[Spec test 13]** `AuthenticationTests.SelfPasswordChange_KeepsTheAlreadyOpenSessionWorking` (Testcontainers): the already-open pooled connection keeps working after `IPasswordService.ChangeOwnPasswordAsync`; a brand-new connection requires the new password
+- [x] 4.15 **[Spec test 19]** `PasswordDdlTests.PendingMustChangePassword_DoesNotConfineADirectDatabaseClient` (Testcontainers)
+- [x] 4.16 **[Spec tests 20, 21]** `PasswordDdlTests.PasswordDdl_SetsTheExactLiteralPasswordWithNoInjection` (Testcontainers, `[Theory]` over both payloads: `o'brien55` and `x'; DROP TABLE app_users; --`)
+- [x] 4.17 **[Spec tests 22, 23]** `RolePermissionTests.Empleado_DirectAppUsersWriteAndProvisioningFunction_BothRefused` / `Admin_DirectAppUsersWriteAndProvisioningFunction_BothSucceed` (Testcontainers)
+- [x] 4.18 **[Spec test 24]** `RolePermissionTests.NeitherRole_CanDisableTheAppendOnlyTrigger` (Testcontainers)
+- [x] 4.19 **[Spec test 28]** `RolePermissionTests.BothRoles_SeeEveryRowOfATableTheyMayRead` (Testcontainers)
+- [x] 4.20 **[Spec test 25 — kept as a full positive end-to-end flow]** `RolePermissionTests.Empleado_CanTerminateAContract_NoticeAndEndBothSucceed` (Testcontainers)
+- [x] 4.21 **[Spec test 26 — kept as a full positive end-to-end flow]** `RolePermissionTests.Empleado_CanConfirmARentAdjustment_WithConfirmedByRecorded` (Testcontainers) — reuses `SchemaConstraintTests.SeedContractWithClause`/`ConfirmAdjustment` (widened to `internal`, per the task's own instruction to reuse rather than duplicate)
+- [x] 4.22 **[Spec test 27]** `RolePermissionTests.Empleado_AggregateOverContracts_SucceedsBecauseNoGrantCanForbidIt` (Testcontainers)
+- [x] 4.23 **[Spec test 33]** `RolePermissionTests.ConfirmingAnAdjustment_AsAnyAuthenticatedUser_StoresHerAppUserReference` (Testcontainers, Admin this time — test 26 already covers Empleado)
+- [x] 4.24 **[Spec test 34]** `SchemaConstraintTests.AppendOnlyTrigger_StillRejectsUpdateAndDelete_ForBothApplicationRoles` (Testcontainers)
+- [x] 4.25 **[Guardrail]** Every new test file lives under `tests/Inmobiliaria.Infrastructure.Tests/`; nothing touches `Inmobiliaria.Desktop`
+- [x] 4.26 **[Isolation check]** `dotnet test Inmobiliaria.Core.slnf --configuration Release` on this branch alone, on top of PR1+2a+2b merged, with none of PR4/PR5's code present — **Domain.Tests 67/67, Infrastructure.Tests 50/50, 0 failed, 0 skipped**, reproduced on two consecutive runs
+
+### The two rules this slice exists to prove — both proven, not merely asserted
+
+1. **No database access before authentication.** `AddPreLoginServices` registers exactly two
+   things: the `ConnectionEndpoint` instance and `IAuthenticator -> NpgsqlAuthenticator`. Neither
+   type is itself assignable to `DbContext`/`NpgsqlDataSource`/`NpgsqlConnection`/
+   `ISessionDbContextFactory` — `CompositionGuardTests.PreLoginServiceCollection_RegistersNothingDatabaseShaped`
+   builds the real `ServiceCollection` `AddPreLoginServices` produces and reflects over every
+   descriptor to confirm it. The session's `NpgsqlDataSource` is created **inside**
+   `NpgsqlAuthenticator.AuthenticateAsync` and only ever leaves that method wrapped inside
+   `AuthenticationResult.Success.Factory` — there is no other path in the entire `Access`
+   namespace that produces one.
+2. **The application never assembles password SQL.** `PostgresPasswordService.ChangeOwnPasswordAsync`
+   calls `context.Database.ExecuteSqlInterpolatedAsync($"SELECT app_set_role_password({_session.Username}, {newPassword})", ct)`
+   — EF's interpolated-SQL API parameterizes every hole; the value never touches a
+   client-built string. `PasswordDdlTests.PasswordDdl_SetsTheExactLiteralPasswordWithNoInjection`
+   proves both payloads (`o'brien55`, `x'; DROP TABLE app_users; --`) become the exact literal
+   password — `app_users` still exists afterward, and the payload string itself successfully
+   authenticates a fresh connection.
+
+### Files Changed (PR 3)
+
+| File | Action | What Was Done |
+|------|--------|----------------|
+| `src/Inmobiliaria.Infrastructure/Access/SupavisorUsername.cs` | Created | `For(role, projectRef)` composition, used only to open the connection |
+| `src/Inmobiliaria.Infrastructure/Access/ConnectionEndpoint.cs` | Created | Record: `Host`, `Port`, `Database`, `ProjectRef`, `Npgsql.SslMode` |
+| `src/Inmobiliaria.Infrastructure/Access/AuthenticationResult.cs` | Created | Closed hierarchy: `Success(IUserSession, ISessionDbContextFactory)` / `Rejected` (no data) / `NotProvisioned(string Reason)` |
+| `src/Inmobiliaria.Infrastructure/Access/IAuthenticator.cs` | Created | `AuthenticateAsync(username, password, ct)` |
+| `src/Inmobiliaria.Infrastructure/Access/NpgsqlAuthenticator.cs` | Created | One `OpenConnectionAsync` call; `28P01`/`28000` map to `Rejected`; `pg_has_role` + `app_users` lookup on the same connection; Admin wins on dual membership |
+| `src/Inmobiliaria.Infrastructure/Access/ISessionDbContextFactory.cs` | Created | `Create(): InmobiliariaDbContext`, `IAsyncDisposable` |
+| `src/Inmobiliaria.Infrastructure/Access/SessionDbContextFactory.cs` | Created | Wraps one `NpgsqlDataSource`; every `Create()` shares its pool |
+| `src/Inmobiliaria.Infrastructure/Access/IPasswordService.cs` | Created | `ChangeOwnPasswordAsync(newPassword, ct)` — self-change only |
+| `src/Inmobiliaria.Infrastructure/Access/PostgresPasswordService.cs` | Created | `ExecuteSqlInterpolatedAsync` call into `app_set_role_password` |
+| `src/Inmobiliaria.Infrastructure/Access/ApplicationServices.cs` | Created | `AddPreLoginServices` — 2 registrations, neither DB-shaped |
+| `src/Inmobiliaria.Infrastructure/Persistence/DesignTimeDbContextFactory.cs` | Modified | One doc sentence; diffed byte-identical otherwise |
+| `src/Inmobiliaria.Infrastructure/Inmobiliaria.Infrastructure.csproj` | Modified | Added `Microsoft.Extensions.DependencyInjection.Abstractions` (required by task 4.7's `IServiceCollection` extension — design Decision 7 names this exact package) |
+| `Directory.Packages.props` | Modified | `Microsoft.Extensions.DependencyInjection.Abstractions` pinned at `10.0.7` — matched to the already-pinned EF Core version after two `NU1109` downgrade errors from `EFCore.NamingConventions`'s and `Testcontainers`'s own transitive floors |
+| `tests/Inmobiliaria.Infrastructure.Tests/RepoPaths.cs` | Created | Shared `FindRepoRoot()` for every lexical/structural guard |
+| `tests/Inmobiliaria.Infrastructure.Tests/AccessTestSupport.cs` | Created | Shared Testcontainers-side provisioning: `BuildEndpoint`, `ProvisionUserAsync`, `BuildRawConnectionAs`, `BuildDbContextAs` — reused by `AuthenticationTests`, `PasswordDdlTests`, `RolePermissionTests`, and `SchemaConstraintTests`' new test 34 |
+| `tests/Inmobiliaria.Infrastructure.Tests/CompositionGuardTests.cs` | Created | Tests 1, 6 + task 4.10's lexical guard |
+| `tests/Inmobiliaria.Infrastructure.Tests/AuthenticationTests.cs` | Created | Tests 2, 3, 4, 5, 7, 8, 13 |
+| `tests/Inmobiliaria.Infrastructure.Tests/PasswordDdlTests.cs` | Created | Tests 19, 20, 21 |
+| `tests/Inmobiliaria.Infrastructure.Tests/RolePermissionTests.cs` | Modified | Added tests 22, 23, 24, 25, 26, 27, 28, 33 (PR 2b's tests 29 and the task 3.12 experiment untouched) |
+| `tests/Inmobiliaria.Infrastructure.Tests/SchemaConstraintTests.cs` | Modified | Added test 34; widened `SeedContractWithClause` and `ConfirmAdjustment` from `private` to `internal` so `RolePermissionTests` can reuse them per the task's own instruction |
+
+### Deviations from Design / tasks.md
+
+1. **No real Supavisor pooler exists under Testcontainers, so tests provision login roles named
+   exactly as `SupavisorUsername.For` would compose them** (e.g. `maria.test-ref`), and give the
+   matching `app_users` row that same composed username. In production, the pooler strips the
+   `.projectref` suffix before Postgres ever sees it, so `current_user` and `app_users.username`
+   are both the bare name; there is no pooler in this test suite to do that stripping, so the
+   composed name is used end-to-end instead. This is a necessary, explicitly-documented test-only
+   difference — the pooler's own suffix-stripping behavior is a separately VERIFIED FACT (spec
+   Decision 9, proven from the office network) this test suite does not re-prove and does not
+   need to; `NpgsqlAuthenticator` itself is agnostic to whatever string Postgres reports as
+   `current_user`.
+2. **`RentAdjustment.IndexValues`'s materialization constructor assigns an empty array literal
+   (`IndexValues = [];` target-typed to `IReadOnlyList<T>`) — a pre-existing PR 2a mapping quirk,
+   not introduced here.** `EF.Include(a => a.IndexValues)` throws `NotSupportedException:
+   Collection was of a fixed size` when EF's include-fixup tries to append into it, because a
+   target-typed `[]` against an interface type compiles to `Array.Empty<T>()`, which is fixed-size.
+   Discovered only by actually running spec test 26 against Testcontainers (exactly why isolation
+   checks exist). Worked around, not patched: test 26 queries
+   `RentAdjustmentIndexValues.CountAsync(v => EF.Property<Guid>(v, "RentAdjustmentId") == id)`
+   instead of `.Include(...)`, which proves the same fact (the child row inserted in the same
+   transaction) without touching `RentAdjustment.cs`, out of this PR's scope. Flagging this as a
+   latent defect for a future PR that ever needs `.Include(a => a.IndexValues)` in production code.
+3. **Test 23's Admin case needed CREATEROLE plus ADMIN OPTION on both group roles, granted
+   directly** — not merely "provisioned as Admin" — for `app_create_login_role`'s internal
+   `CREATE ROLE` and `GRANT <group_role>` to succeed. This is exactly task 3.12's already-proven
+   finding (a bare, non-admin-option Admin membership cannot grant role membership) applied
+   forward: the test reproduces the bootstrap runbook's exact grant shape from
+   `docs/runbooks/bootstrap-first-admin.md` rather than a weaker, PR-4-shaped provisioning path
+   that does not exist yet in this slice.
+4. **`SqlQueryRaw<int>` requires its raw SQL to alias the single projected column `"Value"`**
+   (case-sensitive, quoted) — undocumented in the task list, discovered from the `42703: column
+   s.Value does not exist` failure the very first time this ran against Testcontainers.
+
+### Issues Found
+
+None beyond the three testing-environment adaptations captured above as Deviations. No pre-existing
+test broke; `RolePermissionTests`' own PR 2b tests (`AllThirteenTables_AreSelectableByBothRoles`,
+`AdminOptionInheritance_ProvenNotAssumed`) and every `SchemaConstraintTests` test from PR 1/2a/2b
+remain green, unmodified in substance.
+
+### Scope Compliance
+
+- No provisioning/reset/deactivation code created (`IUserProvisioning` does not exist yet — PR 4 scope).
+- No Desktop/WPF file touched anywhere (PR 5 scope) — confirmed via `git status` and task 4.25's guardrail test.
+- No migration created; the existing `20260924202549_AddUsersAndRoles` migration is untouched (confirmed via `git status` showing no `Migrations/` changes in this PR).
+- The live Supabase project was never connected to; task 3.13 remains explicitly pending the user, unrelated to and unblocked by this PR.
+- Only one `.csproj` and `Directory.Packages.props` edited, and only for the one package design Decision 7 explicitly names as required by this exact task (4.7).
+
+### Work Unit Evidence
+
+| Evidence | Value |
+|---|---|
+| `dotnet build Inmobiliaria.Core.slnf --configuration Release` | 0 Warning(s), 0 Error(s) |
+| Focused test command and exact result | `dotnet test Inmobiliaria.Core.slnf --configuration Release --filter "FullyQualifiedName~CompositionGuardTests"` → **4 passed, 0 failed, 0 skipped** (task 4.10's lexical guard included, re-run individually and pasted in the phase report) |
+| Runtime harness command/scenario and exact result | `dotnet test Inmobiliaria.Core.slnf --configuration Release` (Docker up, Testcontainers `postgres:17.6`) → **Domain.Tests: 67 passed, 0 failed, 0 skipped; Infrastructure.Tests: 50 passed, 0 failed, 0 skipped** — reproduced on two consecutive full runs, zero flakiness observed |
+| Rollback boundary | Delete `src/Inmobiliaria.Infrastructure/Access/*` and the five new test files (`AccessTestSupport.cs`, `RepoPaths.cs`, `CompositionGuardTests.cs`, `AuthenticationTests.cs`, `PasswordDdlTests.cs`); revert `DesignTimeDbContextFactory.cs`'s doc sentence, the `.csproj`/`Directory.Packages.props` package addition, and the new tests appended to `RolePermissionTests.cs`/`SchemaConstraintTests.cs` (widen-to-`internal` included). PR 1/2a/2b (already committed) are fully unaffected — nothing yet authenticates depends on anything created here |
+
+### Review Budget (PR 3 alone)
+
+Measured via `git diff --stat` (modified files) + `wc -l` (new files) against the working tree at
+the start of this PR (PR 1/2a/2b already committed as `48fb58d` and earlier):
+
+- **Modified files**: `Directory.Packages.props` (+1), `Inmobiliaria.Infrastructure.csproj` (+1),
+  `DesignTimeDbContextFactory.cs` (+4/−0 net, one doc sentence), `RolePermissionTests.cs`
+  (+271/−0), `SchemaConstraintTests.cs` (+57/−3, from widening two methods to `internal`) — 331
+  insertions, 3 deletions.
+- **New files** (10 production + 5 test, all authored, no generated goldens in this PR): 847 lines.
+- **Authored (risk-counted) total**: **331 + 3 + 847 = 1,181 lines.**
+- **Session budget**: 800 lines (`review_budget_lines`). **Over budget by ≈381 lines**, and above
+  tasks.md's own 570–670 estimate for this slice. Reported honestly, not trimmed to fit: the
+  overage is concentrated in the eight positive/negative role-permission tests (22–28, 33) design.md
+  itself calls out as absorbing "all three positive/negative guard tests (25, 26, 27)" into this
+  slice, plus the shared `AccessTestSupport` helper every one of those tests depends on. No test was
+  reduced to a smoke test to save lines — tasks.md explicitly forbids that for 25, 26, 27.
+
+### Status (PR 3)
+
+26/26 Phase 4 tasks complete. Ready for `sdd-verify`, or for the orchestrator to proceed to PR 4
+(Phase 5: In-App Provisioning, Reset, Deactivation) once task 3.13 (H.2) is resolved by the user and
+this PR is reviewed and merged — PR 4 also depends on task 3.12's already-recorded consequence (H.3).
