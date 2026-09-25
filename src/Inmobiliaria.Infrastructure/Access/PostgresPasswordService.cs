@@ -25,11 +25,29 @@ public sealed class PostgresPasswordService : IPasswordService
         _session = session;
     }
 
-    public async Task ChangeOwnPasswordAsync(string newPassword, CancellationToken ct = default)
+    public async Task ChangeOwnPasswordAsync(
+        string currentPassword, string newPassword, CancellationToken ct = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(currentPassword);
         ArgumentException.ThrowIfNullOrWhiteSpace(newPassword);
 
+        // Spec test 17 ("Re-entering the provisional password is rejected"): an ordinal
+        // comparison, checked BEFORE newPassword is ever bound to app_set_role_password — this
+        // rejection never reaches the database at all, so it carries none of the residual
+        // log_parameter_max_length risk task 3.13 flags (a rejected call here is not a FAILED
+        // SQL statement; it is never issued). This method does not itself re-verify that
+        // currentPassword is the genuine live password — the caller already holds an
+        // authenticated session, and design Decision 6 assigns that separate proof (the
+        // voluntary-change dialog's own extra confirmation, which "proves it by opening a
+        // throwaway connection with it") to the UI layer, PR 5's ChangePasswordViewModel.
+        if (string.Equals(currentPassword, newPassword, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "The new password must be different from the current one.");
+        }
+
         await using var context = _sessionFactory.Create();
+        await using var transaction = await context.Database.BeginTransactionAsync(ct);
 
         // EF parameterizes every interpolated hole here (@p0, @p1); `format('%I','%L')` inside
         // app_set_role_password escapes server-side. Neither value ever touches a client-built
@@ -37,5 +55,16 @@ public sealed class PostgresPasswordService : IPasswordService
         // tests 20, 21).
         await context.Database.ExecuteSqlInterpolatedAsync(
             $"SELECT app_set_role_password({_session.Username}, {newPassword})", ct);
+
+        // Any self-service change — voluntary (spec test 18) or completing a forced one (spec
+        // tests 15, 16) — clears the pending requirement (spec "Setting It MUST Clear The
+        // Requirement"). The database function is SECURITY DEFINER but scoped to exactly the
+        // caller's own row via current_user (design Decision 6); idempotent when already false.
+        await context.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT app_clear_must_change_password()", ct);
+
+        await transaction.CommitAsync(ct);
+
+        _session.ClearMustChangePassword();
     }
 }

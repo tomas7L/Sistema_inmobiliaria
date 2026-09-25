@@ -69,4 +69,31 @@ public sealed class AppUser
         IsActive = isActive;
         MustChangePassword = mustChangePassword;
     }
+
+    /// <summary>
+    /// Deactivates this user. Paired at the database with <c>ALTER ROLE ... NOLOGIN</c>
+    /// (<see cref="Infrastructure.Access.IUserProvisioning"/> in the Infrastructure layer) — the
+    /// row itself is never deleted (spec "Deactivate, Never Delete"), so every FK that already
+    /// names this user (a <c>ContractDocument</c> upload, a <c>RentAdjustment</c> confirmation)
+    /// keeps resolving to it. Idempotent: deactivating an already-inactive user is a no-op, not
+    /// an error — there is nothing about "already deactivated" that a caller needs reported back.
+    /// </summary>
+    public void Deactivate()
+    {
+        IsActive = false;
+    }
+
+    /// <summary>
+    /// Marks that this user's password was just set by someone other than themselves — at
+    /// provisioning, or by an Admin reset (spec "A Password Set by Another Person Must Be
+    /// Changed Before Anything Else"). Cleared only by that user's own successful password
+    /// change (see <see cref="Domain.Access.IUserSession.ClearMustChangePassword"/> for the
+    /// in-session mirror of this same flag, and <c>app_clear_must_change_password()</c> for the
+    /// database-side clear — design Decision 6). Idempotent, for the same reason
+    /// <see cref="Deactivate"/> is: re-raising an already-pending requirement is a no-op.
+    /// </summary>
+    public void RequirePasswordChange()
+    {
+        MustChangePassword = true;
+    }
 }

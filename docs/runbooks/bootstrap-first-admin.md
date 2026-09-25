@@ -67,6 +67,39 @@ sufficient by itself. If that test recorded that PostgreSQL 17 does **not** hono
 See task 3.12's recorded outcome in `apply-progress.md` for the actual, tested answer — this
 runbook states the branch, not the resolution.
 
+## PR 4's resolution — in-app provisioning creates Empleado accounts only
+
+Task 3.12 failed (see `apply-progress.md`), and PR 4 (`PostgresUserProvisioning`) resolves the
+branch above the only way the frozen migration's SQL actually allows: **`IUserProvisioning.
+CreateUserAsync` creates ONLY Empleado accounts.** There is no code path anywhere in the
+application that provisions a new Admin.
+
+This is not a policy choice made for its own sake — it is forced by `app_create_login_role`'s own
+body (migration `AddUsersAndRoles`, not editable from PR 4: "No migration" is this slice's own
+hard boundary). That function's `GRANT %I TO %I` for the newly created role carries no
+`WITH ADMIN OPTION` clause, for either group role. A login role this function creates can
+therefore never itself call `app_create_login_role` or `app_set_role_password` against a
+DIFFERENT role — it would always fail with `42501`, exactly like the second Admin in
+`RolePermissionTests.AdminOptionInheritance_ProvenNotAssumed`. An Admin provisioned in-app would
+hold every ordinary Admin table grant and still be permanently unable to provision anyone —
+functionally indistinguishable from an Empleado for the one thing that is supposed to set her
+apart. Rather than ship that, PR 4 does not expose it at all.
+
+### Provisioning an additional Admin (beyond the first)
+
+This remains this runbook's job, exactly as it was for the first Admin, run again with a new
+username:
+
+1. Repeat **The one transaction** above verbatim for the new Admin's username and password.
+2. The new Admin now holds `CREATEROLE` and `ADMIN OPTION` on BOTH group roles directly — the
+   only grant shape task 3.12 proved actually lets a caller provision another role — so she can
+   use `IUserProvisioning.CreateUserAsync`/`ResetPasswordAsync`/`DeactivateAsync` from inside the
+   application for Empleado accounts, exactly like the first Admin.
+3. She still cannot provision a THIRD Admin from inside the application (task 3.12's finding
+   applies to her too, once she starts using the in-app path — the one-time direct grant this
+   runbook makes is a bootstrap-only shortcut, not something the application ever mints for
+   itself). A human runs this runbook again for every additional Admin.
+
 ## Verifying the bootstrap succeeded
 
 ```sql

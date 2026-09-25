@@ -62,4 +62,30 @@ public class AppUserTests
         Assert.False(user.IsActive);
         Assert.True(user.MustChangePassword);
     }
+
+    [Fact]
+    public void Deactivate_SetsIsActiveFalse_AndIsIdempotent()
+    {
+        var user = new AppUser(Guid.NewGuid(), "maria", "Maria Lopez");
+
+        user.Deactivate();
+        Assert.False(user.IsActive);
+
+        // Calling it again on an already-inactive user is a no-op, not an error (spec
+        // "Deactivate, Never Delete" names no re-deactivation failure mode).
+        user.Deactivate();
+        Assert.False(user.IsActive);
+    }
+
+    [Fact]
+    public void RequirePasswordChange_SetsMustChangePasswordTrue_AndIsIdempotent()
+    {
+        var user = new AppUser(Guid.NewGuid(), "sofia", "Sofia Martinez");
+
+        user.RequirePasswordChange();
+        Assert.True(user.MustChangePassword);
+
+        user.RequirePasswordChange();
+        Assert.True(user.MustChangePassword);
+    }
 }

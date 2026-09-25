@@ -144,7 +144,7 @@ public sealed class AuthenticationTests
 
         var passwordService = new PostgresPasswordService(login.Factory, login.Session);
         const string newPassword = "BrandNewPassword456!";
-        await passwordService.ChangeOwnPasswordAsync(newPassword);
+        await passwordService.ChangeOwnPasswordAsync(AccessTestSupport.DefaultPassword, newPassword);
 
         // The already-open session keeps working, no re-authentication.
         await using var context = login.Factory.Create();
