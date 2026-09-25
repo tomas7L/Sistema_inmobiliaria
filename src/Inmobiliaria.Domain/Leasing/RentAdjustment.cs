@@ -37,7 +37,12 @@ public sealed class RentAdjustment
     /// </summary>
     private RentAdjustment()
     {
-        IndexValues = [];
+        // A mutable List, not `[]`. A collection expression target-typed to IReadOnlyList<T>
+        // compiles to a FIXED-SIZE array, and EF fixes a collection navigation up by ADDING the
+        // rows it loaded to whatever instance it finds here — which throws against an array.
+        // The symptom is that `.Include(a => a.IndexValues)` fails, so the index values behind a
+        // confirmed adjustment cannot be loaded in one query at all.
+        IndexValues = new List<RentAdjustmentIndexValue>();
     }
 
     private RentAdjustment(

@@ -61,7 +61,12 @@ public sealed class SchemaConstraintTests
     /// Seeds a contract with a single-index, `intervalMonths`-interval adjustment clause,
     /// registering everything against <paramref name="context"/> but not yet saving.
     /// </summary>
-    private static (Contract Contract, EconomicIndex Index) SeedContractWithClause(
+    /// <summary>
+    /// Reused directly by <c>RolePermissionTests</c> (spec tests 26, 33), so this stays
+    /// <see langword="internal"/> rather than <see langword="private"/> — the task explicitly
+    /// calls for reusing this exact helper instead of duplicating a second seeding path.
+    /// </summary>
+    internal static (Contract Contract, EconomicIndex Index) SeedContractWithClause(
         InmobiliariaDbContext context,
         int intervalMonths = 6,
         decimal monthlyRent = 450_000m)
@@ -105,7 +110,8 @@ public sealed class SchemaConstraintTests
     /// average-of-variations formula directly, so the stored coefficient is independently
     /// verifiable against a hand-computed expectation in the tests below.
     /// </summary>
-    private static RentAdjustment ConfirmAdjustment(
+    /// <summary>Reused directly by <c>RolePermissionTests</c> (spec tests 26, 33) — see the note on <see cref="SeedContractWithClause"/>.</summary>
+    internal static RentAdjustment ConfirmAdjustment(
         Contract contract,
         Guid indexId,
         IndexPeriod basePeriod,
@@ -646,6 +652,53 @@ public sealed class SchemaConstraintTests
             new EconomicIndex(Guid.NewGuid(), name));
 
         await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
+    }
+
+    /// <summary>
+    /// Spec test 34 (users-and-roles task 4.24): re-runs the archived append-only assertions
+    /// above (<see cref="AppendOnlyTrigger_RejectsRawUpdateAndDelete"/>), but this time
+    /// connected as each real application role in turn, not the fixture's superuser — proving
+    /// the trigger still rejects both roles after this change adds INSERT to
+    /// <c>rent_adjustments</c> for both of them.
+    /// </summary>
+    [SkippableFact]
+    public async Task AppendOnlyTrigger_StillRejectsUpdateAndDelete_ForBothApplicationRoles()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var context = _fixture.CreateDbContext();
+
+        var (contract, index) = SeedContractWithClause(context);
+        var confirmingUser = SeedAppUser(context);
+        var adjustment = ConfirmAdjustment(
+            contract, index.Id,
+            new IndexPeriod(2026, 1), 8_000m,
+            new IndexPeriod(2026, 7), 9_440m,
+            new DateOnly(2026, 7, 1), DateTimeOffset.UtcNow, confirmingUser.Id);
+
+        await context.SaveChangesAsync();
+
+        await AccessTestSupport.ProvisionUserAsync(context, "trigger34-empleado", UserRole.Empleado);
+        await AccessTestSupport.ProvisionUserAsync(context, "trigger34-admin", UserRole.Admin);
+
+        foreach (var rawUsername in new[] { "trigger34-empleado", "trigger34-admin" })
+        {
+            await using var connection = AccessTestSupport.BuildRawConnectionAs(context, rawUsername);
+            await connection.OpenAsync();
+
+            await using (var updateCommand = connection.CreateCommand())
+            {
+                updateCommand.CommandText =
+                    $"UPDATE rent_adjustments SET coefficient = 99 WHERE id = '{adjustment.Id}'";
+                await Assert.ThrowsAsync<PostgresException>(() => updateCommand.ExecuteNonQueryAsync());
+            }
+
+            await using (var deleteCommand = connection.CreateCommand())
+            {
+                deleteCommand.CommandText = $"DELETE FROM rent_adjustments WHERE id = '{adjustment.Id}'";
+                await Assert.ThrowsAsync<PostgresException>(() => deleteCommand.ExecuteNonQueryAsync());
+            }
+        }
     }
 
     [SkippableFact]
