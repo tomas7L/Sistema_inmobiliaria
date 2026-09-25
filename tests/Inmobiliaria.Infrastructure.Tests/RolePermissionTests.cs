@@ -409,7 +409,7 @@ public sealed class RolePermissionTests
             .SingleAsync(a => a.Id == adjustment.Id);
 
         Assert.Equal((Guid?)empleadoUserId, reloadedAdjustment.ConfirmedBy);
-        Assert.Equal(1, reloadedAdjustment.IndexValues.Count);
+        Assert.Single(reloadedAdjustment.IndexValues);
     }
 
     /// <summary>Spec test 27: the exclusion from aggregate business reporting is application-enforced only — no GRANT can forbid an aggregate over rows a role may already read.</summary>
