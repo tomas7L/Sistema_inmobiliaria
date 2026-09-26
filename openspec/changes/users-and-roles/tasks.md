@@ -20,8 +20,26 @@ table-level `GRANT`.
 
 Decision needed before apply: Yes
 Chained PRs recommended: Yes
-Chain strategy: pending
+Chain strategy: **one PR at a time into `develop`** — chosen by the project owner before apply
 400-line budget risk: High
+
+### Review-budget consent — what was actually delivered, and who agreed to it
+
+`ask-on-risk` requires the user to be asked before an oversized slice proceeds. They were asked each
+time, and this table is the record, written so the overages are not later mistaken for the budget
+rule being ignored.
+
+| Slice | Authored lines | Budget | Decision |
+|---|---|---|---|
+| PR 1 | 272 | 800 | under budget |
+| PR 2a + PR 2b | ~1,031 | 800 | **Over. Owner instructed the merge**: PR 2a failed CI alone because EF Core raises `PendingModelChangesWarning` when the model has changes no migration covers. A model change and its migration cannot be split, so the choice was one oversized PR or a slice that could never be green |
+| PR 3 | ~1,181 | 800 | **Over. Owner reviewed the number and said to leave it as one PR.** The overage is the positive role-permission tests 25, 26 and 27; the alternative split would have put the adapters in one PR and their tests in another |
+| PR 4 | ~807 | 800 | over by 7 — reported, accepted |
+| PR 5 | 734 | 800 | under budget |
+
+The pattern worth carrying forward: the 800-line budget protects reviewer attention, but a slice
+boundary that a compiler or a migration engine refuses is not a boundary at all. When the two
+conflict, the technical boundary wins and the budget overage is recorded here rather than hidden.
 
 ### Suggested Work Units
 
@@ -182,7 +200,7 @@ inside PR 2b, not a separate PR — they gate PR 4, not PR 2b's own merge.
 
 - [ ] H.1 User applies the new migration to the live Supabase project with their own credentials — no agent connects to Supabase (same as tasks 3.9–3.13's constraint)
 - [ ] H.2 User runs the exact query in task 3.13 against the live Supabase project and reports the `log_statement` outcome before Phase 5 (PR 4) starts
-- [ ] H.3 If task 3.12's `ADMIN OPTION` proof fails, a human decides between widening the bootstrap runbook (grant `WITH ADMIN OPTION` per Admin login role) versus revisiting Decision 9 — not an agent decision
+- [x] H.3 **RESOLVED.** Task 3.12's proof failed, as suspected: `ADMIN OPTION` is scoped per grant edge and is never inherited. The decision taken is **neither** of the two options this line anticipated — a third one the experiment itself forced. `app_create_login_role` issues a plain `GRANT <group> TO <new_role>` with no `WITH ADMIN OPTION`, so an Admin created from inside the application could never provision anyone, which is the one thing that defines the role. In-application creation is therefore **Empleado-only**, and every additional Admin is a documented human step in `docs/runbooks/bootstrap-first-admin.md`. Confirmed by the project owner and recorded in `spec.md` Decision 6 and in the requirement "Admin Provisions and Deactivates Users From Inside the Application", which also records the second limit found alongside it: an Admin can reset only the password of a role they created.
 - [ ] H.4 The CHECK constraint `(status='Ended') = (actual_end_date IS NOT NULL AND end_reason IS NOT NULL)` is a carried follow-up for the collection change, per design Decision 5 — not this change
 
 ## Risks / Findings (surfaced, not silently resolved)
