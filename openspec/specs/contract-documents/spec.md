@@ -22,26 +22,24 @@ overwrite or remove a previously stored document pointer.
 ### Requirement: Document Metadata
 
 Each `ContractDocument` MUST store a storage pointer (Supabase Storage path/key), original
-filename, content type, uploaded-at timestamp, an uploader identifier, and a `DocumentKind`
-(Original, Addendum, or TerminationNotice).
+filename, content type, uploaded-at timestamp, a reference to the `AppUser` who uploaded it, and a
+`DocumentKind` (Original, Addendum, or TerminationNotice).
 
-#### Scenario: Upload records full metadata
+(Previously: recorded an "uploader identifier" as a plain string, not a relational reference.)
 
-- GIVEN an original signed lease file is uploaded for a contract
+#### Scenario: Upload records full metadata with a real uploader reference
+
+- GIVEN an original signed lease file is uploaded for a contract by an authenticated user "maria"
 - WHEN the `ContractDocument` is created
-- THEN it MUST record the storage pointer, filename, content type, uploaded-at, uploader
-  identifier, and `DocumentKind = Original`
+- THEN it MUST record the storage pointer, filename, content type, uploaded-at, a foreign-key
+  reference to "maria"'s `AppUser` row, and `DocumentKind = Original`
 
-### Requirement: Uploader as Plain Identifier
+#### Scenario: The uploader reference survives the uploader's later deactivation
 
-Because no user entity exists yet, `UploadedBy` MUST be stored as a plain identifier string, not
-as a foreign key to a user record.
-
-#### Scenario: Upload records a string uploader
-
-- GIVEN a document is uploaded by an agency staff member
-- WHEN the `ContractDocument` is created
-- THEN `UploadedBy` MUST be stored as a string, not a relational reference
+- GIVEN a `ContractDocument` was uploaded by "maria"
+- WHEN "maria" is later deactivated
+- THEN the `ContractDocument` MUST still resolve its uploader reference to "maria"'s `AppUser` row
+  and MUST still display her name
 
 ### Requirement: No Content Processing
 
@@ -54,3 +52,10 @@ pointer and metadata only.
 - WHEN the `ContractDocument` is created
 - THEN only the storage pointer and metadata MUST be persisted
 - AND no extracted text or generated content MUST be stored
+
+## Tests
+
+Derived from the requirements above, not generic CRUD coverage. Each names the requirement it proves. Integration tests require a real Postgres (`postgres:17.6` via Testcontainers); constraints cannot be validated against a fake.
+
+30. **`UploadedBy` is a real foreign key.** `ContractDocument.UploadedBy` resolves to an `AppUser` row; the "plain identifier" requirement is absent from the living specification.
+31. **A `ContractDocument`'s uploader reference survives the uploader's deactivation.** The FK still resolves and displays the uploader's name after they are deactivated.

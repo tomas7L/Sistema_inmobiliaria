@@ -202,19 +202,34 @@ When an adjustment is confirmed after its due date has already passed, the syste
 
 ### Requirement: Append-Only Adjustment History
 
-Each confirmed `RentAdjustment` MUST be recorded as a new row holding the effective date, previous canon, new canon, coefficient, and the index values used. Confirmed adjustments MUST NOT be edited or deleted; the history MUST remain reproducible so that any past canon can be reconstructed without recomputation.
+Each confirmed `RentAdjustment` MUST be recorded as a new row holding the effective date, previous canon, new canon, coefficient, the index values used, and the confirming user (`ConfirmedBy`, nullable, to accommodate any row that predates this column with no truthful value to backfill). Confirmed adjustments MUST NOT be edited or deleted; the history MUST remain reproducible so that any past canon can be reconstructed without recomputation. Neither `inmobiliaria_admin` nor `inmobiliaria_empleado` MUST hold privileges sufficient to disable or bypass the append-only trigger; the only remaining path to alter or delete a confirmed row is a table-owner credential used for migrations — a developer path, not an operator path.
 
-#### Scenario: Confirmed adjustment recorded in full
+(Previously: recorded effective date, previous canon, new canon, coefficient, and index values used, with no confirming user, and named the trigger-disable gap as reachable by "anyone with the application's credential".)
 
-- GIVEN an adjustment is confirmed with previous canon $450,000, coefficient 15%, new canon $517,500
+#### Scenario: Confirmed adjustment records who confirmed it
+
+- GIVEN an adjustment is confirmed by "maria" with previous canon $450,000, coefficient 15%, new canon $517,500
 - WHEN it is recorded
-- THEN a `RentAdjustment` row MUST store the effective date, $450,000, $517,500, 15%, and the IPC and RIPTE values and periods used
+- THEN the `RentAdjustment` row MUST store the effective date, $450,000, $517,500, 15%, the index values used, and `ConfirmedBy` equal to "maria"'s `AppUser` reference
 
-#### Scenario: History answers the canon for a past month
+#### Scenario: History still answers the canon for a past month
 
-- GIVEN a contract has three confirmed adjustments over its lifetime
+- GIVEN a contract has three confirmed adjustments over its lifetime, each naming who confirmed it
 - WHEN the canon in force for a specific past month is requested
 - THEN it MUST be answerable from the stored adjustment history alone
+
+#### Scenario: The column is added nullable, with no backfill attempted
+
+- GIVEN an existing `rent_adjustments` table already has confirmed rows with no `ConfirmedBy` value
+- WHEN the migration adding `ConfirmedBy` runs
+- THEN the column MUST be added as nullable
+- AND no `UPDATE` MUST be attempted against any existing row — the append-only trigger would reject it, and the migration MUST NOT attempt what it cannot do
+
+#### Scenario: Neither application role can disable the append-only trigger to force a backfill
+
+- GIVEN a connection authenticated as either application role
+- WHEN it attempts to disable the `rent_adjustments` trigger in order to backfill `ConfirmedBy` on an old row
+- THEN PostgreSQL MUST refuse the attempt to disable the trigger
 
 ### Requirement: A Correction Produces a New Adjustment, Never a Rewrite
 
@@ -248,3 +263,6 @@ Derived from the requirements above, not generic CRUD coverage. Each names the r
 14. **A corrected index value produces a new adjustment.** Correcting a value already used by a confirmed adjustment leaves that adjustment intact and records a new correcting one.
 15. **Index supersession resolves.** An index discontinued after a period resolves to its named successor for later periods.
 16. **A contract with no adjustment clause never becomes due.** It never appears on the worklist.
+32. **`ConfirmedBy` is added nullable with no backfill.** The migration adding the column to `rent_adjustments` succeeds without issuing any `UPDATE` against existing rows.
+33. **A newly confirmed `RentAdjustment` records `ConfirmedBy`.** Confirming an adjustment as a given user stores that user's reference on the new row.
+34. **The append-only trigger still rejects every update and delete after this change.** Re-run against the modified schema: a confirmed row cannot be altered or removed by either application role.
