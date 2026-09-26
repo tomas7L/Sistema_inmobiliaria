@@ -7,7 +7,9 @@ namespace Inmobiliaria.Infrastructure.Persistence;
 /// Lets `dotnet ef migrations add` run offline, with no credential present. Reads the
 /// connection string from the <c>INMOBILIARIA_DB</c> environment variable; falls back to an
 /// offline placeholder that points at nothing real. No connection string here is a secret —
-/// see design.md Decision 6.
+/// see design.md Decision 6. This factory is a development-time path only: the running
+/// application never reads <c>INMOBILIARIA_DB</c> and never calls <c>Database.Migrate()</c>
+/// (design Decision 7's source guard; users-and-roles task 4.8).
 /// </summary>
 public sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<InmobiliariaDbContext>
 {

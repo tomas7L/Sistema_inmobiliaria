@@ -1,3 +1,4 @@
+using Inmobiliaria.Domain.Access;
 using Inmobiliaria.Domain.Leasing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -61,12 +62,23 @@ public sealed class RentAdjustmentConfiguration : IEntityTypeConfiguration<RentA
 
         builder.Property(a => a.CorrectsAdjustmentId).HasColumnName("corrects_adjustment_id");
 
+        // Nullable at the column and at the property: existing rows predate this column and
+        // stay null forever under the append-only trigger. RentAdjustment.Confirm's
+        // confirmedBy parameter is what stays non-nullable, not this mapped property
+        // (design Decision 8).
+        builder.Property(a => a.ConfirmedBy).HasColumnName("confirmed_by");
+
         builder.Navigation(a => a.IndexValues).UsePropertyAccessMode(PropertyAccessMode.Field);
 
         builder.HasOne<Contract>()
             .WithMany(c => c.Adjustments)
             .HasForeignKey(a => a.ContractId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne<AppUser>()
+            .WithMany()
+            .HasForeignKey(a => a.ConfirmedBy)
+            .OnDelete(DeleteBehavior.Restrict);
 
         foreach (var property in builder.Metadata.GetProperties())
         {

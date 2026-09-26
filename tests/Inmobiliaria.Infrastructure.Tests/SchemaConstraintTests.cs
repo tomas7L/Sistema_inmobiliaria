@@ -1,3 +1,4 @@
+using Inmobiliaria.Domain.Access;
 using Inmobiliaria.Domain.Indices;
 using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Domain.Parties;
@@ -60,7 +61,12 @@ public sealed class SchemaConstraintTests
     /// Seeds a contract with a single-index, `intervalMonths`-interval adjustment clause,
     /// registering everything against <paramref name="context"/> but not yet saving.
     /// </summary>
-    private static (Contract Contract, EconomicIndex Index) SeedContractWithClause(
+    /// <summary>
+    /// Reused directly by <c>RolePermissionTests</c> (spec tests 26, 33), so this stays
+    /// <see langword="internal"/> rather than <see langword="private"/> — the task explicitly
+    /// calls for reusing this exact helper instead of duplicating a second seeding path.
+    /// </summary>
+    internal static (Contract Contract, EconomicIndex Index) SeedContractWithClause(
         InmobiliariaDbContext context,
         int intervalMonths = 6,
         decimal monthlyRent = 450_000m)
@@ -83,12 +89,29 @@ public sealed class SchemaConstraintTests
     }
 
     /// <summary>
+    /// Seeds a real <see cref="AppUser"/> row, registered against <paramref name="context"/>
+    /// but not yet saved. users-and-roles' FK from <c>rent_adjustments.confirmed_by</c> and
+    /// <c>contract_documents.uploaded_by_user_id</c> to <c>app_users</c> means a random,
+    /// never-persisted <see cref="Guid"/> is no longer a valid stand-in for "some user" once
+    /// the AddUsersAndRoles migration is applied — every reference used against a real
+    /// Postgres engine needs a real row behind it.
+    /// </summary>
+    private static AppUser SeedAppUser(InmobiliariaDbContext context, string usernamePrefix = "tester")
+    {
+        var user = new AppUser(
+            Guid.NewGuid(), $"{usernamePrefix}-{Guid.NewGuid():N}"[..24], "Schema Constraint Test User");
+        context.AppUsers.Add(user);
+        return user;
+    }
+
+    /// <summary>
     /// Confirms a single-index adjustment through the real domain pipeline —
     /// <see cref="AdjustmentProposal"/> then <see cref="Contract.ConfirmAdjustment"/> — using the
     /// average-of-variations formula directly, so the stored coefficient is independently
     /// verifiable against a hand-computed expectation in the tests below.
     /// </summary>
-    private static RentAdjustment ConfirmAdjustment(
+    /// <summary>Reused directly by <c>RolePermissionTests</c> (spec tests 26, 33) — see the note on <see cref="SeedContractWithClause"/>.</summary>
+    internal static RentAdjustment ConfirmAdjustment(
         Contract contract,
         Guid indexId,
         IndexPeriod basePeriod,
@@ -97,6 +120,7 @@ public sealed class SchemaConstraintTests
         decimal endLevel,
         DateOnly effectiveDate,
         DateTimeOffset confirmedAt,
+        Guid confirmedByUserId,
         AdjustmentKind kind = AdjustmentKind.Regular,
         Guid? correctsAdjustmentId = null)
     {
@@ -105,7 +129,8 @@ public sealed class SchemaConstraintTests
         var proposal = new AdjustmentProposal(
             contract.MonthlyRent, [snapshot], CombinationRule.Single, variation, effectiveDate);
 
-        return contract.ConfirmAdjustment(Guid.NewGuid(), proposal, confirmedAt, kind, correctsAdjustmentId);
+        return contract.ConfirmAdjustment(
+            Guid.NewGuid(), proposal, confirmedAt, confirmedByUserId, kind, correctsAdjustmentId);
     }
 
     [SkippableFact]
@@ -152,11 +177,12 @@ public sealed class SchemaConstraintTests
         await using var context = _fixture.CreateDbContext();
 
         var (contract, index) = SeedContractWithClause(context);
+        var confirmingUser = SeedAppUser(context);
         var adjustment = ConfirmAdjustment(
             contract, index.Id,
             new IndexPeriod(2026, 1), 8_000m,
             new IndexPeriod(2026, 7), 9_440m,
-            new DateOnly(2026, 7, 1), DateTimeOffset.UtcNow);
+            new DateOnly(2026, 7, 1), DateTimeOffset.UtcNow, confirmingUser.Id);
 
         await context.SaveChangesAsync();
 
@@ -180,6 +206,7 @@ public sealed class SchemaConstraintTests
         await using var context = _fixture.CreateDbContext();
 
         var (contract, index) = SeedContractWithClause(context);
+        var confirmingUser = SeedAppUser(context);
 
         var basePeriod = new IndexPeriod(2026, 1);
         var endPeriod = new IndexPeriod(2026, 7);
@@ -189,7 +216,7 @@ public sealed class SchemaConstraintTests
 
         var original = ConfirmAdjustment(
             contract, index.Id, basePeriod, 8_000m, endPeriod, 9_440m,
-            new DateOnly(2026, 7, 1), DateTimeOffset.UtcNow);
+            new DateOnly(2026, 7, 1), DateTimeOffset.UtcNow, confirmingUser.Id);
 
         await context.SaveChangesAsync();
 
@@ -200,7 +227,7 @@ public sealed class SchemaConstraintTests
 
         var correction = ConfirmAdjustment(
             contract, index.Id, basePeriod, 8_000m, endPeriod, 9_400m,
-            new DateOnly(2026, 7, 1), DateTimeOffset.UtcNow,
+            new DateOnly(2026, 7, 1), DateTimeOffset.UtcNow, confirmingUser.Id,
             AdjustmentKind.Correction, original.Id);
 
         // EF Core gotcha, load-bearing here: `correction` was appended to `contract`'s
@@ -388,6 +415,14 @@ public sealed class SchemaConstraintTests
 
         await using var context = _fixture.CreateDbContext();
 
+        // users-and-roles (task 3.10b): `uploaded_by` (text) no longer exists on
+        // contract_documents — the AddUsersAndRoles migration drops it in favour of the
+        // NOT NULL FK `uploaded_by_user_id`. A real AppUser row is seeded first so the raw
+        // SQL insert below satisfies that FK; this test still proves only the UNRELATED
+        // `kind` CHECK constraint, not anything about the FK itself.
+        var uploader = new AppUser(Guid.NewGuid(), $"kindtester-{Guid.NewGuid():N}"[..24], "Kind Check Tester");
+        context.AppUsers.Add(uploader);
+
         var contract = NewContractWithUnit(context);
         context.Contracts.Add(contract);
         await context.SaveChangesAsync();
@@ -396,11 +431,81 @@ public sealed class SchemaConstraintTests
             context.Database.ExecuteSqlInterpolatedAsync(
                 $"""
                 INSERT INTO contract_documents
-                    (id, contract_id, storage_path, file_name, content_type, uploaded_at, uploaded_by, kind)
+                    (id, contract_id, storage_path, file_name, content_type, uploaded_at, uploaded_by_user_id, kind)
                 VALUES
                     ({Guid.NewGuid()}, {contract.Id}, 'path', 'file.pdf', 'application/pdf',
-                     {DateTimeOffset.UtcNow}, 'tester', 'Draft')
+                     {DateTimeOffset.UtcNow}, {uploader.Id}, 'Draft')
                 """));
+    }
+
+    [SkippableFact]
+    public async Task UploadedByUserId_ResolvesToAppUserRow_AndPlainUploadedByColumnIsGone()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var context = _fixture.CreateDbContext();
+        var connection = context.Database.GetDbConnection();
+        await connection.OpenAsync();
+
+        // Spec test 30 (delta half): the "plain identifier" requirement is gone from the
+        // living specification, and this asserts its physical trace — the `uploaded_by`
+        // text column — is gone from the schema too.
+        await using (var columnCheck = connection.CreateCommand())
+        {
+            columnCheck.CommandText =
+                """
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name = 'contract_documents' AND column_name = 'uploaded_by'
+                """;
+            await using var reader = await columnCheck.ExecuteReaderAsync();
+            Assert.False(await reader.ReadAsync(), "uploaded_by must no longer exist on contract_documents.");
+        }
+
+        var uploader = new AppUser(
+            Guid.NewGuid(), $"uploader-{Guid.NewGuid():N}"[..20], "Uploader Tester");
+        context.AppUsers.Add(uploader);
+
+        var contract = NewContractWithUnit(context);
+        context.Contracts.Add(contract);
+
+        var document = new ContractDocument(
+            Guid.NewGuid(), contract.Id, "leases/original.pdf", "original.pdf",
+            "application/pdf", DateTimeOffset.UtcNow, uploader.Id, DocumentKind.Original);
+        context.ContractDocuments.Add(document);
+
+        await context.SaveChangesAsync();
+
+        await using var readContext = _fixture.CreateDbContext();
+        var reloaded = await readContext.ContractDocuments.SingleAsync(d => d.Id == document.Id);
+        Assert.Equal(uploader.Id, reloaded.UploadedByUserId);
+
+        var resolvedUploader = await readContext.AppUsers.SingleAsync(u => u.Id == reloaded.UploadedByUserId);
+        Assert.Equal(uploader.Username, resolvedUploader.Username);
+    }
+
+    [SkippableFact]
+    public async Task ConfirmedByColumn_IsNullable()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var context = _fixture.CreateDbContext();
+        var connection = context.Database.GetDbConnection();
+        await connection.OpenAsync();
+
+        // Spec test 32: the migration adds `confirmed_by` nullable and issues no `UPDATE`
+        // against any existing row (proven by the migration's own source — task 3.3 — since
+        // no pre-existing rows exist in this fresh-per-test container to backfill in the
+        // first place). What is observable here is the resulting column shape: nullable,
+        // with no NOT NULL constraint, so a row with no confirmer stays representable.
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT is_nullable FROM information_schema.columns
+            WHERE table_name = 'rent_adjustments' AND column_name = 'confirmed_by'
+            """;
+
+        var isNullable = (string?)await command.ExecuteScalarAsync();
+        Assert.Equal("YES", isNullable);
     }
 
     [SkippableFact]
@@ -463,14 +568,15 @@ public sealed class SchemaConstraintTests
 
         var contract = NewContractWithUnit(context);
         context.Contracts.Add(contract);
+        var uploader = SeedAppUser(context, "docuploader");
 
         context.ContractDocuments.AddRange(
             new ContractDocument(
                 Guid.NewGuid(), contract.Id, "leases/original.pdf", "original.pdf",
-                "application/pdf", DateTimeOffset.UtcNow, "agent@example.com", DocumentKind.Original),
+                "application/pdf", DateTimeOffset.UtcNow, uploader.Id, DocumentKind.Original),
             new ContractDocument(
                 Guid.NewGuid(), contract.Id, "leases/addendum-1.pdf", "addendum-1.pdf",
-                "application/pdf", DateTimeOffset.UtcNow, "agent@example.com", DocumentKind.Addendum));
+                "application/pdf", DateTimeOffset.UtcNow, uploader.Id, DocumentKind.Addendum));
 
         await context.SaveChangesAsync();
 
@@ -546,6 +652,53 @@ public sealed class SchemaConstraintTests
             new EconomicIndex(Guid.NewGuid(), name));
 
         await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
+    }
+
+    /// <summary>
+    /// Spec test 34 (users-and-roles task 4.24): re-runs the archived append-only assertions
+    /// above (<see cref="AppendOnlyTrigger_RejectsRawUpdateAndDelete"/>), but this time
+    /// connected as each real application role in turn, not the fixture's superuser — proving
+    /// the trigger still rejects both roles after this change adds INSERT to
+    /// <c>rent_adjustments</c> for both of them.
+    /// </summary>
+    [SkippableFact]
+    public async Task AppendOnlyTrigger_StillRejectsUpdateAndDelete_ForBothApplicationRoles()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var context = _fixture.CreateDbContext();
+
+        var (contract, index) = SeedContractWithClause(context);
+        var confirmingUser = SeedAppUser(context);
+        var adjustment = ConfirmAdjustment(
+            contract, index.Id,
+            new IndexPeriod(2026, 1), 8_000m,
+            new IndexPeriod(2026, 7), 9_440m,
+            new DateOnly(2026, 7, 1), DateTimeOffset.UtcNow, confirmingUser.Id);
+
+        await context.SaveChangesAsync();
+
+        await AccessTestSupport.ProvisionUserAsync(context, "trigger34-empleado", UserRole.Empleado);
+        await AccessTestSupport.ProvisionUserAsync(context, "trigger34-admin", UserRole.Admin);
+
+        foreach (var rawUsername in new[] { "trigger34-empleado", "trigger34-admin" })
+        {
+            await using var connection = AccessTestSupport.BuildRawConnectionAs(context, rawUsername);
+            await connection.OpenAsync();
+
+            await using (var updateCommand = connection.CreateCommand())
+            {
+                updateCommand.CommandText =
+                    $"UPDATE rent_adjustments SET coefficient = 99 WHERE id = '{adjustment.Id}'";
+                await Assert.ThrowsAsync<PostgresException>(() => updateCommand.ExecuteNonQueryAsync());
+            }
+
+            await using (var deleteCommand = connection.CreateCommand())
+            {
+                deleteCommand.CommandText = $"DELETE FROM rent_adjustments WHERE id = '{adjustment.Id}'";
+                await Assert.ThrowsAsync<PostgresException>(() => deleteCommand.ExecuteNonQueryAsync());
+            }
+        }
     }
 
     [SkippableFact]

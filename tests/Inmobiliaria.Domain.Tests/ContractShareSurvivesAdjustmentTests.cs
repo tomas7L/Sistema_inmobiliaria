@@ -28,7 +28,7 @@ public class ContractShareSurvivesAdjustmentTests
         var proposal = new AdjustmentProposal(
             450_000m, [ipc, ripte], CombinationRule.Average, coefficient: 15m, effectiveDate: new DateOnly(2026, 7, 1));
 
-        contract.ConfirmAdjustment(Guid.NewGuid(), proposal, DateTimeOffset.UtcNow);
+        contract.ConfirmAdjustment(Guid.NewGuid(), proposal, DateTimeOffset.UtcNow, Guid.NewGuid());
 
         Assert.Equal(517_500m, contract.MonthlyRent);
         Assert.Equal(60m, contract.Units.Single(u => u.UnitId == unitA).SharePercentage);

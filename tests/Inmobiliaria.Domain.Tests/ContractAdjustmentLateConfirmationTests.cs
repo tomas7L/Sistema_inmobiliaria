@@ -25,7 +25,7 @@ public class ContractAdjustmentLateConfirmationTests
             100_000m, [indexValue], CombinationRule.Single, coefficient: 10m,
             effectiveDate: new DateOnly(2026, 11, 1), monthsLate: 3);
 
-        contract.ConfirmAdjustment(Guid.NewGuid(), proposal, DateTimeOffset.UtcNow);
+        contract.ConfirmAdjustment(Guid.NewGuid(), proposal, DateTimeOffset.UtcNow, Guid.NewGuid());
 
         Assert.Single(contract.Adjustments);
     }
@@ -42,7 +42,7 @@ public class ContractAdjustmentLateConfirmationTests
             100_000m, [indexValue], CombinationRule.Single, coefficient: 10m,
             effectiveDate: new DateOnly(2026, 11, 1), monthsLate: 3);
 
-        var adjustment = contract.ConfirmAdjustment(Guid.NewGuid(), proposal, DateTimeOffset.UtcNow);
+        var adjustment = contract.ConfirmAdjustment(Guid.NewGuid(), proposal, DateTimeOffset.UtcNow, Guid.NewGuid());
 
         Assert.Equal(adjustment.NewCanon, contract.MonthlyRent);
         Assert.Equal(110_000m, contract.MonthlyRent);

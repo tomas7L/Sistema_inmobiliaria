@@ -22,6 +22,48 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Inmobiliaria.Domain.Access.AppUser", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("display_name");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("MustChangePassword")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("must_change_password");
+
+                    b.Property<string>("Username")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("username");
+
+                    b.HasKey("Id")
+                        .HasName("pk_app_users");
+
+                    b.HasIndex("Username")
+                        .IsUnique()
+                        .HasDatabaseName("ix_app_users_username");
+
+                    b.ToTable("app_users", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_app_users_username_lowercase", "username = lower(username)");
+                        });
+                });
+
             modelBuilder.Entity("Inmobiliaria.Domain.Indices.EconomicIndex", b =>
                 {
                     b.Property<Guid>("Id")
@@ -245,16 +287,18 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("uploaded_at");
 
-                    b.Property<string>("UploadedBy")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("uploaded_by");
+                    b.Property<Guid>("UploadedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("uploaded_by_user_id");
 
                     b.HasKey("Id")
                         .HasName("pk_contract_documents");
 
                     b.HasIndex("ContractId")
                         .HasDatabaseName("ix_contract_documents_contract_id");
+
+                    b.HasIndex("UploadedByUserId")
+                        .HasDatabaseName("ix_contract_documents_uploaded_by_user_id");
 
                     b.ToTable("contract_documents", null, t =>
                         {
@@ -332,6 +376,10 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("confirmed_at");
 
+                    b.Property<Guid?>("ConfirmedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("confirmed_by");
+
                     b.Property<Guid>("ContractId")
                         .HasColumnType("uuid")
                         .HasColumnName("contract_id");
@@ -362,6 +410,9 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_rent_adjustments");
+
+                    b.HasIndex("ConfirmedBy")
+                        .HasDatabaseName("ix_rent_adjustments_confirmed_by");
 
                     b.HasIndex("ContractId")
                         .HasDatabaseName("ix_rent_adjustments_contract_id");
@@ -556,6 +607,13 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_contract_documents_contracts_contract_id");
+
+                    b.HasOne("Inmobiliaria.Domain.Access.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UploadedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_contract_documents_app_users_uploaded_by_user_id");
                 });
 
             modelBuilder.Entity("Inmobiliaria.Domain.Leasing.ContractParty", b =>
@@ -594,6 +652,12 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("Inmobiliaria.Domain.Leasing.RentAdjustment", b =>
                 {
+                    b.HasOne("Inmobiliaria.Domain.Access.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("ConfirmedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_rent_adjustments_app_users_confirmed_by");
+
                     b.HasOne("Inmobiliaria.Domain.Leasing.Contract", null)
                         .WithMany("Adjustments")
                         .HasForeignKey("ContractId")

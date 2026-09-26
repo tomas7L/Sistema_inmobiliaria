@@ -142,10 +142,12 @@ public sealed class Contract
         Guid adjustmentId,
         AdjustmentProposal proposal,
         DateTimeOffset confirmedAt,
+        Guid confirmedBy,
         AdjustmentKind kind = AdjustmentKind.Regular,
         Guid? correctsAdjustmentId = null)
     {
-        var adjustment = RentAdjustment.Confirm(adjustmentId, Id, proposal, confirmedAt, kind, correctsAdjustmentId);
+        var adjustment = RentAdjustment.Confirm(
+            adjustmentId, Id, proposal, confirmedAt, confirmedBy, kind, correctsAdjustmentId);
 
         ChangeMonthlyRent(adjustment.NewCanon);
         _adjustments.Add(adjustment);

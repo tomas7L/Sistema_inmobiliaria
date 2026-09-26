@@ -16,10 +16,11 @@ public sealed class ContractDocument
     public DateTimeOffset UploadedAt { get; }
 
     /// <summary>
-    /// Plain identifier string — no user entity exists yet, so this is not a
-    /// relational reference (see contract-documents: Uploader as Plain Identifier).
+    /// Relational reference to <see cref="Inmobiliaria.Domain.Access.AppUser"/> — the FK target every table
+    /// points at when it needs to name a person (design Decision 8). Replaces the plain
+    /// identifier string this column used to be before `Domain/Access` existed.
     /// </summary>
-    public string UploadedBy { get; }
+    public Guid UploadedByUserId { get; }
 
     public DocumentKind Kind { get; }
 
@@ -30,13 +31,17 @@ public sealed class ContractDocument
         string fileName,
         string contentType,
         DateTimeOffset uploadedAt,
-        string uploadedBy,
+        Guid uploadedByUserId,
         DocumentKind kind)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(storagePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
         ArgumentException.ThrowIfNullOrWhiteSpace(contentType);
-        ArgumentException.ThrowIfNullOrWhiteSpace(uploadedBy);
+
+        if (uploadedByUserId == Guid.Empty)
+        {
+            throw new ArgumentException("Uploaded-by user id must be a real user.", nameof(uploadedByUserId));
+        }
 
         Id = id;
         ContractId = contractId;
@@ -44,7 +49,7 @@ public sealed class ContractDocument
         FileName = fileName;
         ContentType = contentType;
         UploadedAt = uploadedAt;
-        UploadedBy = uploadedBy;
+        UploadedByUserId = uploadedByUserId;
         Kind = kind;
     }
 }

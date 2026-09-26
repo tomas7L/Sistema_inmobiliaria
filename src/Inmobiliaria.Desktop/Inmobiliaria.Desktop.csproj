@@ -14,7 +14,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Inmobiliaria.Domain\Inmobiliaria.Domain.csproj" />
+    <ProjectReference Include="..\Inmobiliaria.Infrastructure\Inmobiliaria.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

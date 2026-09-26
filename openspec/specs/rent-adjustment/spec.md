@@ -124,9 +124,11 @@ An adjustment MUST NOT change a contract's canon until an operator explicitly co
 
 The confirmed adjustment MUST set the canon to the computed amount **truncated to a whole peso**. The system MUST NOT charge centavos, and MUST NOT apply commercial rounding to a tidier figure (e.g. lifting $517,483 to $517,500).
 
-Whole pesos is evidence, not preference. Every figure on the agency's real receipt is a whole peso — alquiler 507,000; tasa municipal 28,900; recargo 91,260; neto 650,542.00 — and the owner receipt's honorarios line reads 47,860 where the exact arithmetic gives 47,860.80. The agency already truncates. Argentine cent coins no longer circulate, so a centavo on an invoice names an amount nobody can hand over in cash.
+Whole pesos is evidence, not preference. Every figure on the tenant's part of the agency's real receipt is a whole peso — alquiler 507,000; tasa municipal 28,900; recargo 91,260; neto 650,542.00 — and on the owner's part the honorarios line reads 47,860 where the exact arithmetic gives 47,860.80. Argentine cent coins no longer circulate, so a centavo names an amount nobody can hand over in cash.
 
-Truncating rather than rounding is a deliberate team decision inferred from that single honorarios line. It is on the list to confirm with the agency owner; one peso either way changes nothing material, so the decision was taken rather than left blocking.
+**Confirmed by the agency owner on 2026-09-23.** This rule was previously an inference from that single honorarios line, flagged as needing confirmation. It has been confirmed, and the confirmation added a distinction worth keeping: the printed document truncates, and the agency then rounds the **physical cash** at the register. Those describe different moments and are both true. A decimal result does not bother them, because the difference is settled by hand when the money changes hands — exactly as it is today.
+
+The owner additionally asked, as an optional nicety rather than a requirement, that the system offer a rounding option. That is additive and belongs to the collection change; `RoundingRule` already has room for a second member. Source: `openspec/domain/respuestas-del-dueno.md`.
 
 #### Scenario: Computed amount truncated to a whole peso
 

@@ -2,8 +2,12 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:Inmobiliaria.Desktop"
-             StartupUri="MainWindow.xaml">
+             ShutdownMode="OnExplicitShutdown">
+    <!-- No StartupUri: App.xaml.cs's OnStartup drives LoginWindow -> (forced) ChangePasswordWindow
+         -> MainWindow itself (design Decision 10). A StartupUri here would let WPF construct a
+         window before authentication, which spec "No Database Access Before Authentication"
+         forbids in spirit even for a window that does nothing yet. -->
     <Application.Resources>
-         
+
     </Application.Resources>
 </Application>
