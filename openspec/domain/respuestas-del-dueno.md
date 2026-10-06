@@ -192,13 +192,32 @@ Anything needing different tax treatment leaves the receipt entirely and becomes
 This confirms the mitigation already chosen: the tax regime belongs to the **document**, not to the
 collection, so the tenant's and the owner's parts can differ without a schema change.
 
-### 9. Opening balances — nobody starts at zero
+### 9. Opening balances — typed by hand, from an Excel they already keep
 
-> *"Cada inquilino deberá lo que falta que pague, arrancan todos con saldos antes, nosotros a mano
-> cargaremos todos los datos de cada persona."*
+> 2026-09-23: *"Cada inquilino deberá lo que falta que pague, arrancan todos con saldos antes,
+> nosotros a mano cargaremos todos los datos de cada persona."*
+>
+> 2026-10-06, asked whether they track a running account today at all: *"Lo llevan en un excel con la
+> deuda de cada inquilino, cuando carguemos los datos, vamos a cargar lo que esa persona le debe y lo
+> que no, lo mas actualizado."*
 
-**What this means.** `cuenta corriente` needs a way to enter an opening balance per tenant, loaded
-by the agency. No automated migration and no import from the old system: they will type it.
+**What this means.** `cuenta corriente` needs a way to type an opening balance, loaded by the agency.
+No automated migration and no import from the old system.
+
+**The figure already exists.** This was the open question, and the answer is the good one: the
+agency keeps a spreadsheet of what each tenant owes, so loading is transcription rather than
+reconstruction. Nobody has to work out, tenant by tenant, which months are unpaid. That is the
+difference between an afternoon and a project, and it matters to any go-live date.
+
+**Two corrections to earlier wording, both from the 2026-10-06 answer:**
+
+1. **"Nobody starts at zero" was too strong.** They will load *"lo que esa persona le debe y lo que
+   no"* — some tenants are up to date and start at zero. The design is unaffected, since an opening
+   balance is typed either way, but the specification must not claim every account opens with a debt.
+2. **Their spreadsheet is per TENANT; this capability's account is per CONTRACT.** For a tenant with
+   one contract these coincide. For a tenant holding two, somebody has to decide how the figure
+   splits at load time. This is a data-entry question to settle when loading begins, not a modelling
+   problem — but it must not be discovered on the day.
 
 This is good news for scope — but note that
 `openspec/changes/users-and-roles/proposal.md:319` currently reasons from "no real agency data yet",
