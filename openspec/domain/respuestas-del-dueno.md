@@ -232,6 +232,29 @@ the agency then rounds the **physical cash** when it changes hands.
 The requested rounding option is additive. `src/Inmobiliaria.Domain/Leasing/RoundingRule.cs` already
 anticipates a second member.
 
+### 16. Receipt-only amounts, and which month a payment settles
+
+Asked 2026-09-26, before writing the cuenta corriente proposal.
+
+> On "Otros Conceptos", tasa municipal and seguros: *"los escribiría en el recibo a la hora de
+> cerrarlo."*
+> On a tenant three months behind who pays one month: *"Estaría pagando el primero que adeuda."*
+
+**What this means.**
+
+- Those three amounts **do not accrue as debts.** They come into existence when a receipt is
+  closed, not before. They belong to the collection change, not to cuenta corriente.
+- It is also the only shape that could work: the system has no source for the municipal tax. The
+  owner reads it elsewhere and writes it down.
+- **Therefore the running balance covers rent, honorarios contractuales instalments and recargo —
+  and nothing else.** Municipal tax, insurance and "Otros Conceptos" appear for the first time on
+  the receipt. The screen must say what the figure covers, or someone will read it as the whole of
+  what is about to be charged.
+- **A payment settles the OLDEST unpaid period.** The operator does not choose. That removes a
+  decision from the screen and with it a whole class of misapplied-payment error. It also means the
+  tenant pays their most expensive month first, since the oldest period carries the most days of
+  recargo — correct, and worth stating so nobody later "fixes" it.
+
 ---
 
 ## Round 1 — 2026-09-05, written questions
