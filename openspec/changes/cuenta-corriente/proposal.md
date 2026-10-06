@@ -206,7 +206,7 @@ adding the new tables, and anything in `Inmobiliaria.Desktop`.
 | 1 | The account belongs to the **contract**. A tenant view sums the contracts beneath it. | TEAM, from the owner's contract-closure rule |
 | 2 | An **append-only ledger**; the balance is the sum of its movements. A correction is a new signed movement. | TEAM, matching `rent-adjustment`'s existing shape |
 | 3 | **Recargo is derived**, never stored as a daily movement. Uncapped, 2% simple per day from mora. | CONFIRMED BY USER (round 1) |
-| 4 | **Nobody starts at zero.** Opening balances are typed by hand, one per contract, and are a distinct movement kind so nobody mistakes them for something the system computed. | CONFIRMED BY USER |
+| 4 | **Every account opens with a typed figure**, one per contract, as a distinct movement kind so nobody mistakes it for something the system computed. Most carry a debt; some are at zero because that tenant is up to date. The agency already keeps the numbers in a spreadsheet, so loading is transcription, not reconstruction. | CONFIRMED BY USER (2026-10-06) |
 | 5 | **Only total payments.** No partial payment, no part-paid period, no allocation of a fraction across debts. | CONFIRMED BY USER |
 | 6 | **A payment settles the oldest unpaid period.** The operator does not choose. | CONFIRMED BY USER (2026-09-26) |
 | 7 | **Tasa municipal, seguros and "Otros Conceptos" do not accrue.** They are typed when a receipt is closed and belong to collection. | CONFIRMED BY USER (2026-09-26) |
@@ -236,10 +236,13 @@ adding the new tables, and anything in `Inmobiliaria.Desktop`.
 
 **For the owner — neither blocks this change starting:**
 
-1. **Does the agency track a running account today at all**, or do they work it out from a folder of
-   receipts? This decides whether the opening balances they will type already exist as a number or
-   must be reconstructed per tenant — very different amounts of work for them, and worth knowing
-   before anyone promises a go-live date.
+1. ~~**Does the agency track a running account today at all?**~~ **ANSWERED 2026-10-06.** They keep a
+   spreadsheet of what each tenant owes, so loading is transcription rather than reconstruction.
+
+   One practical item it leaves behind, for whoever runs the load rather than for this design: that
+   spreadsheet is keyed by **tenant**, while an account here belongs to a **contract**. They coincide
+   for a tenant with one contract. For a tenant holding two, somebody decides how the figure splits,
+   and it should not be discovered on the day.
 2. ~~**Does the recargo keep running under a payment plan?**~~ **ANSWERED 2026-10-06 — see Decision
    10.** It stops, and it stops because the obligation is replaced, not because a counter is paused.
 
