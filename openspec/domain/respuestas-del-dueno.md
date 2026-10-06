@@ -255,6 +255,71 @@ Asked 2026-09-26, before writing the cuenta corriente proposal.
   tenant pays their most expensive month first, since the oldest period carries the most days of
   recargo — correct, and worth stating so nobody later "fixes" it.
 
+### 17. Rescission with a debt, and what happens to the recargo
+
+Asked 2026-10-06, while writing the cuenta corriente proposal. An earlier draft of that proposal had
+assumed a contract could not be rescinded while money was owed; this answer corrects it.
+
+> *"Se puede rescindir un contrato y que luego aparezca un plan de pagos el cual indique como se va a
+> ir pagando... lo conveniente seria que se pueda rescindir el contrato por mas que se deba dinero."*
+>
+> On the recargo: *"Con el plan de pago activo se pausa ese 2%, ademas de que el contrato ya se
+> terminó, ahora ambos firmaron ese plan de pago, se llama novacion o transformacion de la
+> obligacion, cuando ambas partes rescinden el contrato ese 2% se pausa en el dia que firmaron y se
+> aplica ese plan de pago."*
+
+**What this means.**
+
+- **A contract CAN be rescinded while money is still owed.** The tenant moves out, the debt remains,
+  and a payment plan is arranged. The system must be able to represent this; a rule blocking it would
+  make the system state something false — a contract reading Active for somebody who has moved out.
+- **Signing the plan is a *novación***, a transformation of the obligation. This is a legal concept,
+  not a figure of speech, and the difference is load-bearing: the original obligation is
+  **extinguished and replaced**, not suspended.
+- **The recargo stops on the signing date.** What accrued up to that day is final and becomes part of
+  what the plan covers. Nothing accrues afterwards, because the debt it was accruing against no
+  longer exists.
+- **Model it as a dated event, never as a flag.** "Paused" invites the question "since when?" with no
+  answer in the data. The signing date IS the legal effect, so the frozen figure is written into the
+  ledger as a dated movement and any earlier date still reads correctly.
+
+
+**Follow-up asked and answered the same day: what if the tenant defaults on the plan?**
+
+> *"Si el inquilino vuelve a fallar se le aplicaria el 2% diario vuelve a correr inmediatamente sobre
+> el saldo que quedó colgado, contando desde el día exacto en que fallaste la cuota. Igualmente va a
+> depender de que es lo que firman ellos, porque seguramente nicolas conoce a la persona y si sabe
+> que no puede pagarla en tiempo y forma esa decision tan agresiva no les viene bien a ninguna de las
+> partes. No se si se podria hacer que nicolas decida eso cuando estan por firmar ese plan de pagos?"*
+
+**Clarified the same day, with the owner's own worked example:**
+
+> *"Desde el dia que volvió a incumplir la mora, sobre el precio que tiene. Pagó 2 cuotas de 100000 y
+> todavia le faltan 300000, se le aplicarian a esos 300."*
+
+**What this means.** The 2% restarts on the day the instalment was missed, and its base is **the
+balance still outstanding on the plan** — not the missed instalment, and not the original debt.
+
+| Plan total | Paid | Outstanding | Recargo base |
+|---|---|---|---|
+| $500,000 | $200,000 (two instalments of $100,000) | $300,000 | **$300,000** |
+
+Two consequences worth stating before anyone designs this. The base is **not fixed**: if the tenant
+resumes paying, the outstanding balance falls and the daily figure falls with it, so this is a
+surcharge on a moving amount rather than a fixed daily sum. And the original debt that preceded the
+plan is irrelevant from the signing date onward, which is the *novación* doing exactly what it is
+supposed to do. **But the terms are whatever the two parties
+signed**, and the agency owner sets them when the plan is drawn up, because he knows the person: an
+aggressive rate on somebody who has already proven they cannot pay recovers nothing.
+
+**Consequence for the model, and it reaches back into cuenta corriente:** the recargo calculation
+must take its rate and grace period **from the obligation it is measuring**, never from a constant.
+A lease supplies 2% per day from its own due day; a payment plan supplies its own figures. This is
+the same pattern the project already follows for the adjustment clause, the honorarios percentage and
+the rent split — what the paper says, the record carries. Built this way from the start, the
+payment-plan change never has to touch the recargo calculation.
+
+
 ---
 
 ## Round 1 — 2026-09-05, written questions
