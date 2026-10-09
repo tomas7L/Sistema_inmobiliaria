@@ -99,7 +99,7 @@ currently paused — it must be restarted first.
 
 **Needs Docker running.**
 
-- [ ] 5.1 Create `IAccountMaterialiser.cs` + its adapter: `MaterialiseDueAccrualsThrough(accountId, date)`. **An explicit named step — never a side effect hidden inside a getter** (design Decision 1) — `src/Inmobiliaria.Infrastructure/Accounts/`
+- [ ] 5.1 Create the port `IAccountMaterialiser.cs` in **`src/Inmobiliaria.Domain/Accounts/`** and its adapter in **`src/Inmobiliaria.Infrastructure/Accounts/`**: `MaterialiseDueAccrualsThrough(accountId, date)`. **An explicit named step — never a side effect hidden inside a getter** (design Decision 1). Port in Domain, adapter in Infrastructure, following the existing `IDueAdjustmentQuery` / `DueAdjustmentQuery` pair — the interface must not live in Infrastructure, or the domain ends up tied to persistence
 - [ ] 5.2 It is idempotent: called twice for the same date, the second call writes nothing
 - [ ] 5.3 It catches up: called after a three-month silence, it writes three periods, each at the canon in force for its own period
 - [ ] 5.4 Handle the concurrency case: on the unique-index violation from a competing writer, **re-read rather than retry the write** (design Decision 1)
@@ -114,7 +114,7 @@ currently paused — it must be restarted first.
 
 **Needs Docker running.**
 
-- [ ] 6.1 Create the mora worklist query: per overdue account, days overdue, amount owed, recargo accrued. Shaped like the existing `DueAdjustmentQuery` so notifications can consume it — `src/Inmobiliaria.Infrastructure/Accounts/`
+- [ ] 6.1 Create the mora worklist: the port `IMoraWorklistQuery.cs` in **`src/Inmobiliaria.Domain/Accounts/`** and its adapter in **`src/Inmobiliaria.Infrastructure/Accounts/`**. Per overdue account: days overdue, amount owed, recargo accrued. Same port/adapter split and same consumable shape as `IDueAdjustmentQuery` / `DueAdjustmentQuery`, so notifications can call it without knowing this capability's internals
 - [ ] 6.2 **It materialises before it reads** (design Decision 8). This is the change's highest-ranked risk: a worklist that only reads movements reports an unread overdue account as clear
 - [ ] 6.3 **[Spec test 28 — the risk's own test]** Seed an account **nobody has ever read**, with periods overdue, and assert it appears on the worklist with the right figures
 - [ ] 6.4 **[Spec test 28]** Three accounts overdue by 5, 38 and 200 days all appear, each carrying days overdue, amount owed and recargo
