@@ -1,7 +1,8 @@
 # Spec: cuenta corriente
 
-Single-file specification for the `cuenta-corriente` change. One capability is covered:
-**`contract-account` (NEW)**. No existing capability is modified.
+Single-file specification for the `cuenta-corriente` change. Two capabilities are covered:
+**`contract-account` (NEW)** and **`lease-contract` (MODIFIED)** — the latter gains the due day every
+calculation in this change depends on.
 
 Domain vocabulary (Argentine terms, glossed once): **cuenta corriente** = running account / ledger;
 **locatario** = tenant; **locador** = lessor/owner; **recargo** = late-payment surcharge; **mora** =
@@ -28,6 +29,8 @@ proven, not decided.
 | 10 | On default of a payment-plan instalment the surcharge restarts **from the day the instalment was missed, on the balance still outstanding** — not on the missed instalment, and not on the pre-plan debt. | CONFIRMED BY USER |
 | 11 | **A contract can be rescinded while money is still owed**, and the account outlives it. An earlier draft blocked this; the rule was hardened from a sentence describing the agency's intention and is removed. `Contract.End(...)` is not modified. | CONFIRMED BY USER |
 | 12 | **Tasa municipal, seguros and "Otros Conceptos" do not accrue.** They are typed when a receipt is closed and belong to the collection change. | CONFIRMED BY USER |
+| 14 | **A contract carries its own due day, defaulting to 10.** The agency applies mora from the 10th for everyone today, but the owner may set another day for a particular tenant. Same pattern as the adjustment clause, the honorarios percentage and the rent split: what the paper says, the record carries. An earlier draft of this change asserted the contract already stored this; **it did not**, and nothing in it could have been calculated without it. | CONFIRMED BY USER |
+| 15 | **Two figures, two names.** The *ledger balance* is the sum of movements — what is written. The *amount owed* as of a date is that balance plus the recargo projected to it. An earlier draft called both "the balance" and contradicted itself, because recargo is deliberately not a movement. | TEAM DECISION, correcting a defect |
 | 13 | **The payment movement itself, receipts, and the payment plan are OUT OF SCOPE.** This capability answers what is owed; collection acts on the answer. | TEAM DECISION |
 
 ## Table of Contents
@@ -35,7 +38,7 @@ proven, not decided.
 1. [Capability: contract-account (NEW)](#capability-contract-account-new)
    1. [Requirement: An Account Belongs to Exactly One Contract](#requirement-an-account-belongs-to-exactly-one-contract)
    2. [Requirement: The Ledger Is Append-Only; a Correction Is a New Movement](#requirement-the-ledger-is-append-only-a-correction-is-a-new-movement)
-   3. [Requirement: The Balance Is the Sum of Its Movements](#requirement-the-balance-is-the-sum-of-its-movements)
+   3. [Requirement: Two Figures, Named Apart — the Ledger Balance and the Amount Owed](#requirement-two-figures-named-apart--the-ledger-balance-and-the-amount-owed)
    4. [Requirement: An Opening Balance Exists Only for a Contract That Predates the System](#requirement-an-opening-balance-exists-only-for-a-contract-that-predates-the-system)
    5. [Requirement: A Period Accrues at the Canon in Force, and Never Re-Prices](#requirement-a-period-accrues-at-the-canon-in-force-and-never-re-prices)
    6. [Requirement: Only Total Payments](#requirement-only-total-payments)
@@ -47,8 +50,10 @@ proven, not decided.
    12. [Requirement: The Account Outlives Its Contract](#requirement-the-account-outlives-its-contract)
    13. [Requirement: Whole Pesos, Truncated, With Decimal Arithmetic](#requirement-whole-pesos-truncated-with-decimal-arithmetic)
    14. [Requirement: The Balance Names What It Covers](#requirement-the-balance-names-what-it-covers)
-2. [Out of Scope](#out-of-scope)
-3. [Tests](#tests)
+2. [Capability: lease-contract (MODIFIED)](#capability-lease-contract-modified)
+   1. [MODIFIED Requirement: A Contract Carries Its Own Due Day](#modified-requirement-a-contract-carries-its-own-due-day)
+3. [Out of Scope](#out-of-scope)
+4. [Tests](#tests)
 
 ---
 
@@ -107,16 +112,33 @@ it is what lets the account be read truthfully for any past date.
 - THEN a new movement MUST be appended carrying the difference and naming the movement it corrects
 - AND the original movement MUST remain readable and unchanged
 
-### Requirement: The Balance Is the Sum of Its Movements
+### Requirement: Two Figures, Named Apart — the Ledger Balance and the Amount Owed
 
-The balance of an account on a given date MUST equal the sum of its movements dated on or before
-that date. A positive balance means the tenant owes; a negative balance means they are in credit.
+The system MUST distinguish two figures and MUST NOT use one name for both.
 
-#### Scenario: Balance equals the sum
+- The **ledger balance** on a date MUST equal the sum of the account's movements dated on or before
+  it. It is what has been written.
+- The **amount owed** as of a date MUST equal that ledger balance plus the recargo projected to that
+  same date. It is what the tenant actually owes.
 
-- GIVEN an account with an opening balance of 150,000 and a rent accrual of 500,000
-- WHEN its balance is read
+They differ because recargo is deliberately not a movement until it is frozen or charged. A positive
+figure means the tenant owes; a negative one means they are in credit.
+
+Any presentation MUST say which of the two it is showing. The figure an operator acts on is almost
+always the **amount owed**; the ledger balance is what reconciles against the movements.
+
+#### Scenario: The ledger balance is the sum of movements
+
+- GIVEN an account with an opening balance of 150,000 and a rent accrual of 500,000, neither overdue
+- WHEN its ledger balance is read
 - THEN it MUST be 650,000
+
+#### Scenario: The amount owed adds the projected recargo
+
+- GIVEN the same account, with the 500,000 accrual 10 days overdue
+- WHEN the amount owed is read for today
+- THEN it MUST be 650,000 plus the recargo projected over those 10 days
+- AND the ledger balance MUST still read 650,000, unchanged
 
 #### Scenario: A historical balance reads correctly
 
@@ -428,6 +450,53 @@ will be charged would be wrong, and the screen must not let them assume it.
 
 ---
 
+## Capability: lease-contract (MODIFIED)
+
+### MODIFIED Requirement: A Contract Carries Its Own Due Day
+
+`Contract` MUST store the day of the month its rent falls due, defaulting to **10**. Mora, and
+therefore recargo, MUST be counted from that day.
+
+The agency applies the 10th to everyone today. The owner MAY set another day for a particular
+tenant, and the model must not prevent him: this is the same pattern the project already follows for
+the adjustment clause, the honorarios percentage and the rent split — what the paper says, the
+record carries.
+
+> **Why this requirement exists at all.** Earlier drafts of this change asserted repeatedly that
+> "the 10 is the contract's due day, not a constant". That was **false**: `Contract` stored no such
+> field. Every calculation in `contract-account` — when a period falls due, how many days of mora
+> have passed, what recargo is owed — depends on it, and none of them could have been implemented.
+> It is recorded here rather than quietly added, because a false claim repeated across three
+> documents is worth leaving a mark.
+
+#### Scenario: A contract defaults to the 10th
+
+- GIVEN a contract created without a due day specified
+- WHEN its due day is read
+- THEN it MUST be 10
+
+#### Scenario: A contract can carry a different due day
+
+- GIVEN a contract created with a due day of 5
+- WHEN its due day is read
+- THEN it MUST be 5
+- AND mora on its periods MUST be counted from the 5th
+
+#### Scenario: An impossible due day is refused
+
+- GIVEN a contract being created
+- WHEN a due day of 0, or of 32, is supplied
+- THEN it MUST be refused
+
+#### Scenario: Existing contracts keep working
+
+- GIVEN contracts that existed before this change
+- WHEN the migration adding the column runs
+- THEN every one of them MUST carry a due day of 10
+- AND no existing contract row MUST be otherwise altered
+
+---
+
 ## Out of Scope
 
 Each item below is *not in this specification*, not *excluded from the product*. It names the change
@@ -461,8 +530,9 @@ enforcement and constraint behaviour cannot be validated against a fake.
 4. **A recorded movement cannot be deleted.** A raw SQL `DELETE` against a movement row is refused.
 5. **A correction appends.** Correcting a wrong amount produces a new movement naming the one it
    corrects, and the original remains readable and unchanged.
-6. **The balance equals the sum.** An opening balance of 150,000 plus an accrual of 500,000 reads as
-   650,000.
+6. **The ledger balance is the sum of movements**, and the **amount owed** for the same account
+   adds the recargo projected to today while leaving the ledger balance unchanged. Two figures, two
+   names, proven apart.
 7. **A historical balance counts only movements up to its date.** A balance asked for a past date
    excludes everything dated after it.
 8. **A contract signed after go-live opens with an empty account.** Creating its account with no
@@ -517,3 +587,12 @@ enforcement and constraint behaviour cannot be validated against a fake.
 33. **Every new table ships with its GRANTs.** After the migration, connecting as each application
     role confirms it can perform exactly its intended operations on the new tables — none silently
     unreachable.
+34. **A contract defaults to a due day of 10.** Created without one specified, it reads 10.
+35. **A contract can carry a different due day**, and mora on its periods is counted from that day
+    rather than from the 10th.
+36. **An impossible due day is refused.** Zero and 32 are both rejected.
+37. **Existing contracts keep working.** After the migration adding the column, every pre-existing
+    contract carries a due day of 10 and no other column on those rows changed.
+38. **Two contracts with different due days produce different mora.** Equally overdue periods on a
+    contract due the 5th and one due the 10th yield different day counts — the same proof as test
+    18, now that the due day actually exists to differ.

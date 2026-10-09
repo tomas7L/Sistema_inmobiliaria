@@ -55,9 +55,12 @@ and a payment always settles the oldest unpaid period.
 
 ### Modified Capabilities
 
-**None.** An earlier draft of this proposal added a requirement to `lease-contract` blocking a
-contract from reaching `Ended` while its tenant still owed. **That requirement was wrong and is
-removed** — see "Rescission leaves the account open" below.
+- **`lease-contract`** — gains the **due day** every calculation in this change depends on, defaulting
+  to 10. Added 2026-10-09 after discovering that three documents of this change had asserted the
+  contract already stored it, and it did not.
+
+An earlier draft also added a requirement blocking a contract from reaching `Ended` while its tenant
+still owed. **That one was wrong and is removed** — see "Rescission leaves the account open" below.
 
 ---
 
@@ -102,7 +105,8 @@ It is computed when asked, from the amount owed, the due date, and the date of t
 when it is charged on a receipt — and that instant belongs to collection.
 
 `RECARGO = alquiler × 2% × (día_pago − 10)` was verified against the agency's real receipts during
-the first change. The 10 is the contract's due day, not a constant.
+the first change. The 10 is a **due day**, which this change adds to `Contract` — it was asserted
+here as already stored and it was not. See the MODIFIED `lease-contract` requirement in `spec.md`.
 
 **There is a second instant, and it is not a special case of the first.** When a contract is
 rescinded and both parties sign a payment plan, that signature is a *novación* — the original
