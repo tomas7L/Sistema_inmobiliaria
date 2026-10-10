@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-10-10_
+_Última actualización: 2026-10-10 (tras actualizar gentle-ai 4.0.0 y engram 3.3.2)_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -46,9 +46,22 @@ que le declara a EF que todas las claves las provee la aplicación.
   trunca. Inofensivo, pero el comentario es falso.
 - **La rama `ramateo` de Mateo está en "Initial commit"**, 87 commits atrás y sin nada propio sin
   mergear. Tiene que traerse `develop` antes de trabajar.
-- **Herramientas con actualización mayor disponible:** gentle-ai 3.7.0 → 4.0.0 (hay que compilar
-  desde fuente, Go 1.26.5 ya está instalado) y engram 1.20.0 → 3.3.2. Antes de actualizar engram,
-  copiar `~/.engram/engram.db`.
+- **Herramientas actualizadas el 2026-10-10:** gentle-ai **4.0.0** y engram **3.3.2**. La memoria
+  quedó verificada intacta (88 observaciones, 31 relaciones, leídas directo del SQLite). Respaldo
+  completo en `~/.engram/backup-20261010-2030/` — incluye `.db`, `-wal` y `-shm`, porque el WAL
+  tenía 3,7 MB de transacciones sin volcar y copiar sólo el `.db` habría respaldado una foto vieja.
+- **Pendiente de la actualización, no bloqueante:** `gentle-ai 4.0` **eliminó todos los comandos
+  `sdd-*` del CLI** (`sdd-status` ya no existe). Las skills `sdd-*` sobrevivieron, pero
+  `~/.claude/skills/_shared/sdd-orchestrator-workflow.md` quedó con fecha del 26-09 y todavía
+  manda a correr `gentle-ai sdd-status` para enrutar una fase. Cuando arranque el próximo change,
+  leer los artefactos directamente en vez de ese despachador.
+- **Defecto de gentle-ai, reproducible:** su propio `gentle-ai upgrade` falla al actualizarse a sí
+  mismo. Arma `go install .../gentle-ai/v3/cmd/gentle-ai@v4.0.0` — ruta de módulo v3 con versión
+  v4 — y Go lo rechaza con `invalid version: unknown revision`. Se resuelve a mano con
+  `go install github.com/gentleman-programming/gentle-ai/v4/cmd/gentle-ai@v4.0.0`.
+- **Ocho agentes de revisión no se actualizaron** (`jd-*`, `review-*` en `~/.claude/agents/`).
+  gentle-ai los preservó a propósito porque sus bytes estaban modificados, y avisa que hay que
+  compararlos y mergearlos a mano. Sin uso hoy.
 
 ## Precondiciones del próximo paso
 
