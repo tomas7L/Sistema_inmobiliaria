@@ -22,6 +22,29 @@ public sealed class Contract
     public DateOnly? ActualEndDate { get; private set; }
     public decimal MonthlyRent { get; private set; }
     public decimal? HonorariosPercentage { get; private set; }
+
+    /// <summary>
+    /// Day of the month this contract's rent falls due, and the day mora starts counting from.
+    /// Ten by default, which is what the agency's leases say today and what every existing row
+    /// will carry after the migration.
+    ///
+    /// This field did not exist until now, and three documents of the cuenta-corriente change
+    /// claimed it did (design Decision 9). Every mora figure in the system is measured from it,
+    /// so a hard-coded 10 would have put a business term the parties sign into the source.
+    ///
+    /// Deliberately get-only. A settable property is mapped by EF convention the moment it is
+    /// added, which puts the model out of step with the last migration and makes every
+    /// Testcontainers test fail before it runs its first assertion. A get-only property enters
+    /// the model only when a configuration names it — the way <see cref="StartDate"/> does —
+    /// which is what lets the column and its migration ship together in one change.
+    /// </summary>
+    public int DueDay { get; } = DefaultDueDay;
+
+    /// <summary>
+    /// The agency's standard due day. A default, never a rule: the owner can set another one per
+    /// contract, because the system should not refuse a lease that happens to say the 5th.
+    /// </summary>
+    public const int DefaultDueDay = 10;
     public ContractStatus Status { get; private set; }
     public EndReason? EndReason { get; private set; }
 
@@ -57,8 +80,18 @@ public sealed class Contract
         DateOnly nominalEndDate,
         decimal monthlyRent,
         IReadOnlyCollection<UnitShare> unitShares,
-        decimal? honorariosPercentage = null)
+        decimal? honorariosPercentage = null,
+        int dueDay = DefaultDueDay)
     {
+        // Any calendar day is allowed, including the 29th through the 31st. A month that is too
+        // short clamps to its own last day when the due date is computed, rather than being
+        // refused here: a lease that genuinely says "the 31st" is a lease the system must accept.
+        if (dueDay is < 1 or > 31)
+        {
+            throw new ArgumentException(
+                "A due day must be a day of the month, between 1 and 31.", nameof(dueDay));
+        }
+
         if (nominalEndDate < startDate)
         {
             throw new ArgumentException("Nominal end date cannot precede the start date.", nameof(nominalEndDate));
@@ -83,6 +116,7 @@ public sealed class Contract
         NominalEndDate = nominalEndDate;
         MonthlyRent = monthlyRent;
         HonorariosPercentage = honorariosPercentage;
+        DueDay = dueDay;
         Status = ContractStatus.Active;
 
         ApplyShares(unitShares);
