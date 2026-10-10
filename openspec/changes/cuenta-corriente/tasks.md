@@ -36,20 +36,20 @@ currently paused — it must be restarted first.
 
 ## Phase 1: Domain/Accounts (PR 1, est. 340–400 lines)
 
-- [ ] 1.1 Create `MovementKind.cs`: `OpeningBalance`, `RentAccrual`, `ContractualFeeInstalment`, `RecargoFrozen`, `Correction` — `src/Inmobiliaria.Domain/Accounts/MovementKind.cs`
-- [ ] 1.2 Create `AccountMovement.cs`: kind, signed amount, `OccurredOn`, optional `Period`, optional `CorrectsMovementId`. Immutable after construction; no setters — `.../Accounts/AccountMovement.cs`
-- [ ] 1.3 Create `ContractAccount.cs`: the aggregate, its movements, `Append(movement)`. `Append` MUST reject a second `OpeningBalance` (spec test 9) — `.../Accounts/ContractAccount.cs`
-- [ ] 1.4 `ContractAccount.LedgerBalance(asOf)`: sum of movements dated on or before `asOf` — **spec Decision 15, this is NOT the amount owed** — `.../Accounts/ContractAccount.cs`
-- [ ] 1.5 `ContractAccount.OldestUnpaidPeriod()`: earliest period with an accrual and no settling payment, or none — `.../Accounts/ContractAccount.cs`
-- [ ] 1.6 `AccountTests.cs`: **[Spec tests 1, 6]** one account per contract; the ledger balance is the sum of movements — `tests/Inmobiliaria.Domain.Tests/AccountTests.cs`
-- [ ] 1.6b **[Spec test 2]** A tenant holding two contracts has two accounts, and "what this tenant owes" is produced by summing them on demand. The schema half — that no table keyed by tenant exists to hold such a total — is asserted in task 4.11b
-- [ ] 1.7 **[Spec test 7]** A historical ledger balance counts only movements dated on or before the date asked
-- [ ] 1.8 **[Spec tests 8, 9, 10]** An account with no movements is valid and reads zero (a contract created in the system); a pre-existing contract carries exactly one `OpeningBalance`; a second one is refused; it never changes after later movements
-- [ ] 1.9 **[Spec test 5]** A correction is a new movement carrying the difference and naming what it corrects; the original is untouched
-- [ ] 1.10 **[Spec tests 13, 14, 15]** A partial payment is refused and records nothing; `OldestUnpaidPeriod` returns July when July, August and September are unpaid; the other two keep their own due dates
-- [ ] 1.11 **[Spec test 27]** Every monetary member is `decimal`; no `double` or `float` appears in `Accounts`
-- [ ] 1.12 **[Guardrail]** `ArchitectureGuardTests` still green: `Domain/Accounts` adds no reference to EF Core, Npgsql or WPF
-- [ ] 1.13 **[Isolation check]** `dotnet build` + `dotnet test tests/Inmobiliaria.Domain.Tests` on this branch alone
+- [x] 1.1 Create `MovementKind.cs`: `OpeningBalance`, `RentAccrual`, `ContractualFeeInstalment`, `RecargoFrozen`, `Correction` — `src/Inmobiliaria.Domain/Accounts/MovementKind.cs`
+- [x] 1.2 Create `AccountMovement.cs`: kind, signed amount, `OccurredOn`, optional `Period`, optional `CorrectsMovementId`. Immutable after construction; no setters — `.../Accounts/AccountMovement.cs`
+- [x] 1.3 Create `ContractAccount.cs`: the aggregate, its movements, `Append(movement)`. `Append` MUST reject a second `OpeningBalance` (spec test 9) — `.../Accounts/ContractAccount.cs`
+- [x] 1.4 `ContractAccount.LedgerBalance(asOf)`: sum of movements dated on or before `asOf` — **spec Decision 15, this is NOT the amount owed** — `.../Accounts/ContractAccount.cs`
+- [x] 1.5 `ContractAccount.OldestUnpaidPeriod()`: earliest period with an accrual and no settling payment, or none — `.../Accounts/ContractAccount.cs`
+- [x] 1.6 `AccountTests.cs`: **[Spec tests 1, 6]** one account per contract; the ledger balance is the sum of movements — `tests/Inmobiliaria.Domain.Tests/AccountTests.cs`
+- [x] 1.6b **[Spec test 2]** A tenant holding two contracts has two accounts, and "what this tenant owes" is produced by summing them on demand. The schema half — that no table keyed by tenant exists to hold such a total — is asserted in task 4.11b
+- [x] 1.7 **[Spec test 7]** A historical ledger balance counts only movements dated on or before the date asked
+- [x] 1.8 **[Spec tests 8, 9, 10]** An account with no movements is valid and reads zero (a contract created in the system); a pre-existing contract carries exactly one `OpeningBalance`; a second one is refused; it never changes after later movements
+- [x] 1.9 **[Spec test 5]** A correction is a new movement carrying the difference and naming what it corrects; the original is untouched
+- [x] 1.10 **[Spec tests 13, 14, 15]** A partial payment is refused and records nothing; `OldestUnpaidPeriod` returns July when July, August and September are unpaid; the other two keep their own due dates
+- [x] 1.11 **[Spec test 27]** Every monetary member is `decimal`; no `double` or `float` appears in `Accounts`
+- [x] 1.12 **[Guardrail]** `ArchitectureGuardTests` still green: `Domain/Accounts` adds no reference to EF Core, Npgsql or WPF
+- [x] 1.13 **[Isolation check]** `dotnet build` + `dotnet test tests/Inmobiliaria.Domain.Tests` on this branch alone
 
 ## Phase 2: Recargo (PR 2, est. 200–260 lines)
 
