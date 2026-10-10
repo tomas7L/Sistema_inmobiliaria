@@ -53,15 +53,15 @@ currently paused — it must be restarted first.
 
 ## Phase 2: Recargo (PR 2, est. 200–260 lines)
 
-- [ ] 2.1 Create `RecargoTerms.cs`: daily rate and grace day, supplied by the obligation. **No default values** — a caller that forgets must not silently get 2% — `src/Inmobiliaria.Domain/Accounts/RecargoTerms.cs`
-- [ ] 2.2 Create `RecargoMath.cs`: `For(amountOwed, dueDate, asOf, terms)`, a pure static function beside the existing `AdjustmentMath`. Truncates once at the edge through `RoundingRule.TruncateToWholePeso` — **do not re-implement truncation** — `.../Accounts/RecargoMath.cs`
-- [ ] 2.3 `RecargoMath` accepts an optional freeze date; when present, `asOf` is clamped to it (design Decision 5)
-- [ ] 2.4 **[Spec test 16]** The same inputs on three different `asOf` dates yield a growing figure and create nothing
-- [ ] 2.5 **[Spec test 17]** 200 days overdue yields the full simple 2% per day with **no ceiling** — assert the exact figure, not merely that it is large
-- [ ] 2.6 **[Spec test 19 — the standing guard]** No literal rate appears in `RecargoMath`. Assert over the source text that neither `0.02` nor `2` appears as a rate constant; the rate arrives in `RecargoTerms`
-- [ ] 2.7 **[Spec test 26]** A recargo computing to 47,860.80 records as 47,860
-- [ ] 2.8 **[Spec tests 20, 22]** With a freeze date of 2026-11-15, a computation `asOf` 2026-12-20 returns exactly what had accrued to 2026-11-15; a computation for a date **before** the freeze is unaffected by it
-- [ ] 2.9 **[Isolation check]** Build and run the domain suite on this branch alone
+- [x] 2.1 Create `RecargoTerms.cs`: daily rate and grace day, supplied by the obligation. **No default values** — a caller that forgets must not silently get 2% — `src/Inmobiliaria.Domain/Accounts/RecargoTerms.cs`
+- [x] 2.2 Create `RecargoMath.cs`: `For(amountOwed, dueDate, asOf, terms)`, a pure static function beside the existing `AdjustmentMath`. Truncates once at the edge — `.../Accounts/RecargoMath.cs`. **Deviation:** the task said to truncate through `RoundingRule.TruncateToWholePeso`, but that enum is stored on `AdjustmentClause` and no code reads it; the project truncates with `decimal.Truncate` directly (`AdjustmentProposal.cs:64`, `RentAdjustment.cs:98`). Followed the real pattern. Unifying them is its own change.
+- [x] 2.3 `RecargoMath` accepts an optional freeze date; when present, `asOf` is clamped to it (design Decision 5)
+- [x] 2.4 **[Spec test 16]** The same inputs on three different `asOf` dates yield a growing figure and create nothing
+- [x] 2.5 **[Spec test 17]** 200 days overdue yields the full simple 2% per day with **no ceiling** — assert the exact figure, not merely that it is large
+- [x] 2.6 **[Spec test 19 — the standing guard]** No literal rate appears in `RecargoMath`. Asserted over the source text, as written. A reflection-only version was tried first and is strictly weaker: it sees declared members, so it catches a `const` and misses `amountOwed * 0.02m * days` written inside the method. The guard was then proven by injecting that exact literal and watching it fail. The rate arrives in `RecargoTerms`
+- [x] 2.7 **[Spec test 26]** A recargo computing to 47,860.80 records as 47,860
+- [x] 2.8 **[Spec tests 20, 22]** With a freeze date of 2026-11-15, a computation `asOf` 2026-12-20 returns exactly what had accrued to 2026-11-15; a computation for a date **before** the freeze is unaffected by it
+- [x] 2.9 **[Isolation check]** Build and run the domain suite on this branch alone
 
 ## Phase 3: Due day and the accrual schedule (PR 3, est. 280–340 lines)
 
