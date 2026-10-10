@@ -5,6 +5,7 @@ using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Domain.Parties;
 using Inmobiliaria.Domain.Units;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace Inmobiliaria.Infrastructure.Persistence;
 
@@ -59,5 +60,47 @@ public sealed class InmobiliariaDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(InmobiliariaDbContext).Assembly);
+
+        ApplyApplicationSuppliedKeys(modelBuilder);
+    }
+
+    /// <summary>
+    /// Every primary key in this project is supplied by the application. No id column carries a
+    /// database default, and no domain type generates its own — every id arrives through a
+    /// constructor parameter, because an aggregate is valid from birth and cannot be half-built
+    /// waiting for the database to name it.
+    ///
+    /// EF has to be told that, and left alone it assumes the opposite for a <see cref="Guid"/>
+    /// key. That assumption is how it decides whether an untracked entity reached through a
+    /// navigation is new: seeing an id already set, it concludes the row must exist and marks the
+    /// entity <c>Modified</c>. The UPDATE that follows matches nothing, and if that entity owns
+    /// children of its own, their inserts hit a foreign key with no parent —
+    /// <c>23503 ... violates foreign key constraint</c>, which is exactly how this was found.
+    ///
+    /// It only bites on the SECOND unit of work: a child added to a parent already on disk.
+    /// Seeding a parent and its children in one save makes children of an Added parent Added too,
+    /// which is why every test in the project passed while confirming a rent adjustment on a
+    /// loaded contract could not work.
+    ///
+    /// Declared here rather than in each configuration because it is one fact about this project,
+    /// not nine coincidences — and because the next entity somebody adds inherits it without
+    /// having to know any of the above.
+    /// </summary>
+    private static void ApplyApplicationSuppliedKeys(ModelBuilder modelBuilder)
+    {
+        foreach (var entity in modelBuilder.Model.GetEntityTypes())
+        {
+            var key = entity.FindPrimaryKey();
+            if (key is null || key.Properties.Count != 1)
+            {
+                continue;
+            }
+
+            var property = key.Properties[0];
+            if (property.ClrType == typeof(Guid))
+            {
+                property.ValueGenerated = ValueGenerated.Never;
+            }
+        }
     }
 }

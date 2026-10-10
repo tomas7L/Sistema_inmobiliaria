@@ -39,20 +39,11 @@ public sealed class AccountMovementConfiguration : IEntityTypeConfiguration<Acco
                 "kind <> 'RentAccrual' OR period IS NOT NULL");
         });
 
+        // The id is application-supplied, which InmobiliariaDbContext declares for every
+        // single-Guid key in the model — see ApplyApplicationSuppliedKeys for why that matters and
+        // what breaks without it. Appending a movement to an account that is ALREADY persisted is
+        // the whole point of lazy accrual, so this type depends on it more than most.
         builder.HasKey(m => m.Id);
-
-        // The application supplies the id, and EF must be told so.
-        //
-        // Without this, EF treats a key it believes it generates as its signal for whether an
-        // untracked entity reached through a navigation is new. A movement arrives from a static
-        // factory with its Guid already set, so EF concludes the row must already exist and marks
-        // it Modified — then issues an UPDATE that matches no row and fails with a concurrency
-        // error. It never showed up before because every existing test saves a parent and its
-        // children in one unit of work, where children of an Added parent are Added too.
-        //
-        // Appending to an account that is ALREADY persisted is the whole point of lazy accrual,
-        // so this would have broken the next slice rather than this one.
-        builder.Property(m => m.Id).ValueGeneratedNever();
 
         // Every property is get-only, set once through a static factory, so each is mapped
         // explicitly: convention skips a property with no setter.
