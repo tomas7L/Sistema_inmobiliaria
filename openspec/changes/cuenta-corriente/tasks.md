@@ -99,16 +99,16 @@ currently paused — it must be restarted first.
 
 **Needs Docker running.**
 
-- [ ] 5.1 Create the port `IAccountMaterialiser.cs` in **`src/Inmobiliaria.Domain/Accounts/`** and its adapter in **`src/Inmobiliaria.Infrastructure/Accounts/`**: `MaterialiseDueAccrualsThrough(accountId, date)`. **An explicit named step — never a side effect hidden inside a getter** (design Decision 1). Port in Domain, adapter in Infrastructure, following the existing `IDueAdjustmentQuery` / `DueAdjustmentQuery` pair — the interface must not live in Infrastructure, or the domain ends up tied to persistence
-- [ ] 5.2 It is idempotent: called twice for the same date, the second call writes nothing
-- [ ] 5.3 It catches up: called after a three-month silence, it writes three periods, each at the canon in force for its own period
-- [ ] 5.4 Handle the concurrency case: on the unique-index violation from a competing writer, **re-read rather than retry the write** (design Decision 1)
-- [ ] 5.5 `AmountOwed(asOf)`: materialise through `asOf`, then `LedgerBalance(asOf)` plus `RecargoMath` — **spec Decision 15, the second of the two figures**
-- [ ] 5.6 **[Spec test 6, second half]** The amount owed adds the projected recargo while the ledger balance reads unchanged
-- [ ] 5.7 **[Spec test 24]** A payment against a rescinded contract's account is accepted and reduces the balance
-- [ ] 5.8 **[Spec test 23]** Ending a contract whose account owes 300,000 succeeds and leaves the account open — assert against `Contract.End`, which this change does **not** modify
-- [ ] 5.9 **[Spec test 21]** A `RecargoFrozen` movement carries the frozen amount and the signing date; no boolean anywhere carries this state — assert over the model, not only over behaviour
-- [ ] 5.10 **[Isolation check]** Build and run both suites on this branch alone
+- [x] 5.1 Create the port `IAccountMaterialiser.cs` in **`src/Inmobiliaria.Domain/Accounts/`** and its adapter in **`src/Inmobiliaria.Infrastructure/Accounts/`**: `MaterialiseDueAccrualsThrough(accountId, date)`. **An explicit named step — never a side effect hidden inside a getter** (design Decision 1). Port in Domain, adapter in Infrastructure, following the existing `IDueAdjustmentQuery` / `DueAdjustmentQuery` pair — the interface must not live in Infrastructure, or the domain ends up tied to persistence. **Deviations:** the adapter went to `src/Inmobiliaria.Infrastructure/Persistence/`, not `Infrastructure/Accounts/` — that is where `DueAdjustmentQuery` actually lives, and this project has no `Infrastructure/Accounts/` folder. The method is `MaterialiseDueAccrualsThroughAsync`, following the `GetDueAsync` suffix convention. Neither adapter is registered in DI: `IDueAdjustmentQuery` is not either, because nothing consumes these yet — the wiring arrives with the UI pass, so this introduces no gap
+- [x] 5.2 It is idempotent: called twice for the same date, the second call writes nothing
+- [x] 5.3 It catches up: called after a three-month silence, it writes three periods, each at the canon in force for its own period
+- [x] 5.4 Handle the concurrency case: on the unique-index violation from a competing writer, **re-read rather than retry the write** (design Decision 1)
+- [x] 5.5 `AmountOwed(asOf)`: materialise through `asOf`, then `LedgerBalance(asOf)` plus `RecargoMath` — **spec Decision 15, the second of the two figures**. **Shape chosen:** `AmountOwed(asOf, terms)` is a PURE method on `ContractAccount`, and materialisation stays the caller's separate explicit step. The account already holds everything the figure needs — each unpaid period's net and the accrual's own due date — and the terms are an argument, so nothing forced it off the aggregate. This also corrects a claim in PR 1's own `LedgerBalance` comment, which said the second figure "needs the contract's terms and therefore does not live on this type"; the premise was true and the conclusion did not follow. Keeping both figures side by side is what makes the distinction visible where somebody might reach for the wrong one
+- [x] 5.6 **[Spec test 6, second half]** The amount owed adds the projected recargo while the ledger balance reads unchanged
+- [x] 5.7 **[Spec test 27, not 24]** A payment against a rescinded contract's account is accepted and reduces the balance. **Shown with a negative correction, not a payment movement:** the spec puts "the payment movement itself, and taking money" in Out of Scope and says "the payment movement itself is created by the collection change; this capability owns the rule that decides which period it settles". Inventing a Payment kind here would have built the next change's model. What is proved is this capability's actual guarantee — the account refuses nothing because its contract ended
+- [x] 5.8 **[Spec test 23]** Ending a contract whose account owes 300,000 succeeds and leaves the account open — assert against `Contract.End`, which this change does **not** modify
+- [x] 5.9 **[Spec test 21]** A `RecargoFrozen` movement carries the frozen amount and the signing date; no boolean anywhere carries this state — assert over the model, not only over behaviour
+- [x] 5.10 **[Isolation check]** Build and run both suites on this branch alone
 
 ## Phase 6: The mora worklist (PR 6, est. 180–240 lines)
 

@@ -78,11 +78,73 @@ public sealed class ContractAccount
     ///
     /// This is NOT what the tenant owes: recargo is derived and is not a movement until it is
     /// frozen or charged, so the amount owed is this figure plus the surcharge projected to the
-    /// same date. Two figures, two names, deliberately (spec "Two Figures, Named Apart"). The
-    /// second one needs the contract's terms and therefore does not live on this type.
+    /// same date. Two figures, two names, deliberately (spec "Two Figures, Named Apart"), and
+    /// <see cref="AmountOwed"/> is the other one — kept beside this method so the distinction is
+    /// visible at the point where somebody might reach for the wrong figure.
     /// </summary>
     public decimal LedgerBalance(DateOnly asOf) =>
         _movements.Where(m => m.OccurredOn <= asOf).Sum(m => m.Amount);
+
+    /// <summary>
+    /// What the tenant actually owes as of <paramref name="asOf"/>: the ledger balance plus the
+    /// recargo projected to that same date. The figure an operator acts on (spec "Two Figures,
+    /// Named Apart").
+    ///
+    /// Each unpaid period counts from its OWN due date, never from one clock for the whole
+    /// account: after July is settled, August and September each keep counting from their own
+    /// tenth. That due date is the accrual movement's own date, so the account needs nothing but
+    /// itself and the terms to answer.
+    ///
+    /// Pure, and it writes nothing. A caller that wants periods materialised first says so, via
+    /// <see cref="IAccountMaterialiser"/>.
+    ///
+    /// Two deliberate silences:
+    ///
+    /// A frozen account projects NOTHING further. A novación extinguished the obligation, and the
+    /// surcharge it had accrued is already written as a movement — so continuing to project would
+    /// both run a clock that stopped and count the freeze twice.
+    ///
+    /// A movement carrying no period accrues no surcharge, the opening balance above all. There
+    /// is no due date to count from, and inventing one would invent a debt. The figure the agency
+    /// types at go-live is what their spreadsheet already says is owed, mora included.
+    /// </summary>
+    public decimal AmountOwed(DateOnly asOf, RecargoTerms terms)
+    {
+        ArgumentNullException.ThrowIfNull(terms);
+
+        var ledger = LedgerBalance(asOf);
+
+        if (_movements.Any(m => m.Kind == MovementKind.RecargoFrozen && m.OccurredOn <= asOf))
+        {
+            return ledger;
+        }
+
+        var projected = 0m;
+
+        foreach (var period in _movements.Where(m => m.Period is not null).GroupBy(m => m.Period!.Value))
+        {
+            // Dated the same way the ledger balance is, so the two figures always describe the
+            // same moment.
+            var owing = period.Where(m => m.OccurredOn <= asOf).Sum(m => m.Amount);
+            if (owing <= 0m)
+            {
+                continue;
+            }
+
+            // Only an accrual establishes when a period fell due. A period holding corrections
+            // but no accrual still counts its principal in the ledger above; it simply has no
+            // date from which a surcharge could be measured.
+            var accrual = period.FirstOrDefault(m => m.Kind == MovementKind.RentAccrual);
+            if (accrual is null)
+            {
+                continue;
+            }
+
+            projected += RecargoMath.For(owing, accrual.OccurredOn, asOf, terms);
+        }
+
+        return ledger + projected;
+    }
 
     /// <summary>
     /// The earliest period whose movements do not net to zero, or null when the account is clear.
