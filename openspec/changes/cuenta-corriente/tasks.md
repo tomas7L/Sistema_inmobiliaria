@@ -114,21 +114,21 @@ currently paused — it must be restarted first.
 
 **Needs Docker running.**
 
-- [ ] 6.1 Create the mora worklist: the port `IMoraWorklistQuery.cs` in **`src/Inmobiliaria.Domain/Accounts/`** and its adapter in **`src/Inmobiliaria.Infrastructure/Accounts/`**. Per overdue account: days overdue, amount owed, recargo accrued. Same port/adapter split and same consumable shape as `IDueAdjustmentQuery` / `DueAdjustmentQuery`, so notifications can call it without knowing this capability's internals
-- [ ] 6.2 **It materialises before it reads** (design Decision 8). This is the change's highest-ranked risk: a worklist that only reads movements reports an unread overdue account as clear
-- [ ] 6.3 **[Spec test 28 — the risk's own test]** Seed an account **nobody has ever read**, with periods overdue, and assert it appears on the worklist with the right figures
-- [ ] 6.4 **[Spec test 28]** Three accounts overdue by 5, 38 and 200 days all appear, each carrying days overdue, amount owed and recargo
-- [ ] 6.5 **[Spec test 29]** An account with no unpaid period does not appear
-- [ ] 6.6 **[Spec test 22, worklist half]** An account frozen by a novación reports its **frozen** figure, not one that kept growing
-- [ ] 6.7 **[Spec tests 30, 31, 32]** Whatever presents a figure states which of the two it is and which concepts it covers; no tasa municipal, seguro or "Otros Conceptos" amount is included
-- [ ] 6.8 **[Guardrail]** Every test added in this change lives under `tests/Inmobiliaria.Domain.Tests` or `tests/Inmobiliaria.Infrastructure.Tests` — never in `Inmobiliaria.Desktop`, which is excluded from `Inmobiliaria.Core.slnf` and cannot gate the Linux `core` job
-- [ ] 6.9 **[Isolation check]** Full solution Release build and the complete suite, zero failures and **zero skipped**
+- [x] 6.1 Create the mora worklist: the port `IMoraWorklistQuery.cs` in **`src/Inmobiliaria.Domain/Accounts/`** and its adapter in **`src/Inmobiliaria.Infrastructure/Accounts/`**. Per overdue account: days overdue, amount owed, recargo accrued. Same port/adapter split and same consumable shape as `IDueAdjustmentQuery` / `DueAdjustmentQuery`, so notifications can call it without knowing this capability's internals. **Deviations:** the adapter went to `Infrastructure/Persistence/`, beside `DueAdjustmentQuery` and `AccountMaterialiser`, not `Infrastructure/Accounts/` — that folder does not exist in this project. `RecargoTerms` is a REQUIRED PARAMETER of the query, not read from anywhere: a contract carries its own due day but not its own rate, and spec Decision 8 forbids a rate constant, so the caller supplies it. The day a contract carries its rate, this signature does not change. The worklist row carries `RecargoFrozenOn` as a DATE, never a bool — PR 5's own `NoBooleanFlag_CarriesFrozenState` test forbids a boolean anywhere in `Domain.Accounts`, so the constraint enforced itself
+- [x] 6.2 **It materialises before it reads** (design Decision 8). This is the change's highest-ranked risk: a worklist that only reads movements reports an unread overdue account as clear. **PROVEN BY REMOVING IT:** deleting the materialisation loop fails 4 tests, including 6.3. Note which tests did NOT fail — the two asserting an account is ABSENT still passed, because a broken worklist also returns absence. That is precisely why 6.3 had to be written as a presence assertion over an account with zero movements
+- [x] 6.3 **[Spec test 28 — the risk's own test]** Seed an account **nobody has ever read**, with periods overdue, and assert it appears on the worklist with the right figures
+- [x] 6.4 **[Spec test 28]** Three accounts overdue by 5, 38 and 200 days all appear, each carrying days overdue, amount owed and recargo
+- [x] 6.5 **[Spec test 29]** An account with no unpaid period does not appear
+- [x] 6.6 **[Spec test 22, worklist half]** An account frozen by a novación reports its **frozen** figure, not one that kept growing
+- [x] 6.7 **[Spec tests 31, 32 — 30 is the floating-point test, covered in PR 1]** Whatever presents a figure states which of the two it is and which concepts it covers; no tasa municipal, seguro or "Otros Conceptos" amount is included
+- [x] 6.8 **[Guardrail]** Every test added in this change lives under `tests/Inmobiliaria.Domain.Tests` or `tests/Inmobiliaria.Infrastructure.Tests` — never in `Inmobiliaria.Desktop`, which is excluded from `Inmobiliaria.Core.slnf` and cannot gate the Linux `core` job
+- [x] 6.9 **[Isolation check]** Full solution Release build and the complete suite, zero failures and **zero skipped**
 
 ---
 
 ## Human Follow-Ups (not assigned to any agent)
 
-- [ ] H.1 **Restart the Supabase project** — it paused again on the free plan — then apply PR4's migration with your own credentials. No agent connects to that database
+- [x] H.1 **Restart the Supabase project** — it paused again on the free plan — then apply PR4's migration with your own credentials. No agent connects to that database. **DONE 2026-10-10:** project restored, `INMOBILIARIA_DB` set to the Session pooler string (port 5432 — the transaction pooler holds no session state and fails partway), `dotnet ef migrations list` confirmed three applied and this one pending, then `dotnet ef database update` reported "Applying migration ... Done." Verified in the SQL editor: migration recorded, trigger present, the accrual index present with its `kind = 'RentAccrual'` filter, `due_day` smallint default 10 NOT NULL, and grants exactly INSERT,SELECT for both roles on both tables. **Honest limit:** the production database holds ZERO contracts, so "every pre-existing contract carries due_day = 10" could not be exercised against real rows. The column default and NOT NULL are what guarantee it, and there was nothing to migrate
 - [ ] H.2 Decide how a tenant's spreadsheet figure splits across contracts at load time, for any tenant holding more than one. A data-entry decision, not a modelling one
 - [ ] H.3 Supabase Cron as a trigger for materialisation is a later, optional addition that needs no change here. Worth doing once the project is on a plan that does not pause — never a dependency
 
