@@ -1,4 +1,5 @@
 using Inmobiliaria.Domain.Access;
+using Inmobiliaria.Domain.Accounts;
 using Inmobiliaria.Domain.Indices;
 using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Domain.Parties;
@@ -8,12 +9,13 @@ using Microsoft.EntityFrameworkCore;
 namespace Inmobiliaria.Infrastructure.Persistence;
 
 /// <summary>
-/// EF Core mapping onto the thirteen target Postgres tables: the six from lease-contract, the
-/// six added by rent-adjustments (economic-index and rent-adjustment capabilities), and
+/// EF Core mapping onto the fifteen target Postgres tables: the six from lease-contract, the
+/// six added by rent-adjustments (economic-index and rent-adjustment capabilities),
 /// <c>app_users</c> added by users-and-roles — the FK target every other table points at when
-/// it needs to name a person (design Decision 8). Repository ports/adapters are not part of
-/// any of these changes — see design.md Decision 2 and the scope guard in the technical
-/// approach.
+/// it needs to name a person (design Decision 8) — and <c>contract_accounts</c> plus
+/// <c>account_movements</c> added by cuenta-corriente, the append-only ledger of what each
+/// contract owes. Repository ports/adapters are not part of any of these changes — see
+/// design.md Decision 2 and the scope guard in the technical approach.
 /// </summary>
 public sealed class InmobiliariaDbContext : DbContext
 {
@@ -35,6 +37,16 @@ public sealed class InmobiliariaDbContext : DbContext
     public DbSet<AdjustmentClauseIndex> AdjustmentClauseIndices => Set<AdjustmentClauseIndex>();
     public DbSet<RentAdjustment> RentAdjustments => Set<RentAdjustment>();
     public DbSet<RentAdjustmentIndexValue> RentAdjustmentIndexValues => Set<RentAdjustmentIndexValue>();
+
+    public DbSet<ContractAccount> ContractAccounts => Set<ContractAccount>();
+
+    /// <summary>
+    /// Exposed as its own set for reading — a balance is a SUM over movements, and the mora
+    /// worklist asks across accounts, neither of which should have to load whole aggregates.
+    /// Writing still goes through <see cref="ContractAccount.Append"/>, which is where the
+    /// invariants live.
+    /// </summary>
+    public DbSet<AccountMovement> AccountMovements => Set<AccountMovement>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
