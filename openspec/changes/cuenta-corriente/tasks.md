@@ -65,16 +65,16 @@ currently paused — it must be restarted first.
 
 ## Phase 3: Due day and the accrual schedule (PR 3, est. 280–340 lines)
 
-- [ ] 3.1 Modify `Contract.cs`: add `DueDay` (1–31, default 10), validated in the constructor. **This is the field three documents wrongly claimed already existed** — design Decision 9 — `src/Inmobiliaria.Domain/Leasing/Contract.cs`
-- [ ] 3.2 **[Spec tests 34, 36]** A contract created without a due day reads 10; a due day of 0 or 32 is refused
-- [ ] 3.3 **[Spec test 35]** A contract created with a due day of 5 reads 5
-- [ ] 3.4 Create `AccrualSchedule.cs`: given a contract and a date, which periods are due and **at which canon**. The canon is read from `Contract.MonthlyRent` plus each `RentAdjustment.EffectiveDate` / `NewCanon` — never guessed — `.../Accounts/AccrualSchedule.cs`
-- [ ] 3.5 **[Spec tests 11, 12]** Three periods accrued before a late adjustment keep the old canon; the first period after confirmation uses the new one
-- [ ] 3.6 **[Spec test 25]** A contract with an `ActualEndDate` has no periods due after it — this is what makes the ended account need no flag (design Decision 6)
-- [ ] 3.7 **[Spec tests 18, 38]** Two contracts with due days 5 and 10 produce different day counts for an equally overdue period
-- [ ] 3.8 **[Guardrail]** Re-run `ArchitectureGuardTests` after the `Contract.cs` edit
-- [ ] 3.9 **[EF model check — not just build]** `dotnet ef dbcontext info -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure`, or the existing `EfModelValidationTests`. `dotnet build` does not validate the EF model, and `Contract` just changed
-- [ ] 3.10 **[Isolation check]** Build and run the domain suite on this branch alone
+- [x] 3.1 Modify `Contract.cs`: add `DueDay` (1–31, default 10), validated in the constructor. **This is the field three documents wrongly claimed already existed** — design Decision 9 — `src/Inmobiliaria.Domain/Leasing/Contract.cs`. **Structural constraint, proven before writing any code:** `DueDay` MUST be get-only. `{ get; private set; }` is mapped by EF convention the instant it is added, which puts the model out of step with the last migration and fails every Testcontainers test at the fixture — the users-and-roles PR2a failure, repeated. `{ get; }` enters the model only when a configuration names it, the way `StartDate` does, so the column and its migration ship together in PR 4. Verified both ways with `dotnet ef migrations has-pending-model-changes`: get-only reports no changes, settable reports pending.
+- [x] 3.2 **[Spec tests 34, 36]** A contract created without a due day reads 10; a due day of 0 or 32 is refused
+- [x] 3.3 **[Spec test 35]** A contract created with a due day of 5 reads 5
+- [x] 3.4 Create `AccrualSchedule.cs`: given a contract and a date, which periods are due and **at which canon**. The canon is read from `Contract.MonthlyRent` plus each `RentAdjustment.EffectiveDate` / `NewCanon` — never guessed — `.../Accounts/AccrualSchedule.cs`
+- [x] 3.5 **[Spec tests 11, 12]** Three periods accrued before a late adjustment keep the old canon; the first period after confirmation uses the new one
+- [x] 3.6 **[Spec test 25]** A contract with an `ActualEndDate` has no periods due after it — this is what makes the ended account need no flag (design Decision 6)
+- [x] 3.7 **[Spec tests 18, 38]** Two contracts with due days 5 and 10 produce different day counts for an equally overdue period
+- [x] 3.8 **[Guardrail]** Re-run `ArchitectureGuardTests` after the `Contract.cs` edit
+- [x] 3.9 **[EF model check — not just build]** `dotnet ef dbcontext info -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure`, or the existing `EfModelValidationTests`. `dotnet build` does not validate the EF model, and `Contract` just changed. Ran `dotnet ef migrations has-pending-model-changes` as well, which is strictly stronger: `dbcontext info` and `EfModelValidationTests` both prove the model BUILDS, while only this command proves it still MATCHES the last migration — which is the thing that actually breaks CI. It needs no database and no Docker.
+- [x] 3.10 **[Isolation check]** Build and run the domain suite on this branch alone
 
 ## Phase 4: Persistence and the migration (PR 4, est. 360–400 lines)
 
