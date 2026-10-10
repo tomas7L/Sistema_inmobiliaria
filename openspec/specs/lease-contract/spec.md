@@ -306,6 +306,75 @@ capability stores the value only; it does not compute fees.
 - WHEN it is saved
 - THEN the stored value MUST be 8%
 
+### Requirement: A Contract Carries Its Own Due Day
+
+`Contract` MUST store the day of the month its rent falls due, defaulting to **10**. Mora, and
+therefore recargo, MUST be counted from that day.
+
+The agency applies the 10th to everyone today. The owner MAY set another day for a particular
+tenant, and the model must not prevent him: this is the same pattern the project already follows for
+the adjustment clause, the honorarios percentage and the rent split — what the paper says, the
+record carries.
+
+> **Why this requirement exists at all.** Earlier drafts of this change asserted repeatedly that
+> "the 10 is the contract's due day, not a constant". That was **false**: `Contract` stored no such
+> field. Every calculation in `contract-account` — when a period falls due, how many days of mora
+> have passed, what recargo is owed — depends on it, and none of them could have been implemented.
+> It is recorded here rather than quietly added, because a false claim repeated across three
+> documents is worth leaving a mark.
+
+#### Scenario: A contract defaults to the 10th
+
+- GIVEN a contract created without a due day specified
+- WHEN its due day is read
+- THEN it MUST be 10
+
+#### Scenario: A contract can carry a different due day
+
+- GIVEN a contract created with a due day of 5
+- WHEN its due day is read
+- THEN it MUST be 5
+- AND mora on its periods MUST be counted from the 5th
+
+#### Scenario: An impossible due day is refused
+
+- GIVEN a contract being created
+- WHEN a due day of 0, or of 32, is supplied
+- THEN it MUST be refused
+
+#### Scenario: Existing contracts keep working
+
+- GIVEN contracts that existed before this change
+- WHEN the migration adding the column runs
+- THEN every one of them MUST carry a due day of 10
+- AND no existing contract row MUST be otherwise altered
+
+---
+
 ## Tests
 
 1. **Shares survive an adjustment.** A two-unit contract at 60/40 keeps those percentages after a confirmed adjustment, still summing to exactly 100%. This is the existing lease-contract invariant, and the rent-adjustment change is the first thing that exercises it for real.
+
+2. **A contract defaults to a due day of 10.** Created without one specified, it reads 10.
+
+   *(test 34 of the cuenta-corriente change.)*
+
+3. **A contract can carry a different due day**, and mora on its periods is counted from that day
+    rather than from the 10th.
+
+   *(test 35 of the cuenta-corriente change.)*
+
+4. **An impossible due day is refused.** Zero and 32 are both rejected.
+
+   *(test 36 of the cuenta-corriente change.)*
+
+5. **Existing contracts keep working.** After the migration adding the column, every pre-existing
+    contract carries a due day of 10 and no other column on those rows changed.
+
+   *(test 37 of the cuenta-corriente change.)*
+
+6. **Two contracts with different due days produce different mora.** Equally overdue periods on a
+    contract due the 5th and one due the 10th yield different day counts — the same proof as test
+    18, now that the due day actually exists to differ.
+
+   *(test 38 of the cuenta-corriente change.)*
