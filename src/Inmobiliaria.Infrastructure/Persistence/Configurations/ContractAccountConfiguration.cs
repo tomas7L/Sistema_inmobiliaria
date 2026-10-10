@@ -22,11 +22,6 @@ public sealed class ContractAccountConfiguration : IEntityTypeConfiguration<Cont
 
         builder.HasKey(a => a.Id);
 
-        // Application-supplied, like every other id in this namespace. See the longer note in
-        // AccountMovementConfiguration: letting EF believe it generates the key makes it
-        // misjudge whether an untracked entity is new.
-        builder.Property(a => a.Id).ValueGeneratedNever();
-
         // Get-only, like RentAdjustment's properties: mapped explicitly rather than left to
         // convention, which skips a property with no setter.
         builder.Property(a => a.ContractId).HasColumnName("contract_id").IsRequired();
