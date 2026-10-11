@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-10-10 (tras actualizar gentle-ai 4.0.0 y engram 3.3.2)_
+_Última actualización: 2026-10-10, cierre de sesión_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -8,60 +8,59 @@ _Última actualización: 2026-10-10 (tras actualizar gentle-ai 4.0.0 y engram 3.
 
 ## En qué estamos
 
-**Entre changes.** `cuenta-corriente` quedó cerrado y archivado en
-`openspec/changes/archive/2026-10-10-cuenta-corriente/`, y su especificación ya es parte de la
-documentación viva: `openspec/specs/contract-account/spec.md`.
+**Entre changes. No hay ninguno en curso** — `openspec/changes/` sólo contiene `archive/`.
 
-`openspec/changes/` está **vacío** — no hay ningún change en curso.
+`cuenta-corriente` quedó cerrado y archivado, y su especificación ya es documentación viva en
+`openspec/specs/contract-account/spec.md`. Lo último que se hizo después fue un arreglo suelto, ya
+mergeado: la convención `ApplyApplicationSuppliedKeys` en
+`src/Inmobiliaria.Infrastructure/Persistence/InmobiliariaDbContext.cs`.
 
-Lo último que se hizo fue un arreglo suelto, ya mergeado: la convención
-`ApplyApplicationSuppliedKeys` en `src/Inmobiliaria.Infrastructure/Persistence/InmobiliariaDbContext.cs`,
-que le declara a EF que todas las claves las provee la aplicación.
+Nueve capacidades vivas, 72 requisitos. **241 tests, 0 fallas, 0 omitidos.** Cuatro migraciones
+aplicadas en producción.
 
-`main` y `develop` tienen **contenido idéntico**. Nada pendiente de mergear.
+**La UI casi no existe:** `src/Inmobiliaria.Desktop` tiene sólo `LoginWindow`,
+`ChangePasswordWindow` y `MainWindow`. Ninguna pantalla de ninguna capacidad. El motor está
+avanzado; lo que Nicolás tocaría, no.
 
 ## Próximos pasos
 
-1. **Arrancar el change `cobranza-y-recibos`.** Es el que agrega el movimiento de **pago** que
-   `cuenta-corriente` dejó deliberadamente afuera, y además es dueño de: tasa municipal, seguros,
-   "Otros Conceptos", los recibos y su numeración, la liquidación al dueño y los honorarios de
-   administración. Empieza por exploración y propuesta, no por código.
-2. Después, **`notificaciones`** — ya tiene su listado de mora esperándolo
-   (`IMoraWorklistQuery`). Depende de la decisión abierta `scheduler-mechanism` en
-   `openspec/config.yaml`: una aplicación de escritorio cerrada no manda nada.
-3. El **plan de pagos** es su propio change, posterior a los dos anteriores.
+1. **Arrancar `cobranza-y-recibos`**, por exploración y propuesta — no por código. Agrega el
+   movimiento de **pago** que `cuenta-corriente` dejó afuera a propósito, y es dueño de: recibos y
+   su numeración, tasa municipal, seguros, "Otros Conceptos", la liquidación al dueño y los
+   honorarios de administración.
+2. **`notificaciones`** después. Ya tiene su listado de mora esperándolo (`IMoraWorklistQuery`).
+   Bloqueado por dos decisiones abiertas en `openspec/config.yaml`: `scheduler-mechanism` (una app
+   de escritorio cerrada no manda nada) y la librería de PDF, sin elegir.
+3. El **plan de pagos** es su propio change, posterior a los dos.
+4. La **pasada de UI**, grande y casi entera por delante.
 
 ## Pendientes / bloqueos
 
-- **H.2 de `cuenta-corriente`, decisión de Tomás:** cómo se reparte entre contratos la deuda que
-  la planilla de la inmobiliaria tiene por inquilino, para los que tienen más de un contrato. Es
-  una decisión de carga de datos.
-- **H.3 de `cuenta-corriente`, opcional:** Supabase Cron como disparador extra de la
-  materialización. Nunca una dependencia.
-- **Pregunta para Nicolás, no bloqueante:** si un contrato arranca a mitad de mes, ¿se cobra la
-  parte ocupada? Tomás cree que sí, y que en la práctica se elige el 1° como fecha de inicio.
-  El código no cambia en ninguno de los dos casos.
+- **Sin commitear:** `docs/ESTADO.md` (este archivo) y `.atl/skill-registry.md` (lo dejó
+  modificado `gentle-ai sync`). **Faltan 2 commits de `develop` a `main`** — ahí va el `CLAUDE.md`
+  que explica cómo se trabaja el proyecto, que es lo que necesita Mateo si saca una rama de ahí.
+- **H.2 de `cuenta-corriente`, decisión de Tomás:** cómo se reparte entre contratos la deuda que la
+  planilla tiene por inquilino, para quien tenga más de uno. Decisión de carga de datos.
+- **H.3, opcional:** Supabase Cron como disparador extra de la materialización. Nunca una
+  dependencia.
+- **Pregunta abierta para Nicolás, no bloqueante:** si un contrato arranca a mitad de mes, ¿se
+  cobra la parte ocupada? Tomás cree que sí, y que en la práctica se elige el 1° como inicio. El
+  código no cambia en ninguno de los dos casos.
 - **Defecto conocido, no arreglado:** `src/Inmobiliaria.Domain/Leasing/RentAdjustment.cs:76` dice
   ser *"el único sitio de truncado de todo el pipeline"*, y `AdjustmentProposal.cs:64` también
-  trunca. Inofensivo, pero el comentario es falso.
+  trunca. Inofensivo; el comentario es falso.
+- **`gentle-ai 4.0` eliminó los comandos `sdd-*` del CLI.** Las skills `sdd-*` siguen, pero
+  `~/.claude/skills/_shared/sdd-orchestrator-workflow.md` quedó en su versión del 26-09 y todavía
+  manda a correr `gentle-ai sdd-status`, que ya no existe. **Leer los artefactos directamente.**
+- **Defecto de gentle-ai, reproducible:** su `upgrade` no puede actualizarse a sí mismo; arma
+  `.../gentle-ai/v3/cmd/gentle-ai@v4.0.0` (ruta v3 con versión v4) y Go lo rechaza. Se resuelve con
+  `go install github.com/gentleman-programming/gentle-ai/v4/cmd/gentle-ai@v4.0.0`.
+  **Sin reportar todavía** — Tomás tiene que decidir si se reporta.
+- **Ocho agentes de revisión** (`jd-*`, `review-*` en `~/.claude/agents/`) no se actualizaron:
+  gentle-ai los preservó porque sus bytes estaban modificados y avisa que hay que mergearlos a
+  mano. Sin uso hoy.
 - **La rama `ramateo` de Mateo está en "Initial commit"**, 87 commits atrás y sin nada propio sin
   mergear. Tiene que traerse `develop` antes de trabajar.
-- **Herramientas actualizadas el 2026-10-10:** gentle-ai **4.0.0** y engram **3.3.2**. La memoria
-  quedó verificada intacta (88 observaciones, 31 relaciones, leídas directo del SQLite). Respaldo
-  completo en `~/.engram/backup-20261010-2030/` — incluye `.db`, `-wal` y `-shm`, porque el WAL
-  tenía 3,7 MB de transacciones sin volcar y copiar sólo el `.db` habría respaldado una foto vieja.
-- **Pendiente de la actualización, no bloqueante:** `gentle-ai 4.0` **eliminó todos los comandos
-  `sdd-*` del CLI** (`sdd-status` ya no existe). Las skills `sdd-*` sobrevivieron, pero
-  `~/.claude/skills/_shared/sdd-orchestrator-workflow.md` quedó con fecha del 26-09 y todavía
-  manda a correr `gentle-ai sdd-status` para enrutar una fase. Cuando arranque el próximo change,
-  leer los artefactos directamente en vez de ese despachador.
-- **Defecto de gentle-ai, reproducible:** su propio `gentle-ai upgrade` falla al actualizarse a sí
-  mismo. Arma `go install .../gentle-ai/v3/cmd/gentle-ai@v4.0.0` — ruta de módulo v3 con versión
-  v4 — y Go lo rechaza con `invalid version: unknown revision`. Se resuelve a mano con
-  `go install github.com/gentleman-programming/gentle-ai/v4/cmd/gentle-ai@v4.0.0`.
-- **Ocho agentes de revisión no se actualizaron** (`jd-*`, `review-*` en `~/.claude/agents/`).
-  gentle-ai los preservó a propósito porque sus bytes estaban modificados, y avisa que hay que
-  compararlos y mergearlos a mano. Sin uso hoy.
 
 ## Precondiciones del próximo paso
 
@@ -70,16 +69,16 @@ que le declara a EF que todas las claves las provee la aplicación.
 | **Docker** | **No** — exploración y propuesta son documentos |
 | **Supabase** | **No** — nada toca la base todavía |
 
-La migración de `cuenta-corriente` ya está aplicada en producción y verificada.
+La migración de `cuenta-corriente` ya está aplicada y verificada en producción.
 
 ## Para retomar
 
 ```bash
-# Verificar que el merge anterior quedó bien (la segunda inspección)
+# La segunda inspección: que el último merge haya llegado entero
 git fetch --all && git status --porcelain
 git rev-list --count origin/main..origin/develop
 
-# La suite completa. Con Docker apagado, los tests de Testcontainers quedan OMITIDOS,
+# La suite completa. Con Docker APAGADO los tests de Testcontainers quedan OMITIDOS,
 # que NO es lo mismo que pasados.
 dotnet build Inmobiliaria.sln --configuration Release
 dotnet test Inmobiliaria.sln --configuration Release
@@ -88,8 +87,11 @@ dotnet test Inmobiliaria.sln --configuration Release
 dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure
 ```
 
-Estado esperado hoy: **241 tests pasados, 0 fallas, 0 omitidos** con Docker prendido
-(141 de dominio + 100 de infraestructura), build sin advertencias, y el modelo en sintonía.
+Esperado con Docker prendido: **241 pasados, 0 fallas, 0 omitidos** (141 dominio + 100
+infraestructura), build sin advertencias, modelo en sintonía.
+
+**Leer la salida por el contador de errores o el código de salida, nunca por un patrón:**
+`error CS` no encuentra `error xUnit2029`, y en esta máquina dotnet responde en español.
 
 ### Archivos clave para abrir primero
 
@@ -99,3 +101,10 @@ Estado esperado hoy: **241 tests pasados, 0 fallas, 0 omitidos** con Docker pren
 | Lo que el dueño respondió, textual | `openspec/domain/respuestas-del-dueno.md` |
 | La cuenta corriente, ya viva | `openspec/specs/contract-account/spec.md` |
 | El change recién cerrado | `openspec/changes/archive/2026-10-10-cuenta-corriente/archive-report.md` |
+| Decisiones abiertas del proyecto | `openspec/config.yaml`, bloque `open_decisions` |
+
+### Herramientas
+
+gentle-ai **4.0.0**, engram **3.3.2**, Go 1.26.5, Docker 29.8.2 con `postgres:17.6` local.
+Respaldo completo de la memoria en `~/.engram/backup-20261010-2030/` (`.db`, `-wal` y `-shm` — el
+WAL tenía 3,7 MB sin volcar, así que copiar sólo el `.db` habría guardado una foto vieja).
