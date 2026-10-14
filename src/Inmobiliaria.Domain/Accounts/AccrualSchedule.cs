@@ -39,7 +39,11 @@ public static class AccrualSchedule
             // passed on the 10th — the contract was not yet in force. This is NOT proration: if
             // the agency charges a part-month for the days actually occupied, that is a separate
             // charge somebody records, not a period this schedule invents.
-            if (dueDate <= lastDay && dueDate >= contract.StartDate)
+            //
+            // A pre-existing contract also produces nothing due on or before its cutover date
+            // (design D17): those months belong to the opening balance. The floor lives here, in
+            // the schedule, so no caller can forget it.
+            if (dueDate <= lastDay && dueDate >= contract.StartDate && !IsOnOrBeforeCutover(contract, dueDate))
             {
                 periods.Add(new AccrualPeriod(period, dueDate, CanonFor(contract, period)));
             }
@@ -49,6 +53,89 @@ public static class AccrualSchedule
 
         return periods;
     }
+
+    /// <summary>
+    /// Every period whose month has begun on or before <paramref name="asOf"/> and that the schedule
+    /// would produce on its due date, oldest first, whether or not that due date has arrived yet
+    /// (design D1). A period here but not in <see cref="PeriodsDue"/> is "begun, not yet due": the
+    /// one a tenant may pay early, and the one whose rent that payment brings onto the account.
+    ///
+    /// The same rules as <see cref="PeriodsDue"/> otherwise: the due date must fall on or after the
+    /// contract's start, not after an actual end, and not on or before the cutover date.
+    /// </summary>
+    public static IReadOnlyList<AccrualPeriod> PeriodsBegun(Contract contract, DateOnly asOf)
+    {
+        ArgumentNullException.ThrowIfNull(contract);
+
+        var periods = new List<AccrualPeriod>();
+        var period = FirstOfMonth(contract.StartDate);
+
+        while (period <= asOf)
+        {
+            var dueDate = DueDateFor(period, contract.DueDay);
+
+            if (IsScheduled(contract, dueDate) && !IsOnOrBeforeCutover(contract, dueDate))
+            {
+                periods.Add(new AccrualPeriod(period, dueDate, CanonFor(contract, period)));
+            }
+
+            period = period.AddMonths(1);
+        }
+
+        return periods;
+    }
+
+    /// <summary>
+    /// The number <em>k</em> of the instalment that attaches to <paramref name="period"/>, when
+    /// the period is the <em>k</em>-th the schedule produces from the contract's first scheduled
+    /// period, or null when the schedule never produces it (design D19).
+    ///
+    /// It counts from the contract's start and so INCLUDES the periods before a cutover date: a
+    /// pre-existing contract skips instalments 1 and 2 when its first two periods predate go-live,
+    /// rather than renumbering them onto later months. The cap at the fee plan's instalment count
+    /// is applied by the caller that holds the plan; the plan itself arrives with the fee-plan
+    /// change.
+    /// </summary>
+    public static int? InstalmentNumberFor(Contract contract, DateOnly period)
+    {
+        ArgumentNullException.ThrowIfNull(contract);
+
+        if (period.Day != 1)
+        {
+            return null;
+        }
+
+        var candidate = FirstOfMonth(contract.StartDate);
+        var number = 0;
+
+        while (candidate <= period)
+        {
+            if (IsScheduled(contract, DueDateFor(candidate, contract.DueDay)))
+            {
+                number++;
+
+                if (candidate == period)
+                {
+                    return number;
+                }
+            }
+
+            candidate = candidate.AddMonths(1);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Whether a period with this due date is one the contract charges at all: the due date fell
+    /// while the contract existed, and no later than the day it actually ended.
+    /// </summary>
+    private static bool IsScheduled(Contract contract, DateOnly dueDate) =>
+        dueDate >= contract.StartDate &&
+        (contract.ActualEndDate is not { } ended || dueDate <= ended);
+
+    private static bool IsOnOrBeforeCutover(Contract contract, DateOnly dueDate) =>
+        contract.CutoverDate is { } cutover && dueDate <= cutover;
 
     /// <summary>
     /// The day <paramref name="period"/> falls due, given a contract's due day.

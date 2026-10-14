@@ -43,4 +43,18 @@ public enum MovementKind
     /// append-only: a mistake is answered with a new line, never by editing the old one.
     /// </summary>
     Correction,
+
+    /// <summary>
+    /// Money received from the tenant for one period. A credit, so always negative, and it always
+    /// carries the period it settles. Written by collection in the same transaction as the recibos
+    /// (cobranza-y-recibos design D2, D4).
+    /// </summary>
+    Payment,
+
+    /// <summary>
+    /// The recargo charged on a period at the moment it is paid, as a debit that the payment then
+    /// settles. Until then recargo is only projected, never a movement. Always positive, and it
+    /// always carries its period.
+    /// </summary>
+    RecargoCharged,
 }

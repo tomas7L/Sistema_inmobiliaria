@@ -108,16 +108,19 @@ public sealed class ContractAccountSchemaTests
         var account = await SeedAccountAsync(context);
 
         var july = new DateOnly(2026, 7, 1);
-        account.Append(AccountMovement.RentAccrual(
-            Guid.NewGuid(), 500_000m, july, new DateOnly(2026, 7, 10)));
-        await context.SaveChangesAsync();
 
-        // A second reader, writing the same period through a different context — exactly the race
-        // the index exists for.
+        // The second reader loads the account BEFORE the first one saves July. If it loaded
+        // afterwards, the domain would refuse the duplicate in memory (D18, ContractAccount.Append)
+        // and the database would never be asked. Loading first is the real race: both appends pass
+        // the domain, and only the unique index can stop the second write.
         await using var second = _fixture.CreateDbContext();
         var reloaded = await second.ContractAccounts
             .Include(a => a.Movements)
             .SingleAsync(a => a.Id == account.Id);
+
+        account.Append(AccountMovement.RentAccrual(
+            Guid.NewGuid(), 500_000m, july, new DateOnly(2026, 7, 10)));
+        await context.SaveChangesAsync();
 
         reloaded.Append(AccountMovement.RentAccrual(
             Guid.NewGuid(), 500_000m, july, new DateOnly(2026, 7, 10)));
