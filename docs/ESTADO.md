@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-10-13, después de cerrar las dudas de la propuesta_
+_Última actualización: 2026-10-13, cierre de sesión_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -8,30 +8,35 @@ _Última actualización: 2026-10-13, después de cerrar las dudas de la propuest
 
 ## En qué estamos
 
-**Change activo: `cobranza-y-recibos`, propuesta cerrada.** Todavía no tiene spec, design ni
-`tasks.md`.
+**Change activo: `cobranza-y-recibos`, spec leída y corregida por Tomás (2026-10-14).** Todavía no
+tiene design ni `tasks.md`.
 
-- Propuesta: `openspec/changes/cobranza-y-recibos/proposal.md`, leída por Tomás y con sus dudas ya
-  incorporadas (§5, Decisions 3, 4, 6, 8 y 15; §6, "Settled" y "Already answered").
+- Propuesta: `openspec/changes/cobranza-y-recibos/proposal.md`, aprobada y mergeada (PR #53).
+- Spec: `openspec/changes/cobranza-y-recibos/spec.md`, 37 decisiones y 69 tests. Correcciones de la
+  lectura: decisiones 21 (base de honorarios, confirmada), 22 (tasa 0 % con aviso), 23 (numeración,
+  con la evidencia de los recibos 24269/24270) y 37 nueva (pagar el mes en curso antes del
+  vencimiento).
 - Exploración: sólo en Engram, `sdd/cobranza-y-recibos/explore`.
 - El change es el **slice A** de tres: el pago del inquilino y sus dos recibos. Los otros dos son
   changes posteriores, `liquidacion-al-dueno` y `recibo-pdf`.
 
-No hay código nuevo. `ramatomy`, `develop` y `main` están a la par.
+No hay código nuevo. `ramatomy` y `develop` están a la par.
 
 ## Próximos pasos
 
-1. **Spec de `cobranza-y-recibos`**, un solo archivo: `openspec/changes/cobranza-y-recibos/spec.md`.
-   Ya no hay pregunta que la bloquee. Tiene que **reescribir** el requisito vivo
-   "A Payment Settles the Oldest Unpaid Period" de `openspec/specs/contract-account/spec.md:179` y su
-   Test 14 (Decision 3).
-2. **Design**, en paralelo o después: el contador de numeración, el tope de la fecha de pago y quién
-   puede ponerla hacia atrás (§6, "Settled — the payment date").
+1. **Tomás commitea la spec** y abre el PR.
+2. **Design**. Además de lo de abajo: cómo el pago trae al ledger el alquiler de un mes todavía no
+   vencido sin que la acumulación perezosa lo cobre dos veces (Decision 37;
+   `AccrualSchedule.PeriodsDue` sólo cuenta períodos ya vencidos).
+3. **Design, también**: el contador de numeración, el tope de la fecha de pago y quién puede ponerla hacia
+   atrás, quién fija el número de cutover y quién puede anular (la spec los lista).
 
 ## Pendientes / bloqueos
 
-- **Sin commitear:** `openspec/changes/cobranza-y-recibos/proposal.md` (archivo nuevo) y
+- **Sin commitear:** `openspec/changes/cobranza-y-recibos/spec.md` (archivo nuevo) y
   `docs/ESTADO.md` (este archivo).
+- **Para la carga de datos:** un mes viejo cargado como deuda inicial no genera recargo solo
+  (Decision 31). Cada mes se carga con su cifra real, mora incluida.
 - **Para el contador o un abogado, no para Nicolás:**
   - si el recibo puede ser no fiscal (Decision 10, recomendación **débil**);
   - si el art. 900 del CCyCN obliga a pagar primero los recargos de los meses más viejos antes que
@@ -57,7 +62,7 @@ No hay código nuevo. `ramatomy`, `develop` y `main` están a la par.
 
 | | |
 |---|---|
-| **Docker** | **No.** Spec y design son documentos |
+| **Docker** | **No.** Leer la spec y el design son documentos |
 | **Supabase** | **No.** Nada toca la base todavía |
 
 Para implementar el slice A van a hacer falta las dos: Docker para Testcontainers y Supabase
@@ -91,8 +96,8 @@ no encuentra `error xUnit2029`, y en esta máquina dotnet responde en español.
 | Para qué | Dónde |
 |---|---|
 | Cómo trabajamos | `CLAUDE.md` (raíz) |
-| La propuesta cerrada | `openspec/changes/cobranza-y-recibos/proposal.md` |
-| El requisito que la spec reescribe | `openspec/specs/contract-account/spec.md:179` |
+| La spec en revisión | `openspec/changes/cobranza-y-recibos/spec.md` (y el extracto local `lectura-spec-cobranza.md`) |
+| La propuesta aprobada | `openspec/changes/cobranza-y-recibos/proposal.md` |
 | Lo que el dueño respondió, textual | `openspec/domain/respuestas-del-dueno.md` |
 | Decisiones abiertas del proyecto | `openspec/config.yaml`, bloque `open_decisions` |
 
