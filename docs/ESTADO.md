@@ -9,7 +9,7 @@ _Última actualización: 2026-10-14, spec corregida tras la lectura de Tomás_
 ## En qué estamos
 
 **Change activo: `cobranza-y-recibos`, spec y design escritos, revisados y corregidos (2026-10-14).**
-Todavía no tiene `tasks.md`.
+Tasks escritas: `openspec/changes/cobranza-y-recibos/tasks.md` (6 PRs, 73 tareas + H.1–H.8).
 
 - Propuesta: `openspec/changes/cobranza-y-recibos/proposal.md`, aprobada y mergeada (PR #53).
 - Spec: `openspec/changes/cobranza-y-recibos/spec.md`, 49 decisiones y 76 tests.
@@ -19,13 +19,13 @@ Todavía no tiene `tasks.md`.
 - El change es el **slice A** de tres: el pago del inquilino y sus dos recibos. Los otros dos son
   changes posteriores, `liquidacion-al-dueno` y `recibo-pdf`.
 
-No hay código nuevo. La spec (commit 53e398c) está en `ramatomy`, con PR abierto hacia `develop`.
+No hay código nuevo. Spec y design mergeados a `develop` (PRs #54 y #55).
 
 ## Próximos pasos
 
-1. **Tomás commitea spec, design y `respuestas-del-dueno.md`.**
-2. **Elegir la estrategia de PRs encadenados** (el design estima ~2.400–2.900 líneas en 6 slices).
-3. **Tasks**: `openspec/changes/cobranza-y-recibos/tasks.md` a partir de design §13.
+1. **Tomás commitea `tasks.md`.**
+2. **PR 1 (ledger rules in the domain)**: implementar las tareas 1.x. Sin Docker ni Supabase.
+3. Después, PR 2 en adelante, de a uno: cada PR se mergea a `develop` antes de empezar el siguiente.
 
 ## Pendientes / bloqueos
 

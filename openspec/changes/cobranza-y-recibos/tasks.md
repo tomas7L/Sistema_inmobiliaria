@@ -1,0 +1,304 @@
+# Tasks: cobranza y recibos (slice A: tenant payment and recibo)
+
+Turns `design.md` section 13 (six slices) into ordered, checkable work. It does not re-plan the change
+and does not edit `spec.md` or `design.md`. Where slicing exposed a gap, it is listed under
+**Issues found** at the end.
+
+Domain vocabulary: **recibo** = receipt (non-fiscal, one per copy); **locatario** = tenant;
+**propietario** = lessor/owner; **recargo** = late-payment surcharge; **mora** = being late;
+**cutover** = the go-live date and number from which the system, not the spreadsheet, is the record.
+
+## How to read this (Tomás)
+
+| Read | Skip |
+|---|---|
+| This header, the **Suggested Work Units** table, the **Human Follow-Ups** (H.1 to H.8) and **Issues found** | Everything inside Phases 1 to 6 except the "Verification" block at the end of each: those are for the assistant and for the second inspection |
+
+## Review Workload Forecast
+
+| Field | Value |
+|---|---|
+| Estimated changed lines | 2,380 to 2,920 (design section 13), authored additions + deletions, tests included |
+| Review budget | about 400 authored lines per PR, a planning heuristic and not a cap |
+| 400-line budget risk | High: every slice is estimated at or above 380, and `cuenta-corriente` PR5 landed at about 2.5x its estimate |
+| Chained PRs recommended | Yes |
+| Suggested split | PR1 to PR6, forced order, one slice per PR |
+| Delivery strategy | ask-on-risk, resolved by the parent: one PR per design slice |
+| Chain strategy | One PR at a time: each PR is opened from `ramatomy` into `develop` by Tomas and **merged before the next slice starts** (the `cuenta-corriente` precedent). No PR is stacked on an unmerged PR |
+
+Decision needed before apply: No
+Chained PRs recommended: Yes
+Chain strategy: stacked-to-main
+400-line budget risk: High
+
+The `Chain strategy` literal is `stacked-to-main` because each PR targets `develop` (the main line),
+but it is **sequential, not stacked**: a PR is never opened on top of an unmerged one.
+
+**Working agreements that apply to every phase** (from `CLAUDE.md`): the assistant writes files and
+leaves them **uncommitted**; Tomas commits, pushes and opens the PR. At the end of each phase the
+assistant hands over the file list and a Conventional Commit message, with no `Co-Authored-By`.
+At the start of the next session, before continuing, the **second inspection** runs: did the last
+merge land intact, and does what is about to be built still match the code (task X.1 of each phase).
+
+**Preconditions, announced before each phase starts**
+
+| Phase | Docker | Supabase | Model change |
+|---|---|---|---|
+| 1 | no | no | no (enum members only) |
+| 2 | **yes** | Tomas only, to apply migration A (H.2) | **yes** |
+| 3 | no | no | no |
+| 4 | no | no | no |
+| 5 | **yes** | Tomas only, to apply migration B (H.4) | **yes** |
+| 6 | **yes** | Tomas only, for PV1 (H.5) | no |
+
+### Suggested Work Units
+
+| Unit | Goal | PR | Focused test command | Runtime harness | Rollback boundary |
+|---|---|---|---|---|---|
+| 1 | Ledger rules in the domain: kinds, factories, opening balance per period, payability, cutover floor, early accrual planning, ledger dates. 400 to 480 lines | PR 1 | `dotnet test tests/Inmobiliaria.Domain.Tests --configuration Release` | N/A: pure domain, no database | Revert the PR: enum members and domain code only, no schema |
+| 2 | Fee plan, `cutover_date`, instalment attachment, materialiser changes, **migration A**. 420 to 520 lines | PR 2 | `dotnet test tests/Inmobiliaria.Infrastructure.Tests --configuration Release --filter "FullyQualifiedName~Materialis\|FullyQualifiedName~LedgerConstraint"` | Testcontainers `postgres:17.6` applying migration A on a fresh instance | Migration A `Down`; lossless until contracts carry a plan or a cutover date |
+| 3 | The recibo document: catalog, lines, signs, both copies, honorarios line, Saldo Deudor, legend, pair numbering in the domain. 380 to 460 lines | PR 3 | `dotnet test tests/Inmobiliaria.Domain.Tests --configuration Release --filter FullyQualifiedName~Recibo` | N/A: pure domain | Revert the PR: new files under `Domain/Collection`, nothing else |
+| 4 | Collection and voiding planners, clock port and adapter, rules constants. 400 to 480 lines | PR 4 | `dotnet test tests/Inmobiliaria.Domain.Tests --configuration Release --filter "FullyQualifiedName~Collection\|FullyQualifiedName~Voiding"` | N/A: pure domain plus a clock test without a container | Revert the PR: no schema, no writers |
+| 5 | **Migration B**: five tables, counter, triggers, grants, configurations, schema tests. 400 to 500 lines | PR 5 | `dotnet test tests/Inmobiliaria.Infrastructure.Tests --configuration Release --filter FullyQualifiedName~Recibo` | Testcontainers applying migrations A and B; raw SQL as superuser and as real login roles | Migration B `Down`; lossless **only before the first real recibo** |
+| 6 | `CollectionDesk`: the transaction, voiding, starting-number adapter; atomicity and concurrency tests. 380 to 480 lines | PR 6 | `dotnet test tests/Inmobiliaria.Infrastructure.Tests --configuration Release --filter FullyQualifiedName~CollectionDesk` | Two real sessions with a barrier against Testcontainers; PV1 later against the real pooler | Revert the PR: the desk is not wired into `Desktop`, so nothing calls it |
+
+---
+
+## Phase 1: Ledger rules in the domain (PR 1, est. 400 to 480 lines)
+
+**No Docker. No model change.** Everything in `Inmobiliaria.Domain` plus `Inmobiliaria.Domain.Tests`.
+Spec tests in this PR: 3, 4, 5, 6, 7, 9, 52, 53, 54, 55, 56, 68 (rent part), 71 (Domain part).
+
+- [ ] 1.1 **[Second inspection, read-only]** Confirm the `cuenta-corriente` code is intact and matches design section "Claims checked": `src/Inmobiliaria.Domain/Accounts/AccountMovement.cs` (read-only), `src/Inmobiliaria.Domain/Accounts/ContractAccount.cs` (read-only), `src/Inmobiliaria.Domain/Accounts/AccrualSchedule.cs` (read-only), `src/Inmobiliaria.Domain/Leasing/Contract.cs` (read-only). Run the baseline once and record it: 241 passed, 0 failed, 0 skipped with Docker up
+- [ ] 1.2 **[Find the living tests this change replaces]** `rg` the existing tests for the "second `OpeningBalance` is refused", "partial payment refused" and "oldest unpaid" cases (spec header: Tests 3, 4, 5 replace living `contract-account` Tests 14 and 15; Tests 52 to 56 replace living Tests 9 and 10). Record in this task the file, test names and count **R** removed or rewritten, because the expected total below is `241 - R + new`. Edit target: `tests/Inmobiliaria.Domain.Tests/AccountTests.cs`
+- [ ] 1.3 **RED, Tests 52, 54, 56.** Month-by-month opening balance: three `OpeningBalance` movements with periods sum to the ledger balance (52); a non-zero one with no period is refused, a zero with no period is accepted, a second one for one period is refused, a period holding one takes no `RentAccrual` (54); an opening balance never changes after later movements (56). New `tests/Inmobiliaria.Domain.Tests/OpeningBalanceTests.cs`. Watch it fail for the right reason (factory signature does not take a period yet)
+- [ ] 1.4 **GREEN, ledger vocabulary.** Add `Payment` and `RecargoCharged` to `src/Inmobiliaria.Domain/Accounts/MovementKind.cs`; change factories in `src/Inmobiliaria.Domain/Accounts/AccountMovement.cs` per design 7.1: `OpeningBalance(id, amount, occurredOn, DateOnly? period)`, `ContractualFeeInstalment(id, amount, period, dueOn)`, new `RecargoCharged` (amount > 0) and `Payment` (amount < 0), each requiring a period. Update every existing caller and test that used the old factory signatures. Enum members are schema-neutral (kind is stored as a string, no list)
+- [ ] 1.5 **GREEN, `Append` rules** in `src/Inmobiliaria.Domain/Accounts/ContractAccount.cs` (D18): refuse a non-zero period-less opening balance, a second opening balance for one period, a period-less zero when one exists, a period-less zero on an account holding period opening balances (weak, only prevents a confusing mix), and a `RentAccrual` for a period already charged. Tests 52, 54, 56 go green
+- [ ] 1.6 **Characterise, then extract (D22).** Before touching `AmountOwed`, confirm the existing `AmountOwed` tests are green; extract `RecargoProjectedFor(period, asOf, terms)` and make `AmountOwed` call it. **No behaviour change**: the same existing tests stay green, unmodified. In `src/Inmobiliaria.Domain/Accounts/ContractAccount.cs`
+- [ ] 1.7 **RED then GREEN, Test 55.** An opening-balance month projects no recargo (`RecargoProjectedFor` returns 0, spec Decision 31) and therefore no `RecargoCharged` would be written when it is paid. Test in `tests/Inmobiliaria.Domain.Tests/OpeningBalanceTests.cs`. The planner-level repeat of "paying it writes no `RecargoCharged`" is asserted again, unnumbered, in task 4.4
+- [ ] 1.8 **RED, Tests 3, 4, 5, 6, 7, 9.** Payability and default period over an account with July, August and September unpaid: naming September settles September only (3); no period named picks the oldest, July (4); after September, July and August still project recargo from their own due dates (5); a period already settled, a month that has not begun, and a period not on the contract (including a calendar month the contract never charges, Decision 43 / D24) are each not payable, with nothing appended (6); an account with a frozen recargo is not payable (7); after a payment the period nets zero and the amount owed read the next day projects no recargo for it (9). Also Test 53: one month of an old debt is paid by name leaving the others, by default the oldest. New `tests/Inmobiliaria.Domain.Tests/PayabilityTests.cs`
+- [ ] 1.9 **GREEN, account members** in `src/Inmobiliaria.Domain/Accounts/ContractAccount.cs` per design 7.1: `PeriodNet`, `IsChargedFor`, `HasInstalmentFor`, `HasLivePaymentFor` (a `Payment` no `Correction` names), `IsFrozen`, plus a pure payability predicate and default-period selection ("no live payment settles it, and it is owed or begun-not-yet-due"; if none named, oldest owed, else the month in course when begun and unpaid, else nothing payable, design section 2 "Picking the period"). The predicate returns a neutral reason (not `CollectionRefusal`, which arrives in PR 4). Rewrite the `OldestUnpaidPeriod` doc comment that still says "the operator never chooses". Tests 3 to 7, 9, 53 go green
+- [ ] 1.10 **RED, Test 71 (Domain part).** `AccrualSchedule` given a contract with a cutover date yields no period due on or before it, rent and instalment alike, and `InstalmentNumberFor` counts from the contract's first scheduled period including periods before the cutover (no renumbering). New `tests/Inmobiliaria.Domain.Tests/CutoverScheduleTests.cs`
+- [ ] 1.11 **GREEN, cutover floor.** In `src/Inmobiliaria.Domain/Leasing/Contract.cs` add `CutoverDate` (`DateOnly?`) as a **get-only** property assigned in the constructor, so EF leaves it out of the model until PR 2 names it (the `DueDay` precedent, `Contract.cs:35-41`). In `src/Inmobiliaria.Domain/Accounts/AccrualSchedule.cs` filter `PeriodsDue` by it, add `PeriodsBegun(contract, asOf)` and `InstalmentNumberFor(contract, period)`. A contract with no cutover date behaves exactly as today, so the existing `AccrualSchedule` tests stand unchanged
+- [ ] 1.12 **RED then GREEN, Test 68 (rent part).** The current month is paid before its due date: planning writes the period's `RentAccrual` (same row lazy accrual would write, dated on the due date, D1), no recargo, and the `Payment` is dated on the due date, not the received date (D2, Decision 47); a later materialisation raises nothing again (`IsChargedFor`). Add the pure ledger-date rule of design section 1 "The ledger date rule" (later of received date and charge date; later of voiding day and reversed movement's date) as a small domain helper in `src/Inmobiliaria.Domain/Accounts/LedgerDating.cs`. Test in `tests/Inmobiliaria.Domain.Tests/EarlyAccrualTests.cs`. The instalment half of Test 68 is task 2.5
+- [ ] 1.13 **[Guardrails]** `ArchitectureGuardTests` green (no EF Core, Npgsql or WPF reference in `Domain`); no `double` or `float` in any new monetary member; `dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure` reports **no pending changes** (proves `CutoverDate` stayed out of the model; `dotnet build` does not build the EF model)
+- [ ] 1.14 **[Prove a guard by making it fail]** Remove the cutover filter from `AccrualSchedule.PeriodsDue` once in a scratch run: the Test 71 tests must go red. Restore it and record the result here
+- [ ] 1.15 **[Handover]** File list and Conventional Commit message (for example `feat(domain): ledger rules for tenant payment`) to Tomas. No commit by the assistant
+
+### Verification, PR 1 (Docker: no)
+
+| Command | Expected |
+|---|---|
+| `dotnet build Inmobiliaria.sln --configuration Release` | exit code 0; read the **warning and error counts** ("Advertencia(s)", "Errores"), both 0. Never grep for a pattern |
+| `dotnet test tests/Inmobiliaria.Domain.Tests --configuration Release` | 0 failed, 0 skipped. Domain total = previous Domain total - R + new tests |
+| `dotnet test Inmobiliaria.sln --configuration Release` (Docker up) | **241 - R + N passed**, 0 failed, 0 skipped ("Superado", "Con error", "Omitido"), where **N >= 13** (13 spec test parts; some need more than one method). Record R and N here |
+| `dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure` | no pending model changes |
+
+---
+
+## Phase 2: Fee plan, cutover date, instalments, migration A (PR 2, est. 420 to 520 lines)
+
+**Docker must be running.** Model change: the migration ships in this PR with its model changes.
+Spec tests in this PR: 57, 58, 59, 60, 61, 62, 63, 64, 67 (A), 68 (instalment part), 71 (Infrastructure part), 76.
+
+- [ ] 2.1 **[Second inspection, read-only]** Confirm PR 1 landed on `develop` and that `ramatomy` is rebased on it; confirm `MovementKind`, the new factories and `AccrualSchedule.PeriodsBegun` exist as designed; confirm Docker is up (a skipped Testcontainers test is an unrun test). Read-only: `src/Inmobiliaria.Infrastructure/Persistence/AccountMaterialiser.cs` (read-only)
+- [ ] 2.2 **RED, Tests 60 to 63 (fee plan).** A plan of amount and count is stored and no plan is valid (60); a count of 0 or 7, a non-positive amount, and an amount without a count (or the reverse) are refused (61); the plan amount does not move when the rent adjusts (62); the plan cannot be changed once an instalment has been written (63). New `tests/Inmobiliaria.Domain.Tests/ContractualFeePlanTests.cs`
+- [ ] 2.3 **GREEN, fee plan and cutover setter** in `src/Inmobiliaria.Domain/Leasing/Contract.cs`: `ContractualFeePlan` (amount, count) with validation, `ChangeContractualFeePlan(plan, account)` refusing once the account holds an instalment, and the method that sets `CutoverDate` when a contract is loaded as predating the system, refused once its account holds any movement (D17). Because `CutoverDate` and the plan properties are get-only, back them with private fields and name the field in the EF configuration in 2.8 (see Issues found 3). Add one unnumbered domain test for the cutover-set refusal beside 2.2's file
+- [ ] 2.4 **RED, Tests 58 and 59 (instalment attachment).** Instalment k attaches to the k-th rent period the schedule produces, is paid with the rent, cannot be paid alone (asserted at account level here: a payment of less than the period net does not settle the period; the planner-level repeat is task 4.4) and is never raised twice (58); instalments for periods due on or before the cutover date are not raised on a pre-existing contract, including a period due exactly on it, and instalments 1 and 2 are skipped, not renumbered (59). New `tests/Inmobiliaria.Domain.Tests/InstalmentAttachmentTests.cs`
+- [ ] 2.5 **GREEN plus Test 68 (instalment part).** Attach the instalment to the k-th scheduled period using `InstalmentNumberFor` (D19), with its period set at creation; extend the early-payment plan from task 1.12 so an early payment of a period that carries an instalment writes the instalment too, and writes rent and instalment **only when `IsChargedFor` / `HasInstalmentFor` say they are missing** (the voided-early-payment case of design section 1). Test in `tests/Inmobiliaria.Domain.Tests/EarlyAccrualTests.cs`
+- [ ] 2.6 **RED (Infrastructure), Tests 57, 64, 71 (Infrastructure part), 76.** Against a fresh `postgres:17.6` with the migration applied: the database accepts `Payment` and `RecargoCharged` and refuses UPDATE/DELETE on them (57); existing contracts carry no plan, no cutover date, and no other column changed (64); materialising a loaded pre-existing account writes no `RentAccrual` or instalment on or before the cutover and writes the later ones (71); a contract stored with a cutover date and no opening balance yet, read by the mora worklist, gains nothing on or before that date (76). Plus unnumbered constraint tests, each a raw INSERT that must be refused: kind outside the list, `Payment` with a positive amount, `RecargoCharged` with a negative amount, a second charge for one period across `RentAccrual` and `OpeningBalance`, a second instalment for one period, a second period-less opening balance, a fee plan with only one of the two columns. New `tests/Inmobiliaria.Infrastructure.Tests/LedgerConstraintTests.cs` and `.../MaterialiserCutoverTests.cs`
+- [ ] 2.7 **GREEN, materialiser** in `src/Inmobiliaria.Infrastructure/Persistence/AccountMaterialiser.cs`: honour the cutover floor through the schedule, skip a period `IsChargedFor` already holds, write the instalment beside the rent guarded by `HasInstalmentFor`. Keep the existing `23505` catch and re-read (`:67-83`); it already covers the renamed index. Confirm `MoraWorklistQuery` needs no change (it reads through the materialiser), which is what Test 76 proves
+- [ ] 2.8 **EF configuration:** `src/Inmobiliaria.Infrastructure/Persistence/Configurations/ContractConfiguration.cs` maps `contractual_fee_amount numeric(14,2)`, `contractual_fee_instalments smallint`, `cutover_date date` with the check constraints of design 5 (both-or-neither, amount > 0, count 1 to 6); `src/Inmobiliaria.Infrastructure/Persistence/Configurations/AccountMovementConfiguration.cs` maps `ck_account_movements_kind`, `ck_account_movements_period_required`, `ck_account_movements_opening_balance_period`, `ck_account_movements_payment_sign`, `ck_account_movements_recargo_charged_sign`, and the three indexes (`ux_account_movements_period_charge`, `ux_account_movements_instalment_period`, `ux_account_movements_opening_zero`)
+- [ ] 2.9 **Migration A: generate, then hand-edit** under `src/Inmobiliaria.Infrastructure/Persistence/Migrations/`. Generated: columns, checks, indexes. Hand-written: replace `ck_account_movements_accrual_has_period` and `ux_account_movements_accrual_period` as design 5 says; the `contracts` trigger refusing a fee-plan change once an instalment exists and refusing a `cutover_date` change once the account holds any movement (not `SECURITY DEFINER`); **no new grants** (design 5). `Down` drops the trigger and function first (the `AddContractAccounts` pattern), restores the two replaced objects, drops the columns. Raise trigger refusals with `ERRCODE = 'P0001'` and `CONSTRAINT = '<name>'` (design section 2)
+- [ ] 2.10 **GREEN and Test 67 (A).** Task 2.6 tests pass; then `dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure` reports nothing pending. This is a command check, not an xUnit test, and needs no database
+- [ ] 2.11 **[Guardrails]** Every earlier migration and its `.Designer.cs` unchanged against `HEAD`; `ArchitectureGuardTests` green; all `cuenta-corriente` tests still pass unmodified
+- [ ] 2.12 **[Prove a guard by making it fail]** In a scratch run drop `ux_account_movements_period_charge`: the second-charge test must go red. Restore it and record the result here
+- [ ] 2.13 **[Handover]** File list (migration included) and commit message (for example `feat(db): contract fee plan, cutover date and ledger constraints`) to Tomas. Remind him of H.1 and H.2 before the live database is touched
+
+### Verification, PR 2 (Docker: **yes**)
+
+| Command | Expected |
+|---|---|
+| `dotnet build Inmobiliaria.sln --configuration Release` | exit code 0, warning and error counts both 0 |
+| `dotnet test Inmobiliaria.sln --configuration Release` | **(PR 1 total) + N passed**, 0 failed, **0 skipped**, where **N >= 11** (spec parts 57 to 64 = 8, plus 68 instalment, 71 Infrastructure, 76) plus the unnumbered constraint tests |
+| `dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure` | no pending model changes (Test 67, A) |
+
+---
+
+## Phase 3: The recibo document (PR 3, est. 380 to 460 lines)
+
+**No Docker. No model change.** New files under `src/Inmobiliaria.Domain/Collection/`. These are plain
+domain types: they must not become EF entities in this PR (see Issues found 1).
+Spec tests in this PR: 21, 28, 29, 30, 36, 37, 38, 39, 40, 41, 42, 43, 44, 46, 49, 50, 75.
+
+- [ ] 3.1 **[Second inspection, read-only]** Confirm PR 2 landed; confirm `ContractAccount.IsChargedFor`, `PeriodNet` and the fee plan exist; `Contract.HonorariosPercentage` is get-only and set only at construction (`src/Inmobiliaria.Domain/Leasing/Contract.cs` (read-only)). Confirm `RoundingRule.TruncateToWholePeso` or the project's real truncation pattern (`decimal.Truncate`; `cuenta-corriente` task 2.2 found the enum is not read anywhere) and reuse whichever the code actually uses
+- [ ] 3.2 **RED, Tests 36, 37, 49, 50.** The locatario recibo carries rent, instalment and recargo; the propietario carries rent and recargo but no instalment (36); a derived line (rent, instalment, recargo, saldo deudor) cannot be overridden by the operator (37); both kinds carry the legend `Documento no válido como factura` (49); the total equals the sum of the signed lines and no monetary member is `double` or `float` (50). New `tests/Inmobiliaria.Domain.Tests/ReciboLinesTests.cs`
+- [ ] 3.3 **GREEN, the document model** in `src/Inmobiliaria.Domain/Collection/`: `ReciboCopy`, `ReciboLineKind` (print order: Rent, ContractualFeeInstalment, Recargo, TasaMunicipal, Seguro, OtrosConceptos, SaldoDeudor, HonorariosAdministracion), `ReciboLine`, `ReciboDraft` with `Total`, `ReciboLineCatalog` (`IsLedgerDerived`, `AppearsOn`, `MayBeNegative`, D11), `ReciboHeader` (tenant, lessors, units as text, D12), the `Recibo` immutable type and the `Recibo.NonFiscalLegend` constant
+- [ ] 3.4 **RED then GREEN, typed lines, Tests 21, 38, 39, 40, 41.** A fractional typed amount is truncated toward zero on entry and shown truncated (21); a negative Otros Conceptos is accepted, appears on the recibo, never on the ledger (38); a negative seguro is accepted on its own line on both recibos (39); a negative tasa municipal is refused (40); tasa municipal, seguro and Otros Conceptos create no ledger movement and leave the balance unchanged (41). New `tests/Inmobiliaria.Domain.Tests/ReciboTypedLinesTests.cs`; implementation in `src/Inmobiliaria.Domain/Collection/ReciboBuilder.cs`
+- [ ] 3.5 **RED then GREEN, honorarios de administración, Tests 42, 43, 44, 46.** The propietario recibo carries a negative line `-truncate(rate / 100 x (rent + recargo))` and the locatario none; Recibo N 24270 is the worked example: 8 / 100 x (507,000 + 91,260) = 47,860.80, so **-47,860** (42); the stored line is never recomputed: reading an issued recibo against a contract built with another rate leaves the line as issued (43, spec Decision 46); several lessors appear on one propietario recibo (44); no honorarios movement is ever written to the account (46: assert `MovementKind` has no such member and the builder appends nothing). New `tests/Inmobiliaria.Domain.Tests/HonorariosLineTests.cs`
+- [ ] 3.6 **RED then GREEN, Test 75 (Saldo Deudor).** Paying a month loaded as an `OpeningBalance` of 160,000 under a rate of 8% puts a `SaldoDeudor` line of 160,000 on both recibos, no rent or recargo line, and **-12,800** on the propietario recibo (D27: the base is that month's figure, never the whole debt). New `tests/Inmobiliaria.Domain.Tests/SaldoDeudorTests.cs`
+- [ ] 3.7 **RED then GREEN, pair numbering, Tests 28, 29, 30.** Each payment yields exactly one locatario and one propietario recibo with the same period and received date (28); the pair's numbers are consecutive with the locatario taking the lower (29); two payments are four recibos with four consecutive numbers (30). Pure function taking `firstNumber`: `src/Inmobiliaria.Domain/Collection/ReciboPair.cs`. New `tests/Inmobiliaria.Domain.Tests/ReciboPairTests.cs`
+- [ ] 3.8 **[Guardrails]** `ArchitectureGuardTests` green; `dotnet ef migrations has-pending-model-changes` reports nothing pending (proves the new types stayed out of the model); every new test lives in `Inmobiliaria.Domain.Tests`
+- [ ] 3.9 **[Prove a guard by making it fail]** Make the honorarios line add instead of subtract once in a scratch run: Tests 42 and 75 must go red; restore and record
+- [ ] 3.10 **[Handover]** File list and commit message (for example `feat(domain): recibo document with paired copies`) to Tomas
+
+### Verification, PR 3 (Docker: no)
+
+| Command | Expected |
+|---|---|
+| `dotnet build Inmobiliaria.sln --configuration Release` | exit code 0, warning and error counts both 0 |
+| `dotnet test tests/Inmobiliaria.Domain.Tests --configuration Release` | 0 failed, 0 skipped |
+| `dotnet test Inmobiliaria.sln --configuration Release` (Docker up) | **(PR 2 total) + N passed**, 0 failed, 0 skipped, **N >= 17** |
+| `dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure` | no pending model changes |
+
+---
+
+## Phase 4: Collection and voiding planners (PR 4, est. 400 to 480 lines)
+
+**No Docker for the planners.** The clock adapter test runs without a container. No model change.
+Spec tests in this PR: 1, 2, 8, 10, 11, 12, 13, 19, 20, 22, 23, 24, 27, 45, 47, 69, 73, 74.
+
+- [ ] 4.1 **[Second inspection, read-only]** Confirm PR 3 landed; confirm `ReciboDraft`, `ReciboBuilder`, `ReciboHeader` and `Recibo` exist; confirm `ContractAccount` exposes the members of design 7.1. Read-only: `src/Inmobiliaria.Domain/Collection/ReciboBuilder.cs` (read-only)
+- [ ] 4.2 **Constants and clock.** Create `src/Inmobiliaria.Domain/Collection/CollectionRules.cs` (`BackDateBoundDays = 7`, voiding free window 7 days, Admin window 30 days; one place, mirrored later by the triggers), `src/Inmobiliaria.Domain/Accounts/IAgencyClock.cs` (`DateOnly Today`), and `src/Inmobiliaria.Infrastructure/Persistence/AgencyClock.cs` using `TimeZoneInfo.FindSystemTimeZoneById("America/Argentina/Buenos_Aires")`, falling back to `"Argentina Standard Time"` if it throws (PV4). Test (no container) in `tests/Inmobiliaria.Infrastructure.Tests/AgencyClockTests.cs`: the zone resolves and `Today` is the Buenos Aires date at 23:30 and 00:30 UTC-3 boundaries using a fixed instant
+- [ ] 4.3 **RED, Tests 1, 2, 8, 10, 11, 12, 13.** A partial amount is refused, writes nothing (1); an excess amount is refused (2); the recargo charged equals the recargo projected as of the received date, truncated (8); a zero recargo writes no `RecargoCharged` and prints no recargo line (10); received date defaults to today, the preview records the resolved day, and the request has no recorded-at field (11); a future date is refused, more than 7 days back is refused, exactly 7 back is accepted for either role (12); a back-dated received date charges the recargo of that date, lower than today's, and the recibo shows that date (13). New `tests/Inmobiliaria.Domain.Tests/CollectionPlannerTests.cs`
+- [ ] 4.4 **GREEN, `CollectionPlanner.Plan`** in `src/Inmobiliaria.Domain/Collection/CollectionPlanner.cs`: `CollectionRequest`, `CollectionPreview` (record with value equality, D21), `CollectionRefusal` enum with operator text (design section 2 list), `CollectionWarning`. Map the neutral payability reasons of task 1.9 to `CollectionRefusal`. Also assert, unnumbered, the planner-level repeats: an opening-balance month writes no `RecargoCharged` (task 1.7) and an instalment cannot be paid alone (task 2.4)
+- [ ] 4.5 **RED then GREEN, Tests 19, 45, 47, 69.** The preview shows period, received date, previous amount owed, each line of both recibos, both totals, the ledger figure and the resulting balance (19); a contract whose administration rate was never entered cannot be committed and the preview says so (45); the recibo total and the ledger figure differ by the typed lines and are named apart (47); a 0% rate is collected, the preview warns `ZeroAdministrationRate` and the honorarios line is zero (69). New `tests/Inmobiliaria.Domain.Tests/CollectionPreviewTests.cs`
+- [ ] 4.6 **RED then GREEN, Test 20 (commit differs from preview).** A pure comparison of the preview with a freshly recomputed one: another payment of this period, another payment of a different period (previous amount owed moved), the day turning over (resolved today moved) and a rate change each yield `PreviewStale`. In `src/Inmobiliaria.Domain/Collection/CollectionPlanner.cs`; test in `tests/Inmobiliaria.Domain.Tests/CollectionPreviewTests.cs`
+- [ ] 4.7 **RED then GREEN, Tests 73 and 74.** A period due on the 10th, paid on the 2nd and voided on the 3rd is payable on the 4th; the new payment writes no second `RentAccrual` or instalment, charges no recargo and leaves the period at zero (73). A rent adjustment effective on or before an early-paid period's due date and confirmed afterwards leaves that `RentAccrual` as written and generates nothing for it; the next period accrues at the adjusted canon (74, D26: no new code is expected, the test pins existing behaviour). New `tests/Inmobiliaria.Domain.Tests/EarlyPaymentRulesTests.cs`
+- [ ] 4.8 **RED then GREEN, voiding planner, Tests 22, 23, 24, 27.** Voiding appends a `Correction` of `+|Payment|` naming the payment and, when present, a `-RecargoCharged` correction naming it; the period is unpaid and projects recargo again (22); voiding either recibo annuls both (23); a voiding needs a reason and the planner refuses a recibo already annulled (24); a balance read for a date before a voiding still shows the payment, and the voiding of an early payment is dated on the due date, never before the payment (27, D2). Create `src/Inmobiliaria.Domain/Collection/VoidingPlanner.cs`, `CollectionRecord.cs`, `ReciboAnnulment.cs` (domain types only). Unnumbered rule tests: Empleado on day 7 allowed, day 8 `AdminOnly`, Admin day 8 and day 30 allowed, day 31 `WindowClosed` for anyone (the database half is Test 72 in PR 5). New `tests/Inmobiliaria.Domain.Tests/VoidingPlannerTests.cs`
+- [ ] 4.9 **[Guardrails]** `ArchitectureGuardTests` green; `has-pending-model-changes` reports nothing pending; all new tests are in `Inmobiliaria.Domain.Tests` or `Inmobiliaria.Infrastructure.Tests`, never in `Inmobiliaria.Desktop`
+- [ ] 4.10 **[Prove a guard by making it fail]** Change `BackDateBoundDays` to 8 once in a scratch run: Test 12 must go red; restore and record
+- [ ] 4.11 **[Handover]** File list and commit message (for example `feat(domain): collection and voiding planners`) to Tomas
+
+### Verification, PR 4 (Docker: no)
+
+| Command | Expected |
+|---|---|
+| `dotnet build Inmobiliaria.sln --configuration Release` | exit code 0, warning and error counts both 0 |
+| `dotnet test tests/Inmobiliaria.Domain.Tests --configuration Release` | 0 failed, 0 skipped |
+| `dotnet test Inmobiliaria.sln --configuration Release` (Docker up) | **(PR 3 total) + N passed**, 0 failed, 0 skipped, **N >= 18** plus the clock and unnumbered rule tests |
+| `dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure` | no pending model changes |
+
+---
+
+## Phase 5: Migration B, collection and recibo tables (PR 5, est. 400 to 500 lines)
+
+**Docker must be running.** Model change: the migration ships in this PR with its configurations.
+Spec tests in this PR: 14, 32, 33, 34, 35, 48, 51, 65, 66, 67 (B), 72.
+
+- [ ] 5.1 **[Second inspection, read-only]** Confirm PR 4 landed; confirm `CollectionRules`, `CollectionRecord`, `ReciboAnnulment`, `Recibo` and `ReciboLine` exist as plain domain types; confirm migration A is on `develop`. Docker up. Read-only: `src/Inmobiliaria.Infrastructure/Persistence/Migrations/` (read-only) for the `AddContractAccounts` trigger pattern (`:105-139`)
+- [ ] 5.2 **RED, schema tests** against a fresh `postgres:17.6` once the migration exists, written first so they fail on a missing table: collection inserted directly with a supplied `recorded_at` has it ignored, neither `recorded_at` nor `recorded_by` can be updated including by raw SQL, and a received date beyond the 7-day bound is refused (14); the database refuses a duplicate recibo number (32); with starting number 31001 and no recibo, the raw counter `UPDATE ... RETURNING` returns 31001 (locatario) and 31002 (propietario), and a starting number corrected to 31100 before use is the one returned (33); the cutover number is refused after the first recibo (34); with no starting number the raw issuance returns no row and leaves the counter unchanged, and a zero or negative starting number is refused (35); a recibo and its lines cannot be updated or deleted including by raw SQL (48); an annulled recibo is read as annulled with number, reason, user and time, the latter two stamped by the database and a supplied value ignored (51); a counter set back by a direct UPDATE cannot produce a duplicate: the next raw issuance plus its recibo insert is refused by the unique constraint (66). New `tests/Inmobiliaria.Infrastructure.Tests/ReciboSchemaTests.cs`
+- [ ] 5.3 **RED, Test 65 (grants per role).** Connect as each application role (`inmobiliaria_admin`, `inmobiliaria_empleado`) and confirm exactly the intended operations: SELECT and INSERT on `collections`, `recibos`, `recibo_lines`, `recibo_annulments`; SELECT and advancing `next_number` on the counter; no UPDATE or DELETE on the others; **only Admin** may set `starting_number`, the Empleado role is refused. New `tests/Inmobiliaria.Infrastructure.Tests/ReciboGrantsTests.cs`
+- [ ] 5.4 **RED, unnumbered trigger tests.** The `collections` attempt rule (an attempt other than previous + 1, or any insert while an earlier collection of the period has no annulment, is refused with constraint `collections_attempt_rule`); `ux_collections_live_attempt` collision; recibo line unique position and kind; a negative `TasaMunicipal` line and a positive honorarios line refused; blank annulment reason refused; a second annulment of one recibo refused. And **constants agree**: `CollectionRules` equals the figures in the triggers (7, 7, 30), checked by a test that probes the trigger at the boundary days. In `tests/Inmobiliaria.Infrastructure.Tests/ReciboSchemaTests.cs`
+- [ ] 5.5 **EF configurations and DbContext.** Create under `src/Inmobiliaria.Infrastructure/Persistence/Configurations/`: `CollectionConfiguration`, `ReciboConfiguration`, `ReciboLineConfiguration`, `ReciboAnnulmentConfiguration`, `ReciboNumberingConfiguration` (columns of design 5, the kind `CHECK` list mirroring `ReciboLineKind`, `copy IN ('Locatario','Propietario')`, `ValueGeneratedNever()` ids, skip shadow properties in the after-save-behaviour loop as in `cuenta-corriente` task 4.1). Modify `src/Inmobiliaria.Infrastructure/Persistence/InmobiliariaDbContext.cs`: five DbSets and the summary comment
+- [ ] 5.6 **Migration B: generate, then hand-edit** under `src/Inmobiliaria.Infrastructure/Persistence/Migrations/`. Hand-written: the single counter row (`INSERT INTO recibo_numbering (id) VALUES (1)`); the shared append-only trigger function on `collections`, `recibos`, `recibo_lines`, `recibo_annulments`; `collections_stamp` (`recorded_at := now()`, `recorded_by := current_user`, received-date future and 7-day bound against `(now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date`, attempt rule); `recibo_annulments_stamp` plus the window and role check with `pg_has_role(current_user, 'inmobiliaria_admin', 'MEMBER')` (`recibo_annulments_admin_only`, `recibo_annulments_window_closed`); `recibo_numbering_cutover`; **no trigger function `SECURITY DEFINER`**; refusals raised as `P0001` with `CONSTRAINT`. Grants in the same migration exactly as design 5 (column-level `UPDATE (next_number)` for both roles, `UPDATE (starting_number)` for Admin only). `Down` drops triggers and functions, then tables
+- [ ] 5.7 **Test 72 fixtures (the voiding window).** Per design section 9: insert the collection, movements and recibo pair as the container superuser inside a transaction that runs `SET LOCAL session_replication_role = replica`, writing `recorded_at` explicitly; run the voiding under test on a **separate connection logged in as a real login role** that is a member of `inmobiliaria_empleado` or `inmobiliaria_admin`, created the way user provisioning creates one. Cases: Empleado day 7 succeeds, day 8 refused; Admin day 8 and day 30 succeed; anyone day 31 refused; each refusal writes nothing, including by raw SQL. New `tests/Inmobiliaria.Infrastructure.Tests/VoidingWindowTests.cs`. No test hook, no caller-supplied date, trigger never loosened
+- [ ] 5.8 **GREEN and Test 67 (B).** All schema tests pass; `dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure` reports nothing pending
+- [ ] 5.9 **[Guardrails]** Migration A and every earlier migration with its `.Designer.cs` unchanged against `HEAD`; `ArchitectureGuardTests` green; all earlier tests unmodified and green
+- [ ] 5.10 **[Prove guards by making them fail]** (a) Run the Empleado day-8 case as the **superuser** once: it must succeed, showing the role is what Test 72 exercises. (b) Mark one trigger function `SECURITY DEFINER` in a scratch run: the stamp or role test must go red. (c) Drop `ux_recibos_number` in a scratch run: Tests 32 and 66 must go red. Restore each and record the results here
+- [ ] 5.11 **[Handover]** File list (migration included) and commit message (for example `feat(db): collection and recibo tables with counter and triggers`) to Tomas. Remind him of H.3 and H.4 before the live database is touched
+
+### Verification, PR 5 (Docker: **yes**)
+
+| Command | Expected |
+|---|---|
+| `dotnet build Inmobiliaria.sln --configuration Release` | exit code 0, warning and error counts both 0 |
+| `dotnet test Inmobiliaria.sln --configuration Release` | **(PR 4 total) + N passed**, 0 failed, **0 skipped**, **N >= 10** (spec Tests 14, 32 to 35, 48, 51, 65, 66, 72) plus the unnumbered trigger tests |
+| `dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure` | no pending model changes (Test 67, B) |
+
+---
+
+## Phase 6: CollectionDesk, the transaction (PR 6, est. 380 to 480 lines)
+
+**Docker must be running.** No model change. `Inmobiliaria.Desktop` is not touched and the desk is not
+wired into DI (nothing consumes it yet), as in `cuenta-corriente` task 5.1.
+Spec tests in this PR: 15, 16, 17, 18, 25, 26, 31, 70.
+
+- [ ] 6.1 **[Second inspection, read-only]** Confirm PR 5 landed and migrations A and B apply on a fresh container; confirm `ICollectionDesk` can be defined without any `Infrastructure` reference in `Domain`. Docker up. Read-only: `src/Inmobiliaria.Infrastructure/Persistence/SessionDbContextFactory.cs` (read-only) to re-confirm no EF retry strategy wraps user transactions
+- [ ] 6.2 **Ports.** Create `src/Inmobiliaria.Domain/Collection/ICollectionDesk.cs` (`PreviewAsync`, `CommitAsync`, `PreviewVoidAsync`, `VoidAsync`, `CollectionResult`, `VoidingResult`) and `src/Inmobiliaria.Domain/Collection/IReciboNumbering.cs` (`SetStartingNumberAsync`) exactly as design 7.6
+- [ ] 6.3 **RED, test scaffolding.** A test-only `DbCommandInterceptor` that throws on the first `INSERT INTO recibos` and on the propietario insert; a two-session barrier helper. In `tests/Inmobiliaria.Infrastructure.Tests/CollectionDeskFixture.cs`
+- [ ] 6.4 **RED, Tests 18, 15, 16.** The preview writes nothing: row counts and counter identical before and after (18); a failure forced after the `RecargoCharged` write leaves no `RecargoCharged`, no `Payment`, no recibo and an unchanged counter (15); a failure writing the propietario recibo leaves nothing and the next payment takes the number the failed one would have (16). New `tests/Inmobiliaria.Infrastructure.Tests/CollectionDeskAtomicityTests.cs`
+- [ ] 6.5 **RED, Tests 25, 26.** A voided number stays and is never reused, the next payment takes the next pair, the voided pair stays readable and marked annulled (25); a voided period accepts a new payment (attempt 2) while two live payments for one period are impossible (26). New `tests/Inmobiliaria.Infrastructure.Tests/CollectionDeskVoidingTests.cs`
+- [ ] 6.6 **RED, concurrency, Tests 17, 31, 70** with two or more real sessions and a barrier. Two sessions pay the same period at once: exactly one succeeds, the other is refused `ConcurrentChange` with nothing written (17); several sessions issue at once and the numbers form one unbroken run with each pair adjacent (31); an early payment and the lazy accrual of the same period committed concurrently leave exactly one `RentAccrual` and at most one instalment, the loser writing nothing (70). New `tests/Inmobiliaria.Infrastructure.Tests/CollectionDeskConcurrencyTests.cs`
+- [ ] 6.7 **GREEN, `CollectionDesk`** in `src/Inmobiliaria.Infrastructure/Persistence/CollectionDesk.cs`: preview with in-memory materialisation only (D3); commit in one READ COMMITTED transaction in the order of design section 2: reload, recompute and compare (`PreviewStale`), insert missing accruals and instalments in period order, early accrual if not yet due and not yet charged, `RecargoCharged` (if > 0), `Payment`, `collections` row, **counter last** via the raw `UPDATE ... RETURNING` enlisted in the EF transaction (`GetDbConnection()` plus `CurrentTransaction.GetDbTransaction()`), then both recibos with lines and header snapshot. Voiding as design 7.5 (reads `recorded_at` from the database, converts through the clock's zone). No Npgsql type outside this file
+- [ ] 6.8 **GREEN, error mapping.** Catch `PostgresException` and map by SQLSTATE and `ConstraintName` per the table in design section 2 (`23505` and `40P01` to `ConcurrentChange`, `23505` on `ux_recibo_annulments_recibo` to `AlreadyAnnulled`, the `P0001` names to their refusals); an unmapped exception surfaces as an error, never as success. Unnumbered test: each mapped constraint produces its refusal
+- [ ] 6.9 **GREEN, `ReciboNumbering`** in `src/Inmobiliaria.Infrastructure/Persistence/ReciboNumbering.cs`: `SetStartingNumberAsync` updates only `starting_number`. Unnumbered test: an Admin login succeeds, an Empleado login is refused (Test 65 already proves the grant; this proves the adapter surfaces it)
+- [ ] 6.10 **[PV5]** Confirm from tests 15 and 16 that the raw counter `UPDATE ... RETURNING` enlisted in the EF transaction rolls back with it. Record the observed result here; if it does not, stop and report before continuing
+- [ ] 6.11 **[Guardrails]** `ArchitectureGuardTests` green; earlier migrations unchanged; `dotnet ef migrations has-pending-model-changes` reports nothing pending (this PR changes no model)
+- [ ] 6.12 **[Prove guards by making them fail]** Scratch runs, each restored and recorded here: (a) drop `ux_collections_live_attempt`: Test 17 must go red; (b) drop `ux_account_movements_period_charge`: Test 70 must go red; (c) *exploratory, not a guard proof:* move the counter `UPDATE` to the start of the transaction and run Test 16 and 31: record what changes
+- [ ] 6.13 **[Handover]** File list and commit message (for example `feat(infra): collection desk transaction and voiding`) to Tomas. Remind him of H.5 and H.6
+
+### Verification, PR 6 (Docker: **yes**)
+
+| Command | Expected |
+|---|---|
+| `dotnet build Inmobiliaria.sln --configuration Release` | exit code 0, warning and error counts both 0 |
+| `dotnet test Inmobiliaria.sln --configuration Release` | **(PR 5 total) + N passed**, 0 failed, **0 skipped**, **N >= 8** (spec Tests 15, 16, 17, 18, 25, 26, 31, 70) plus the unnumbered error-mapping test (6.8) and starting-number adapter test (6.9) |
+| `dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure` | no pending model changes |
+
+---
+
+## Test coverage check (Tests 1 to 76, each in exactly one task)
+
+| Tests | Task |
+|---|---|
+| 52, 54, 56 | 1.3 |
+| 55 | 1.7 |
+| 3, 4, 5, 6, 7, 9, 53 | 1.8 |
+| 71 (Domain part) | 1.10 |
+| 68 (rent part) | 1.12 |
+| 60, 61, 62, 63 | 2.2 |
+| 58, 59 | 2.4 |
+| 68 (instalment part) | 2.5 |
+| 57, 64, 71 (Infrastructure part), 76 | 2.6 |
+| 67 (A) | 2.10 |
+| 36, 37, 49, 50 | 3.2 |
+| 21, 38, 39, 40, 41 | 3.4 |
+| 42, 43, 44, 46 | 3.5 |
+| 75 | 3.6 |
+| 28, 29, 30 | 3.7 |
+| 1, 2, 8, 10, 11, 12, 13 | 4.3 |
+| 19, 45, 47, 69 | 4.5 |
+| 20 | 4.6 |
+| 73, 74 | 4.7 |
+| 22, 23, 24, 27 | 4.8 |
+| 14, 32, 33, 34, 35, 48, 51, 66 | 5.2 |
+| 65 | 5.3 |
+| 72 | 5.7 |
+| 67 (B) | 5.8 |
+| 18, 15, 16 | 6.4 |
+| 25, 26 | 6.5 |
+| 17, 31, 70 | 6.6 |
+
+---
+
+## Human Follow-Ups (Tomás, not assigned to any agent)
+
+The assistant never handles the Supabase password; only Tomás connects. Supabase pauses on the free
+plan after about a week, so restore it first.
+
+- [ ] H.1 **Before applying migration A (after PR 2 merges): PV2.** Restore the Supabase project, run `SELECT kind, count(*) FROM account_movements GROUP BY kind;` and check that no row breaks a new constraint (a non-zero period-less opening balance, an instalment without a period) and that **no contract predating the system has been loaded yet** (it would take `cutover_date = NULL` and accrue its history on its next read; if one exists, set its date before the account is read again). Report the result to the assistant
+- [ ] H.2 **Apply migration A** with your own credentials against the Session pooler string (port 5432), then confirm in the SQL editor: migration recorded, the kind `CHECK` present, `ux_account_movements_period_charge`, `ux_account_movements_instalment_period` and `ux_account_movements_opening_zero` present, the three new `contracts` columns present
+- [ ] H.3 **Before applying migration B (after PR 5 merges): PV3 pre-check.** `SELECT now() AT TIME ZONE 'America/Argentina/Buenos_Aires';` returns Buenos Aires local time on Supabase
+- [ ] H.4 **Apply migration B**, then confirm: the five tables, the single `recibo_numbering` row with `starting_number` and `next_number` both `NULL`, the four append-only triggers, the stamp and cutover triggers, and the column-level grants (`UPDATE (next_number)` for both roles, `UPDATE (starting_number)` for Admin only). Report any trigger or grant that failed to create under Supabase's `postgres` role (PV3)
+- [ ] H.5 **PV1, after PR 6 merges, not before:** with Supabase restored, run Tests 17, 31 and 70 once pointed at the real Supavisor session pooler (port 5432) and report whether they behave as against Testcontainers. Not a merge gate
+- [ ] H.6 **At go-live, Volkode under an Admin login:** set `contracts.cutover_date` for each contract that predates the system **before its account is first read**, then set the starting recibo number (`recibo_numbering.starting_number`). Both are one-way once a movement or a recibo exists. There is no screen for either yet (see Issues found 5)
+- [ ] H.7 **Ask Nicolás Q3 (design section 10):** when a contract starts after the due day (say on the 20th), is the first honorarios contractuales instalment charged with the next month's rent? Default already built in: yes, instalment 1 rides with the first month that actually charges rent. A different answer changes `InstalmentNumberFor` only. Best answered before PR 2 is merged, but it does not block it. Q1 and Q2 (the 7-day bound and the voiding window) were answered by Tomás and may still be narrowed by Nicolás; that is a constant and a trigger line each
+- [ ] H.8 **PV4, during PR 4:** run `AgencyClockTests` on Tomás's Windows machine, because CI is Linux. If `America/Argentina/Buenos_Aires` does not resolve there, the fallback id `Argentina Standard Time` in task 4.2 is the fix
+
+---
+
+## Issues found while slicing (nothing in spec or design was edited)
+
+1. **Slice 4 needs types that design 7.4 places in slice 5.** `VoidingPlanner.Plan` takes `Recibo`, `CollectionRecord` and produces `ReciboAnnulment`, but section 7.4 says `Recibo` is "persisted, slice 5". Resolution used: the pure domain types are created in PR 3 (`Recibo`, `ReciboHeader`) and PR 4 (`CollectionRecord`, `ReciboAnnulment`); PR 5 only adds their EF configurations. Guard: `has-pending-model-changes` in PR 3 and PR 4 must report nothing pending, which proves they stayed out of the model until PR 5 maps them. Needs Tomás's awareness only if he reads the design literally
+2. **`PV4` says "Slice 4" but `AgencyClock` is an Infrastructure adapter.** The design's slice 4 is Domain-only. Placed in PR 4 with a container-free test. If Tomás prefers it with `CollectionDesk`, it moves to PR 6 and PV4 moves with it
+3. **A get-only property cannot be set by a method.** Design 8 says `Contract.CutoverDate` and the fee plan are get-only and unmapped (so they stay out of the model) yet "set when the contract is loaded as predating the system". PR 1 uses a constructor argument; PR 2 needs a private backing field named in `ContractConfiguration` (`UsePropertyAccessMode`/`HasField`). Verify with `has-pending-model-changes` in both PRs. Not a blocker, an implementation detail the design leaves open
+4. **Tests 6, 7 and 58 are partly about refusals and partial payments, but `CollectionRefusal` and the planner only exist in slice 4.** Slice 1 and 2 assert the account-level predicate (not payable, not settled); the same behaviours are re-asserted through the planner as unnumbered tests in tasks 1.7, 2.4 and 4.4, so no spec test is counted twice
+5. **No entry point exists for the go-live acts.** `Inmobiliaria.Desktop` is not touched, and nothing wires `IReciboNumbering.SetStartingNumberAsync` or the cutover-date setter to a screen. H.6 therefore has to be done by Volkode in the Supabase SQL editor or an Admin-login script. Worth deciding whether the later UI slice covers it
+6. **Expected test totals are not simply `241 + new`.** Spec header says Tests 3, 4, 5 and 52 to 56 *replace* living tests, so some existing tests are removed or rewritten in PR 1 (task 1.2 records the count R). Each verification block states `previous total - R + N` for PR 1 and `previous total + N` afterwards, with N a minimum because one spec test may need several methods
+7. **The line estimates are probably low.** Design 13 itself notes `cuenta-corriente` PR5 landed at about 781 lines against 260 to 320. PRs 2, 5 and 6 are the likeliest to exceed 500; the plan keeps one PR per slice and does not split further unless Tomás asks
+
+**Resolutions (2026-10-14).** Items 1 to 4, 6 and 7 are technical and are accepted as written above.
+Item 5 is accepted too: both go-live acts are done once, by Volkode, during data loading, so a
+reviewed SQL script run under an Admin login is enough and no screen is built in this change. If
+data loading later gets its own tooling, the script moves there.
