@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-10-13, cierre de sesión_
+_Última actualización: 2026-10-14, spec corregida tras la lectura de Tomás_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -8,33 +8,32 @@ _Última actualización: 2026-10-13, cierre de sesión_
 
 ## En qué estamos
 
-**Change activo: `cobranza-y-recibos`, spec leída y corregida por Tomás (2026-10-14).** Todavía no
-tiene design ni `tasks.md`.
+**Change activo: `cobranza-y-recibos`, spec y design escritos, revisados y corregidos (2026-10-14).**
+Todavía no tiene `tasks.md`.
 
 - Propuesta: `openspec/changes/cobranza-y-recibos/proposal.md`, aprobada y mergeada (PR #53).
-- Spec: `openspec/changes/cobranza-y-recibos/spec.md`, 37 decisiones y 69 tests. Correcciones de la
-  lectura: decisiones 21 (base de honorarios, confirmada), 22 (tasa 0 % con aviso), 23 (numeración,
-  con la evidencia de los recibos 24269/24270) y 37 nueva (pagar el mes en curso antes del
-  vencimiento).
+- Spec: `openspec/changes/cobranza-y-recibos/spec.md`, 49 decisiones y 76 tests.
+- Design: `openspec/changes/cobranza-y-recibos/design.md`, D1–D27, 6 slices (~2.400–2.900 líneas).
+  Pasó una revisión independiente; sus hallazgos están corregidos en los dos documentos.
 - Exploración: sólo en Engram, `sdd/cobranza-y-recibos/explore`.
 - El change es el **slice A** de tres: el pago del inquilino y sus dos recibos. Los otros dos son
   changes posteriores, `liquidacion-al-dueno` y `recibo-pdf`.
 
-No hay código nuevo. `ramatomy` y `develop` están a la par.
+No hay código nuevo. La spec (commit 53e398c) está en `ramatomy`, con PR abierto hacia `develop`.
 
 ## Próximos pasos
 
-1. **Tomás commitea la spec** y abre el PR.
-2. **Design**. Además de lo de abajo: cómo el pago trae al ledger el alquiler de un mes todavía no
-   vencido sin que la acumulación perezosa lo cobre dos veces (Decision 37;
-   `AccrualSchedule.PeriodsDue` sólo cuenta períodos ya vencidos).
-3. **Design, también**: el contador de numeración, el tope de la fecha de pago y quién puede ponerla hacia
-   atrás, quién fija el número de cutover y quién puede anular (la spec los lista).
+1. **Tomás commitea spec, design y `respuestas-del-dueno.md`.**
+2. **Elegir la estrategia de PRs encadenados** (el design estima ~2.400–2.900 líneas en 6 slices).
+3. **Tasks**: `openspec/changes/cobranza-y-recibos/tasks.md` a partir de design §13.
 
 ## Pendientes / bloqueos
 
-- **Sin commitear:** `openspec/changes/cobranza-y-recibos/spec.md` (archivo nuevo) y
-  `docs/ESTADO.md` (este archivo).
+- **Para Nicolás, no bloqueantes (design §10):** Q3 (con qué mes arranca la cuota 1 si el contrato
+  empieza después del día de vencimiento).
+- **Antes de la carga de datos:** cada contrato viejo necesita su fecha de corte (`cutover_date`,
+  Decision 41) **antes** de que alguien abra la lista de morosos, o el sistema le genera toda la
+  historia.
 - **Para la carga de datos:** un mes viejo cargado como deuda inicial no genera recargo solo
   (Decision 31). Cada mes se carga con su cifra real, mora incluida.
 - **Para el contador o un abogado, no para Nicolás:**

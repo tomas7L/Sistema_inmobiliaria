@@ -36,7 +36,7 @@ this spec's.
 |---|---|---|
 | 1 | This change is **slice A only**: tenant payment and recibo. Owner settlement (`liquidacion-al-dueno`) and PDF (`recibo-pdf`) are separate changes. | TEAM DECISION, medium-strong |
 | 2 | **Total payments only.** A partial amount is refused and writes nothing. | CONFIRMED BY USER (§6) |
-| 3 | **The tenant may name which owed, already-due period a payment settles.** When it names none, the **oldest unpaid** period is settled. The recibo states the period. This corrects §16 and the living requirement "A Payment Settles the Oldest Unpaid Period", which forbade any choice. | VERIFIED FACT: CCyCN arts. 900–902. **Strong** on the right to choose. **WEAK** on one edge: art. 900 forbids imputing to capital while interest is owed without the creditor's consent, so whether older periods' recargo must be paid first is for the agency's lawyer or contador. This spec does not enforce that edge. |
+| 3 | **The tenant may name which payable period a payment settles**: one that no live payment settles and that is owed, or whose month has begun and whose due date has not arrived (Decision 37). When it names none, the **oldest unpaid** period is settled. The recibo states the period. This corrects §16 and the living requirement "A Payment Settles the Oldest Unpaid Period", which forbade any choice. | VERIFIED FACT: CCyCN arts. 900–902. **Strong** on the right to choose. **WEAK** on one edge: art. 900 forbids imputing to capital while interest is owed without the creditor's consent, so whether older periods' recargo must be paid first is for the agency's lawyer or contador. This spec does not enforce that edge. |
 | 4 | **One payment per period**; each payment issues a *locatario* and a *propietario* recibo, with consecutive numbers from one sequence. | CONFIRMED BY USER (§13); strong on two numbers, **medium** on "issued together" (one sample pair) |
 | 5 | `RecargoCharged` and `Payment` are written in **the same transaction** as the recibos and the counter. | TEAM DECISION, strong (technical) |
 | 6 | Tasa municipal, seguro and Otros Conceptos are **typed at closing and never accrue**; seguro has its own line; Otros Conceptos **and seguro** are **signed**. | CONFIRMED BY USER (§4, §16; seguro's sign confirmed by Tomás, 2026-10-13) |
@@ -49,7 +49,7 @@ this spec's.
 | 13 | Amounts are whole pesos, truncated at the edge, `decimal` only, `numeric(14,2)` storage. | CONFIRMED BY USER (convention `whole-peso-amounts`) |
 | 14 | `Contract.End()` gains **no** solvency check. §2 consequence 4 is superseded by §17. | CONFIRMED BY USER (§17) |
 | 15 | **Slice A issues the propietario recibo too**, with the honorarios de administración line from the rate on `Contract`. Paying the owner stays in `liquidacion-al-dueno`. | TEAM DECISION (Tomás, 2026-10-13), strong; **medium** that both are issued at collection time |
-| 16 | **Payment dates.** *Received on* defaults to today, may be typed earlier, never later than today, within a bounded number of days back; recargo is computed as of it. *Recorded at* is the system timestamp and is never editable. The recibo shows the received date. The bound and who may back-date are **design's**. | TEAM DECISION (Tomás, 2026-10-13). Strong on the shape (value date vs booking date); the bound is open. |
+| 16 | **Payment dates.** *Received on* defaults to today, may be typed earlier, never later than today, within a bounded number of days back; recargo is computed as of it. *Recorded at* is the system timestamp and is never editable. The recibo shows the received date. The bound and who may back-date are set by Decision 38. | TEAM DECISION (Tomás, 2026-10-13). Strong on the shape (value date vs booking date); the bound is Decision 38. |
 | 17 | **Open Question 4 default, labelled as a default:** a honorarios contractuales instalment is never paid apart from the monthly rent; instalment *k* rides with the *k*-th rent period. | **DEFAULT, not answered by Nicolás**; medium |
 | 18 | **Open Question 7 default, labelled as a default:** old debt is loaded month by month; which months each tenant owes is reconstructed with Nicolás at cutover. The model does not depend on the answer. | **DEFAULT**; data-loading question only |
 | 19 | **Voiding a recibo annuls the whole pair.** A payment produces two recibos from one event; reversing the payment while leaving one of the pair standing would leave a recibo describing money that no longer counts. Annulling either recibo therefore annuls both and reverses the payment. | SPEC CALL, **medium-strong** (follows from Decision 8 and the success criterion "its period becomes unpaid again"; the proposal never says it) |
@@ -59,18 +59,30 @@ this spec's.
 | 23 | **The locatario recibo takes the lower number of the pair, the propietario recibo the next one.** Numbers follow issuance order, and the system issues the locatario recibo first. | **medium**: the sample pair says so (N° 24269 is headed *Locatario*, N° 24270 *Propietario*, both dated 19/08/2026); one pair only. No rule on the order was found in law or practice |
 | 24 | **A zero recargo writes no `RecargoCharged` movement and prints no recargo line.** | SPEC CALL, weak; low consequence |
 | 25 | **Tasa municipal MUST NOT be negative**; seguro and Otros Conceptos MAY be. The proposal names only those two as signed. | SPEC CALL, weak; low consequence |
-| 26 | **The cutover number is required before the first issuance** (no silent default of 1), and MAY be set and corrected freely until the first recibo exists, then is locked. "Set once" is read as "locked after first use", so a typo at cutover is recoverable. Who may set it is **design's**. | SPEC CALL, medium |
+| 26 | **The cutover number is required before the first issuance** (no silent default of 1), and MAY be set and corrected freely until the first recibo exists, then is locked. "Set once" is read as "locked after first use", so a typo at cutover is recoverable. Who may set it is Decision 39. | SPEC CALL, medium |
 | 27 | **The amount a payment is for must equal the period's ledger total exactly** (rent + instalment + recargo as of the received date). A smaller amount is the partial payment of Decision 2; a larger one is refused too, because the system does not represent credit on a period. The agency settles cash differences at the register (§11). | SPEC CALL, medium |
 | 28 | **A payment against an account whose recargo is frozen by a novación is refused.** The plan de pagos is its own change. | SPEC CALL, medium-strong (the proposal puts it out of scope; refusing is the safe reading) |
 | 29 | **A commit applies exactly what the preview showed.** If any previewed figure differs at commit (the day turned over, another operator paid, a rate changed), the commit is refused, writes nothing, and a fresh preview is required. | SPEC CALL, medium |
 | 30 | **An opening balance with an amount must carry its period; only a zero one may be period-less.** The living rule "exactly one `OpeningBalance` per account" cannot survive Decision "loaded month by month": it becomes one entry per owed month, or one period-less zero for an up-to-date tenant. | SPEC CALL, medium (the proposal says "as ordinary periods" without saying how the living rule bends) |
 | 31 | **An opening-balance month projects no recargo.** The living code already treats a movement with no accrual as having no date to measure from, and the typed figure is what the agency's spreadsheet says is owed, mora included. Data loading must enter each month's real figure with that in mind. | VERIFIED FACT (`ContractAccount.cs:107-109`, `:134-141`) |
-| 32 | **Instalments are raised only for periods on or after go-live** on a contract that predates the system; earlier instalments are part of the opening balance. The plan cannot be changed once any instalment has been written. | SPEC CALL, medium (the proposal does not cover a pre-existing contract mid-plan) |
-| 33 | **Voiding records a reason, the acting user and the time.** Precedent: "Ended Requires a Reason". Who may void is **design's**. | SPEC CALL, medium |
+| 32 | **Instalments are raised only for periods due after the contract's cutover date** on a contract that predates the system; a period due on or before it, including exactly on it, belongs to the opening balance. The plan cannot be changed once any instalment has been written. | SPEC CALL, medium (the proposal does not cover a pre-existing contract mid-plan). **Amended 2026-10-14:** was "on or after go-live"; Decision 41 governs the boundary, so instalments follow rent |
+| 33 | **Voiding records a reason, the acting user and the time.** Precedent: "Ended Requires a Reason". Who may void, and until when, is Decision 45. | SPEC CALL, medium |
 | 34 | **"Today" is the agency's local calendar date**, not the database server's UTC date. | SPEC CALL, medium |
 | 35 | **Fractional pesos typed on a line are truncated toward zero** at the edge, and the preview shows the truncated figure. | SPEC CALL, medium (convention `whole-peso-amounts`) |
 | 36 | **The database cannot tell an increment of the counter inside an issuance from any other `UPDATE` of it**, so the counter's `UPDATE` grant is a named limit, not a protection. The unique constraint on the recibo number is what makes tampering visible. | VERIFIED FACT (privilege model), named as the Column-Level Limits requirement demands |
-| 37 | **A period may be paid as soon as its month has begun**, before its due date. Its rent is brought onto the account by the payment, with no recargo (it is not late). A month that has not begun cannot be paid. | CONFIRMED BY USER (Tomás, 2026-10-14: a tenant paying the month as soon as it starts must be allowed), **strong**; paying a month that has not begun was not asked and stays refused |
+| 37 | **A period may be paid as soon as its month has begun**, before its due date. Its rent is brought onto the account by the payment, with no recargo (it is not late). A month that has not begun cannot be paid. **Amended 2026-10-14:** *payable* = no live payment settles the period **and** it is owed, or its month has begun and its due date has not arrived. A period whose early payment was voided before its due date is therefore payable again, and a payment writes the period's rent and instalment only when the period does not already carry its charge. | CONFIRMED BY USER (Tomás, 2026-10-14: a tenant paying the month as soon as it starts must be allowed), **strong**; paying a month that has not begun was not asked and stays refused |
+| 38 | **Back-dating bound: the received date may be typed up to 7 calendar days before today, by either role.** An earlier date is refused. The 7 is one named constant, never a literal repeated across the code, and the database refuses a date outside it as well. Fills the bound Decision 16 left open. | CONFIRMED BY USER (Tomás, 2026-10-14), **medium**: the agency has not been asked, and Nicolás may still narrow it |
+| 39 | **The starting recibo number is set by Volkode at go-live, under an Admin login. Only Admin may set it**, and the database enforces that (Empleado is refused), not the UI. | CONFIRMED BY USER (Tomás, 2026-10-14) that Volkode sets it under an Admin login; **medium** on "Admin only" as the permanent rule (it follows from data loading being an Admin act today) |
+| 40 | **The collection event (`collections`) is a fifth table in the access-control requirement and in Test 65**, insert-only like recibos. **The counter's grants are narrowed**: both roles may advance it, only Admin may set its starting number. | SPEC CALL following design D7 and D9, **medium** (design §12 rows 1 and 2) |
+| 41 | **A pre-existing contract accrues nothing, rent or instalment, for a period due on or before its cutover date** (a date **stored on the contract** when it is loaded as one that predates the system). Without it, lazy accrual would raise every month since signing on top of the opening balance. Extends Decision 32 from instalments to rent. **Amended 2026-10-14:** was "the date its earliest opening balance was entered"; a contract read before its opening balances were typed would then have had no cutover and materialised its whole history, permanently, on an append-only ledger. The stored date cannot change once the account holds a movement. | CONFIRMED BY USER (Tomás, 2026-10-14); **medium**. VERIFIED gap: the schedule walks from the contract's start (design §12 row 3); VERIFIED: `MoraWorklistQuery.cs:40-48` materialises every account on each read, which is why the date is stored rather than derived |
+| 42 | **An early payment racing the lazy accrual of the same period leaves exactly one `RentAccrual` and at most one instalment**; the loser writes nothing. The database, not the application, settles the race. | SPEC CALL following design D1, **strong** (unique index precedent); proven by Test 70 |
+| 43 | **"On the contract" means "a period the contract charges rent for, or one carrying an opening balance".** A calendar month the schedule never charges (a contract starting on the 20th with due day 10 never charges its first calendar month) is not on the contract and is refused. | SPEC CALL following design D24, **medium** |
+| 44 | **A voiding's `Correction` is dated on the later of the voiding day and the date of the movement it reverses.** An ordinary late payment is unchanged (the voiding day); an early payment voided before its due date is not reversed by a movement that precedes it. | SPEC CALL following design D2, **medium** (design §12 row 6) |
+| 45 | **Voiding window.** Up to **7 calendar days** after the payment was recorded, either role may void. From day **8 to day 30**, **Admin only**. After day 30, **nobody**. The restriction is enforced by the database on the annulment insert, not only by the application. Supersedes "who may void is design's" (Decision 33). | TEAM DECISION (Tomás, 2026-10-14), **medium** on the shape (ordinary cash-desk internal control; no law or standard fixes a limit for a non-fiscal recibo). **WEAK on the 30**: a stand-in for "until the period is liquidated to the owner", to be replaced when `liquidacion-al-dueno` exists |
+| 46 | **An issued recibo's honorarios de administración line is stored and never recomputed.** Since `Contract` has no way to change the rate after construction, "a later change of rate" is proven as "reading the issued recibo against a contract carrying another rate leaves the line as issued". | SPEC CALL following design §12 row 8, **medium** |
+| 47 | **`Payment` and `RecargoCharged` are dated on the later of the received date and the period's charge date** (the date of its `RentAccrual` or `OpeningBalance`). For an ordinary late payment that is the received date; for an early payment it is the due date, so nothing about a period appears on the ledger before it was charged. The received date itself is stored on the collection and printed on the recibo. | SPEC CALL following design D2, **medium** |
+| 48 | **An early-written rent is final.** The `RentAccrual` an early payment writes carries the canon the schedule gives the period when it is written. A rent adjustment taking effect on or before that period's due date and confirmed after the early payment does not re-price it: it is a late confirmation under the living requirement "A Period Accrues at the Canon in Force, and Never Re-Prices" (`openspec/specs/contract-account/spec.md`), and the next period accrues at the adjusted canon. | SPEC CALL following the living rule and design D26, **medium-strong** (the living rule already covers a late confirmation; this names that an early write is one) |
+| 49 | **A month carried by an opening balance prints its figure on a Saldo Deudor line**, on both recibos, not on the rent line (the physical recibo has a "Saldo Deudor" row). Its honorarios de administración base is that figure itself, truncated as usual: it already holds the month's rent and mora (Decision 31), so there is no recargo to add. The base is **that one month's figure**, never the tenant's whole loaded debt (each owed month is its own opening balance, Decision 30). | CONFIRMED BY USER (Tomás, 2026-10-14: "cifra completa del mes que adeuda, no desde todo"), **medium-strong** |
 
 ## Table of Contents
 
@@ -98,7 +110,8 @@ this spec's.
    2. [RENAMED and MODIFIED Requirement: A Payment Settles the Period the Tenant Names, or the Oldest Unpaid One](#renamed-and-modified-requirement-a-payment-settles-the-period-the-tenant-names-or-the-oldest-unpaid-one)
    3. [MODIFIED Requirement: An Opening Balance Exists Only for a Contract That Predates the System](#modified-requirement-an-opening-balance-exists-only-for-a-contract-that-predates-the-system)
    4. [ADDED Requirement: A Honorarios Contractuales Instalment Is Payable With Its Rent Period](#added-requirement-a-honorarios-contractuales-instalment-is-payable-with-its-rent-period)
-   5. [Unchanged requirements that this change relies on](#unchanged-requirements-that-this-change-relies-on)
+   5. [ADDED Requirement: A Pre-Existing Contract Accrues Nothing Due On or Before Its Cutover Date](#added-requirement-a-pre-existing-contract-accrues-nothing-due-on-or-before-its-cutover-date)
+   6. [Unchanged requirements that this change relies on](#unchanged-requirements-that-this-change-relies-on)
 4. [Capability: lease-contract (MODIFIED)](#capability-lease-contract-modified)
    1. [ADDED Requirement: A Contract Carries a Honorarios Contractuales Plan](#added-requirement-a-contract-carries-a-honorarios-contractuales-plan)
    2. [MODIFIED Note: Honorarios Percentage Is Stored, Nullable](#modified-note-honorarios-percentage-is-stored-nullable)
@@ -161,14 +174,25 @@ payments, each with its own recibos.
 ### Requirement: The Tenant Names the Period; the Oldest Unpaid One Is the Default
 
 A payment MAY name the period it settles. A named period MUST be **payable** as of the received date:
-either it is **owed** (its movements do not net to zero), or its **month has begun** and it has not yet
-been charged because its due date has not arrived (Decision 37). A period that is already settled,
-whose month has not begun, or that is not on the contract MUST be refused and MUST write nothing. When
+no live payment settles it, **and** either it is **owed** (its movements do not net to zero) or its
+**month has begun** and its due date has not arrived (Decision 37). A period that is already settled,
+whose month has not begun, or that is not on the contract MUST be refused and MUST write nothing. A
+period is **on the contract** when the contract charges rent for it (the accrual schedule produces
+it) or when it carries an opening balance (Decision 43). When
 no period is named, the payment MUST settle the oldest unpaid period on the account or, when nothing
 is owed, the month in course.
 
-A period paid before its due date MUST have its rent brought onto the account by the payment itself,
-with no recargo, and the later accrual MUST NOT charge it a second time.
+A period paid before its due date MUST have its charges brought onto the account by the payment
+itself: its rent and, when the period carries one, its honorarios contractuales instalment, with no
+recargo. It MUST write them only when the period does not already carry its charge: a period whose
+early payment was voided before its due date still holds the rent and instalment that payment wrote,
+so paying it again writes neither a second time. The later accrual MUST NOT raise either of them a
+second time.
+
+The rent an early payment writes is final. A rent adjustment taking effect on or before that period's
+due date and confirmed afterwards MUST NOT re-price it: it is a late confirmation under the living
+requirement "A Period Accrues at the Canon in Force, and Never Re-Prices", and the next period
+accrues at the adjusted canon (Decision 48).
 
 Every recibo MUST state the period it settles. Naming a period never changes what the other periods
 owe: each unpaid period keeps counting recargo from its own due date.
@@ -211,15 +235,46 @@ This is the rewrite of the living requirement named under `contract-account` bel
 - WHEN a payment names it
 - THEN it MUST be refused and nothing MUST be written
 
-#### Scenario: A period that is not on the account is refused
+#### Scenario: A period that is not on the contract is refused
 
-- GIVEN an account with no movement for a given month
+- GIVEN a month before the contract's start or after its end
 - WHEN a payment names that month
 - THEN it MUST be refused and nothing MUST be written
 
-#### Scenario: An account that owes nothing has no default period
+#### Scenario: A month the contract never charges is refused
 
-- GIVEN an account with no unpaid period
+- GIVEN a contract starting on the 20th with its rent due on the 10th, which never charges rent for
+  its first calendar month
+- WHEN a payment names that first calendar month
+- THEN it MUST be refused and nothing MUST be written
+
+#### Scenario: An early payment and the lazy accrual race
+
+- GIVEN a period whose month has begun and whose due date has not arrived
+- WHEN an early payment of it and the lazy accrual of the same period commit at the same time
+- THEN exactly one `RentAccrual`, and at most one instalment, MUST exist for the period
+- AND the commit that loses MUST write nothing
+
+#### Scenario: A voided early payment is paid again before its due date
+
+- GIVEN a period due on the 10th, paid on the 2nd and voided on the 3rd
+- WHEN a payment names it on the 4th
+- THEN it MUST be accepted, with no recargo
+- AND no second `RentAccrual` and no second instalment MUST be written for the period
+- AND the period MUST net to zero afterwards
+
+#### Scenario: An early-written rent is not re-priced by a later-confirmed adjustment
+
+- GIVEN July, due on the 10th, paid on 2 July at a canon of 500,000
+- AND a rent adjustment taking effect on 1 July, confirmed on 5 July
+- WHEN the account is read
+- THEN July's `RentAccrual` MUST still be 500,000 and no movement MUST be generated for it
+- AND the next period MUST accrue at the adjusted canon
+
+#### Scenario: An account with nothing payable has no default period
+
+- GIVEN an account with no unpaid period, whose month in course is already settled or outside the
+  contract
 - WHEN a payment names no period
 - THEN it MUST be refused and nothing MUST be written
 
@@ -241,6 +296,10 @@ top of the recargo already charged.
 
 When the projected recargo is zero, no `RecargoCharged` movement MUST be written and no recargo line
 MUST appear on either recibo (Decision 24).
+
+The `Payment` and `RecargoCharged` movements MUST be dated on the later of the received date and the
+period's charge date (Decision 47). The received date itself is kept on the payment and printed on the
+recibo, whatever the movements are dated.
 
 #### Scenario: A committed payment leaves the period at zero
 
@@ -269,6 +328,13 @@ MUST appear on either recibo (Decision 24).
 - THEN neither recibo MUST persist
 - AND the next successful payment MUST receive the number the failed one would have received
 
+#### Scenario: An early payment is dated on the due date
+
+- GIVEN a period due on the 10th and a payment received on the 2nd
+- WHEN the payment is committed
+- THEN its `Payment` MUST be dated the 10th, the same date as the period's `RentAccrual`
+- AND the recibo and the payment record MUST still show the 2nd as the received date
+
 #### Scenario: A period inside the grace period charges no recargo
 
 - GIVEN a period paid on a day that projects a recargo of zero
@@ -281,7 +347,8 @@ MUST appear on either recibo (Decision 24).
 A payment MUST carry two dates and MUST NOT conflate them.
 
 - **Received on**: the day the money was received. It MUST default to today. It MAY be typed earlier.
-  It MUST NOT be later than today, and MUST NOT be earlier than a bound of days back. Recargo MUST be
+  It MUST NOT be later than today, and MUST NOT be more than **7 calendar days** before today
+  (Decision 38). Recargo MUST be
   computed as of this date, and whether a period is payable MUST be judged as of this date.
 - **Recorded at**: the instant the system recorded the payment. It MUST be set by the system, MUST NOT
   be supplied by any caller, and MUST NOT be updatable.
@@ -290,8 +357,10 @@ Both MUST be stored. The recibo MUST show the received date. "Today" is the agen
 date.
 
 A back-dated payment lowers the recargo, so the received date MUST be visible on the preview and the
-recibo and MUST be bounded, never free. The size of the bound, and who may type a date other than
-today, are **design's** (see Parameters Left to Design). Consequence, stated so nobody "fixes" it:
+recibo and MUST be bounded, never free. Either role MAY type a date other than today within the
+bound. The 7 MUST be one named constant, not a literal repeated across the code, and the database
+MUST refuse a received date outside the bound whatever the application did. Consequence, stated so
+nobody "fixes" it:
 recibo numbers follow recording order, so a back-dated recibo can carry a higher number than one
 dated after it.
 
@@ -317,9 +386,23 @@ dated after it.
 
 #### Scenario: A received date beyond the bound is refused
 
-- GIVEN a payment whose received date is earlier than the allowed bound of days back
+- GIVEN a payment whose received date is 8 or more calendar days before today
 - WHEN it is attempted
 - THEN it MUST be refused and nothing MUST be written
+
+#### Scenario: Either role may back-date within the bound
+
+- GIVEN an Empleado, and separately an Admin, each taking a payment with a received date 7 calendar
+  days before today
+- WHEN it is committed
+- THEN it MUST be accepted for both, with that received date
+
+#### Scenario: The database refuses a received date beyond the bound
+
+- GIVEN a collection inserted directly, bypassing the application, with a received date 8 calendar
+  days before today
+- WHEN it is attempted
+- THEN it MUST be refused
 
 #### Scenario: Recorded-at cannot be supplied or changed
 
@@ -419,14 +502,30 @@ because both describe the same payment (Decision 19). Voiding MUST:
 1. append an annulment record for each recibo of the pair, naming the voided recibo, the reason (which
    MUST be given), the acting user and the time;
 2. append `Correction` movements that reverse the `Payment` and the `RecargoCharged` of that payment,
-   each carrying the opposite sign and naming the movement it corrects;
+   each carrying the opposite sign and naming the movement it corrects, and each dated on the later
+   of the voiding day and the date of the movement it reverses (Decision 44);
 3. leave every recibo number, every line and every original movement readable and unchanged.
 
 A voided number MUST NOT be reused and MUST NOT be deleted. After voiding, the period MUST be unpaid
 again, its recargo MUST again be projected from its own due date, and a new payment for it MUST take
 the next numbers. A recibo already annulled MUST NOT be annulled again. Voiding moves money, so it
 MUST show a summary before it is confirmed (previous amount owed, what is reversed, resulting
-amount owed). Who may void is **design's**.
+amount owed).
+
+**Who may void, and until when** (Decision 45). The age of a pair is the number of calendar days, in the
+agency's local calendar, between the day its payment was recorded and the day of the voiding.
+
+| Age of the pair | Who may void it |
+|---|---|
+| 0 to 7 days | Admin or Empleado |
+| 8 to 30 days | Admin only |
+| 31 days or more | Nobody |
+
+A refused voiding MUST write nothing. The restriction MUST be enforced by the database when the
+annulment is recorded, not only by the application, and it MUST hold for raw SQL, because both roles
+hold `INSERT` on annulments (see `access-control`). The age MUST be measured from the instant the
+database stamped on the payment, never from a value any caller supplied. The figures are constants in
+one place. The 30 is weak (Decision 45).
 
 The honorarios contractuales instalment is not reversed by a voiding: it was raised with the rent
 period, not by the payment, and it returns to unpaid together with the rent.
@@ -456,7 +555,36 @@ period, not by the payment, and it returns to unpaid together with the rent.
 
 - GIVEN a payment voided today
 - WHEN the ledger balance is read for a date before the voiding
-- THEN it MUST still show the payment as written, because corrections are dated on the day they were made
+- THEN it MUST still show the payment as written, because a correction is dated on the voiding day
+  (or on the date of the movement it reverses, if later), never before it
+
+#### Scenario: A correction never precedes the payment it reverses
+
+- GIVEN a payment taken on the 2nd for a period due on the 10th, with its `Payment` dated the 10th,
+  and voided on the 5th
+- WHEN the corrections are read
+- THEN they MUST be dated the 10th, not the 5th
+- AND the period MUST read as unpaid and owed from the 10th, counting recargo from the 10th
+
+#### Scenario: Either role voids within 7 days
+
+- GIVEN a pair recorded 7 days ago
+- WHEN an Empleado, and separately an Admin, voids it with a reason
+- THEN the voiding MUST succeed for both
+
+#### Scenario: Only Admin voids from day 8 to day 30
+
+- GIVEN a pair recorded 8 days ago
+- WHEN an Empleado attempts to void it
+- THEN it MUST be refused by the database and nothing MUST be written
+- AND an Admin voiding the same pair MUST succeed
+- AND an Admin voiding a pair recorded 30 days ago MUST succeed
+
+#### Scenario: Nobody voids after day 30
+
+- GIVEN a pair recorded 31 days ago
+- WHEN an Admin, and separately an Empleado, attempts to void it
+- THEN both MUST be refused and nothing MUST be written
 
 #### Scenario: A recibo cannot be annulled twice
 
@@ -543,13 +671,22 @@ been set, issuing a recibo MUST be refused (there MUST be no silent default). It
 corrected, until the first recibo exists; from the moment the first recibo is issued, any attempt to
 change it MUST be refused. The first recibo issued MUST carry exactly that number.
 
-Who may set it is **design's**. Whatever grant allows it MUST be named in `access-control` below.
+Only an Admin may set it: Volkode sets it at go-live under an Admin login (Decision 39). An Empleado
+attempting it MUST be refused by the database, not only by the application, and the grant that allows
+it is named in `access-control` below.
 
 #### Scenario: The first recibo carries the cutover number
 
 - GIVEN a starting number of 31001 and no recibo yet
 - WHEN the first payment is committed
 - THEN its locatario recibo MUST be 31001 and its propietario recibo 31002
+
+#### Scenario: Only an Admin may set the starting number
+
+- GIVEN no recibo yet
+- WHEN an Empleado attempts to set the starting number, including by a direct `UPDATE`
+- THEN it MUST be refused
+- AND an Admin setting it MUST be accepted
 
 #### Scenario: A mistyped starting number is corrected before use
 
@@ -609,6 +746,10 @@ operator MUST NOT be able to supply or override them.
 The locatario recibo carries all three that apply. The propietario recibo carries rent and recargo; it
 does not carry the instalment (Decision 20, the tenant's fee prints only on the tenant's part, §2).
 
+A period carried by an `OpeningBalance` has no rent line: both recibos print the opening-balance
+figure on a **Saldo Deudor** line instead, derived from the ledger like the rent (default, Decision
+49). Such a period has no recargo line (Decision 31).
+
 #### Scenario: The locatario recibo carries rent, instalment and recargo
 
 - GIVEN a period with 507,000 rent, an instalment of 30,000 and a recargo of 91,260
@@ -621,6 +762,13 @@ does not carry the instalment (Decision 20, the tenant's fee prints only on the 
 - WHEN the propietario recibo is read
 - THEN it MUST show rent and recargo
 - AND it MUST NOT show the honorarios contractuales instalment
+
+#### Scenario: An opening-balance month prints a Saldo Deudor line
+
+- GIVEN a month loaded as an `OpeningBalance` of 160,000 and a contract rate of 8%
+- WHEN the payment is committed
+- THEN both recibos MUST carry a Saldo Deudor line of 160,000 and no rent or recargo line
+- AND the propietario recibo's honorarios de administración line MUST be -12,800
 
 #### Scenario: A derived line cannot be overridden
 
@@ -675,8 +823,10 @@ municipal MUST NOT be negative (Decision 25).
 
 The propietario recibo MUST carry one **honorarios de administración** line, **negative**, equal to
 the administration rate stored on the contract applied to the fee base (rent of the settled period
-plus the recargo charged on it, Decision 21), truncated to a whole peso. The amount is computed at
-issuance and stored on the recibo; a later change of the rate MUST NOT alter an issued recibo. The
+plus the recargo charged on it, Decision 21; for a month carried by an opening balance, that figure
+itself, Decision 49), truncated to a whole peso. The amount is computed at
+issuance and stored on the recibo; a later change of the rate MUST NOT alter an issued recibo, and nothing MUST
+recompute the line from the contract once issued (Decision 46). The
 line MUST NOT appear on the locatario recibo and MUST NOT be written to the contract account (the
 account covers rent, instalments and recargo only).
 
@@ -696,7 +846,8 @@ contract with a rate of 0% MAY be committed; its line is zero and the preview MU
 #### Scenario: A later change of rate leaves an issued recibo alone
 
 - GIVEN an issued propietario recibo with a line of -47,860
-- WHEN the contract's rate is changed
+- WHEN it is read against a contract carrying a different rate (the contract has no operation that
+  changes its rate after construction, so this is how a later change is represented)
 - THEN the issued recibo MUST still read -47,860
 
 #### Scenario: Several lessors, one propietario recibo
@@ -813,7 +964,7 @@ choose. Migration: the living Tests 14 and 15 are replaced by Tests 3 to 5 below
 changes.)
 
 When a payment settles a period, that period MUST be the one the tenant named, provided it is payable:
-owed, or in a month that has begun but not yet fallen due. When the tenant names none, it MUST be the
+no live payment settles it, and it is owed or in a month that has begun but not yet fallen due. When the tenant names none, it MUST be the
 **oldest unpaid** period on the account or, when nothing is owed, the month in course. The
 system MUST NOT refuse a named period merely because an older one is unpaid, and MUST NOT contain any
 clause that forbids a choice or an override.
@@ -959,8 +1110,8 @@ payment, on the same recibo, under the same period rule as that period's rent, a
 period's amount for recargo purposes. It MUST NOT be settled apart from the rent (default, Decision
 17: whether the agency ever lets one be paid off-schedule is Open Question 4).
 
-For a contract that predates the system, instalments for periods before go-live MUST NOT be raised:
-they belong to the opening balance. The instalment for each period MUST be raised once, together with
+For a contract that predates the system, instalments for periods due on or before the cutover date MUST NOT be raised
+(Decisions 32 and 41): they belong to the opening balance. The instalment for each period MUST be raised once, together with
 that period's rent accrual, and never twice.
 
 An instalment is the tenant's concept only: it appears in the account balance (which covers rent,
@@ -988,8 +1139,9 @@ instalments and recargo) and on the locatario recibo, never on the propietario r
 
 #### Scenario: Earlier instalments of a pre-existing contract are not raised
 
-- GIVEN a contract that predates go-live with 6 instalments, the first two periods before go-live
-- WHEN accruals run after go-live
+- GIVEN a contract that predates go-live with 6 instalments, the first two periods due on or before
+  its cutover date
+- WHEN accruals run after the cutover
 - THEN instalments 1 and 2 MUST NOT be raised
 - AND instalments 3 to 6 MUST be raised with their periods
 
@@ -998,6 +1150,59 @@ instalments and recargo) and on the locatario recibo, never on the propietario r
 - GIVEN an instalment already raised for a period
 - WHEN it is raised again
 - THEN it MUST be refused
+
+### ADDED Requirement: A Pre-Existing Contract Accrues Nothing Due On or Before Its Cutover Date
+
+The **cutover date** is stored on the contract. A contract loaded as one that predates the system
+carries it from the moment it is loaded; a contract created in the system carries none. It MUST NOT be
+derived from the account's movements: a pre-existing contract read before its opening balances are
+typed would then have no cutover, and because reading an account (and the mora worklist, which reads
+every account) materialises accruals onto an append-only ledger, its whole history would be written
+permanently. The cutover date MUST NOT change once the account holds any movement (Decision 41).
+
+For a contract that predates the system, the system MUST NOT raise a `RentAccrual` or a
+`ContractualFeeInstalment` for any period whose due date falls on or before the cutover date: those
+months are carried by the opening balance, month by month, or are not owed. This MUST hold however an
+accrual is triggered (reading the account, the mora worklist, or a payment), including before any
+opening balance has been entered. A period due after the cutover date accrues
+as for any contract. A contract created in the system has no cutover date and is unaffected.
+
+Instalment numbering MUST NOT shift: instalment *k* still belongs to the *k*-th rent period from the
+contract's start, so the instalments skipped by this rule are not renumbered onto later periods
+(Decisions 32 and 41).
+
+#### Scenario: A loaded pre-existing contract accrues no history
+
+- GIVEN a contract signed years before go-live, whose cutover date is 5 October
+- WHEN its account is read, which triggers accrual
+- THEN no `RentAccrual` MUST be written for any period due on or before 5 October
+- AND the account's balance MUST equal its opening balances
+
+#### Scenario: A period due after the cutover date accrues normally
+
+- GIVEN the same account and a period due on 10 October
+- WHEN the account is read on 11 October
+- THEN a `RentAccrual` MUST be written for that period
+
+#### Scenario: No instalment is raised for a period before the cutover
+
+- GIVEN the same contract carrying a plan of 6 instalments whose first periods are due before 5 October
+- WHEN accruals run
+- THEN no instalment MUST be raised for those periods
+- AND each later instalment MUST attach to its own *k*-th period
+
+#### Scenario: A contract created in the system is unaffected
+
+- GIVEN a contract created in the system
+- WHEN its first period falls due
+- THEN its `RentAccrual` MUST be written
+
+#### Scenario: A pre-existing contract read before its opening balances are typed accrues nothing
+
+- GIVEN a contract loaded as predating the system with a cutover date of 5 October, and no opening
+  balance entered yet
+- WHEN the mora worklist reads every account on 6 October
+- THEN no `RentAccrual` and no instalment MUST be written for any period due on or before 5 October
 
 ### Unchanged requirements that this change relies on
 
@@ -1096,21 +1301,25 @@ Living spec: `openspec/specs/access-control/spec.md`. Requirements not listed be
 ### ADDED Requirement: The Collection Tables Are Granted Deliberately, and the Counter Is a Named Departure
 
 Under "Every New Table Ships With Its GRANTs in the Same Migration", the migration that creates the
-recibo, recibo-line, annulment and numbering-counter tables MUST grant, in the same migration, to both
-`inmobiliaria_admin` and `inmobiliaria_empleado` exactly:
+collection (payment event), recibo, recibo-line, annulment and numbering-counter tables MUST grant, in
+the same migration, to both `inmobiliaria_admin` and `inmobiliaria_empleado` exactly:
 
-- recibos, recibo lines, annulment records: `SELECT` and `INSERT`, and nothing else. Neither role
-  MUST hold `UPDATE` or `DELETE` on them.
-- the numbering counter: `SELECT` and `UPDATE`, and not `INSERT` or `DELETE`. This is a **deliberate
-  departure** from the insert-only pattern the other collection tables follow. The counter is the one
-  row that must change, and both roles take payments. Its single row exists from the migration.
+- collections, recibos, recibo lines, annulment records: `SELECT` and `INSERT`, and nothing else.
+  Neither role MUST hold `UPDATE` or `DELETE` on them (Decision 40).
+- the numbering counter: `SELECT`, and `UPDATE` of the column that advances the counter, and not
+  `INSERT` or `DELETE`. This is a **deliberate departure** from the insert-only pattern the other
+  collection tables follow. The counter is the one row that must change, and both roles take
+  payments. Its single row exists from the migration.
+- the privilege to set the **starting number** is held by `inmobiliaria_admin` only
+  (Decision 39). `inmobiliaria_empleado` MUST NOT be able to set it. This restriction is enforced by
+  the database (a separate column-level grant or function), not by the UI.
+- the annulment records are insertable by both roles, yet the time and role limits on voiding
+  (Decision 45) MUST still be enforced by the database on that insert, because a grant cannot express
+  them.
 - the existing movements table keeps its insert-only grants; the new movement kinds need no new privilege.
 
-The privilege to set the starting number at cutover is **design's**. If it is restricted to Admin,
-that restriction MUST be enforced by the database (a separate grant or function), not by the UI.
-
-**A named limit.** Under table-level `GRANT` the database cannot distinguish an increment made inside
-an issuance from any other `UPDATE` of the counter row. The protection against a tampered counter is
+**A named limit.** Under a `GRANT` on the counter's advancing column the database cannot distinguish an
+increment made inside an issuance from any other `UPDATE` of that column. The protection against a tampered counter is
 therefore not the grant but the unique constraint on the recibo number: a counter set back would
 cause the next issuance to be refused, not to issue a duplicate. This is stated so no reader assumes
 database enforcement that does not exist.
@@ -1119,8 +1328,9 @@ database enforcement that does not exist.
 
 - GIVEN the migration has run
 - WHEN each application role connects
-- THEN each MUST be able to read the new tables, insert recibos, lines and annulments, and update the counter
-- AND neither MUST be able to update or delete a recibo, a line or an annulment, or to insert into or delete from the counter
+- THEN each MUST be able to read the new tables, insert collections, recibos, lines and annulments, and advance the counter
+- AND neither MUST be able to update or delete a collection, a recibo, a line or an annulment, or to insert into or delete from the counter
+- AND only `inmobiliaria_admin` MUST be able to set the counter's starting number
 
 #### Scenario: A counter set back cannot produce a duplicate
 
@@ -1152,19 +1362,23 @@ database enforcement that does not exist.
 
 ## Parameters Left to Design
 
-The spec states the observable requirement. These are design's to fix, each marked where it appears:
+The spec states the observable requirement. These were design's to fix; the design's answers are
+recorded here, and only item 1 remains pending verification:
 
-1. Where the counter lives, and the effect of a transaction-mode pooler on its lock. **Verify against
-   the real pooler.**
-2. The back-date bound (a small fixed number of days until `liquidacion-al-dueno` provides a closure),
-   and who may type a received date other than today.
-3. Who may set the cutover starting number.
-4. Who may void a recibo.
-5. Whether a pre-existing contract's opening months are `OpeningBalance` entries carrying a period,
-   or accruals, so long as the requirements above hold.
-6. The receipt-line catalog: fixed kinds in code, or a table.
-7. Whether the instalment gains its period at creation or is mapped to one.
-8. The database mechanism for "one live payment per period".
+1. Where the counter lives, and the effect of a transaction-mode pooler on its lock. Design answer: a
+   dedicated one-row table advanced by a single `UPDATE ... RETURNING`; the app connects in session
+   mode (design D5, D6). **Still pending verification against the real Supabase pooler (design
+   PV1)**; not decided-and-verified.
+2. Pre-existing contract's opening months: `OpeningBalance` entries carrying a period, with the
+   ledger constraints widened to match (design D18).
+3. The receipt-line catalog: a code enum mirrored by a `CHECK` list, not a table (design D11).
+4. The instalment's period: set at creation, written with that period's rent (design D19).
+5. "One live payment per period": an attempt number with a unique index and an insert trigger
+   (design D8).
+
+Decided by the 2026-10-14 amendment and no longer open: the back-date bound and who may back-date
+(Decision 38), who may set the starting number (Decision 39), and who may void and until when
+(Decision 45).
 
 ## Tests
 
@@ -1184,18 +1398,24 @@ Testcontainers, Docker running; a skipped test is an unrun test). Tests 3, 4 and
 5. **The remaining periods keep their own clocks.** After September is settled, July and August still
    project recargo from their own due dates. *(Domain.Tests)*
 6. **A period already settled, a month that has not begun, and a period not on the contract are each
-   refused**, with nothing written. *(Domain.Tests)*
+   refused**, with nothing written. A period not on the contract includes a calendar month the
+   contract never charges (Decision 43). *(Domain.Tests)*
 7. **A payment against an account with a frozen recargo is refused.** *(Domain.Tests)*
 8. **The recargo charged equals the recargo projected as of the received date**, truncated to a whole
    peso. *(Domain.Tests)*
 9. **A committed payment leaves the period at zero**, and the amount owed read the next day projects
    no recargo for it (no double recargo). *(Domain.Tests)*
 10. **A zero recargo writes no `RecargoCharged` and prints no recargo line.** *(Domain.Tests)*
-11. **Received on defaults to today** and recorded-at is set by the system. *(Domain.Tests)*
-12. **A future received date is refused**, and so is one beyond the bound. *(Domain.Tests)*
+11. **Received on defaults to today.** With no received date supplied, the preview resolves it to the
+    clock's today and records which day that was; the request offers no way to supply a recorded-at.
+    *(Domain.Tests)*
+12. **A future received date is refused**, and so is one more than 7 calendar days back; 7 days back
+    is accepted for either role (Decision 38). *(Domain.Tests)*
 13. **A back-dated received date charges the recargo of that date**, lower than today's, and the
     recibo shows that date. *(Domain.Tests)*
-14. **Recorded-at cannot be updated**, including by raw SQL. *(Infrastructure.Tests)*
+14. **Recorded-at and recorded-by are set by the database**: a supplied recorded-at is ignored at
+    creation, and neither can be updated, including by raw SQL. A collection inserted directly with a
+    received date beyond the bound is refused. *(Infrastructure.Tests)*
 15. **Atomicity, recargo then failure.** A failure forced after the `RecargoCharged` write leaves no
     `RecargoCharged`, no `Payment`, no recibo and an unchanged counter. *(Infrastructure.Tests)*
 16. **Atomicity, recibo failure consumes no number.** A failure while writing the propietario recibo
@@ -1212,13 +1432,15 @@ Testcontainers, Docker running; a skipped test is an unrun test). Tests 3, 4 and
 22. **Voiding appends corrections.** The `Payment` and the `RecargoCharged` are each reversed by a
     `Correction` naming them; the period is unpaid again and projects recargo again. *(Domain.Tests)*
 23. **Voiding either recibo annuls both.** *(Domain.Tests)*
-24. **A voiding needs a reason**, records user and time, and a recibo cannot be annulled twice.
-    *(Domain.Tests)*
+24. **A voiding needs a reason**, and the voiding plan refuses a recibo already annulled. (User and
+    time are the database's: Test 51.) *(Domain.Tests)*
 25. **A voided number stays and is never reused.** The next payment takes the next numbers; the
     voided pair stays readable, marked annulled. *(Infrastructure.Tests)*
 26. **A voided period accepts a new payment**, while two live payments for one period are impossible.
     *(Infrastructure.Tests)*
-27. **A balance read for a date before a voiding still shows the payment.** *(Domain.Tests)*
+27. **A balance read for a date before a voiding still shows the payment.** A voiding of an early
+    payment before its due date is dated on the due date, never before the payment it reverses
+    (Decision 44). *(Domain.Tests)*
 
 **Receipt**
 
@@ -1229,11 +1451,14 @@ Testcontainers, Docker running; a skipped test is an unrun test). Tests 3, 4 and
 31. **Gapless under concurrency.** Several sessions issue at once; the numbers form one unbroken run
     and each pair is adjacent. *(Infrastructure.Tests)*
 32. **The database refuses a duplicate recibo number.** *(Infrastructure.Tests)*
-33. **The first recibo carries the cutover number**, which can be corrected before use.
-    *(Infrastructure.Tests)*
+33. **The first issuance takes the cutover number.** With a starting number of 31001 and no recibo,
+    an issuance against the counter (its `UPDATE ... RETURNING`, run raw) returns 31001 for the
+    locatario and 31002 for the propietario; a starting number corrected to 31100 before use is the
+    one returned. *(Infrastructure.Tests)*
 34. **The cutover number is refused after the first recibo.** *(Infrastructure.Tests)*
-35. **No number is issued before cutover is set**, and a zero or negative starting number is refused.
-    *(Infrastructure.Tests)*
+35. **No number is issued before cutover is set**: an issuance against a counter with no starting
+    number, run raw, returns no row and leaves the counter unchanged; a zero or negative starting
+    number is refused. *(Infrastructure.Tests)*
 36. **The locatario recibo carries rent, instalment and recargo; the propietario recibo carries rent
     and recargo but no instalment.** *(Domain.Tests)*
 37. **A derived line cannot be overridden by the operator.** *(Domain.Tests)*
@@ -1245,7 +1470,9 @@ Testcontainers, Docker running; a skipped test is an unrun test). Tests 3, 4 and
     unchanged. *(Domain.Tests)*
 42. **The propietario recibo carries a negative honorarios de administración line** computed from the
     contract's rate on rent plus recargo, truncated; the locatario recibo has none. *(Domain.Tests)*
-43. **A later change of rate leaves an issued recibo unchanged.** *(Domain.Tests)*
+43. **The stored honorarios de administración line is never recomputed.** Reading an issued recibo
+    against a contract built with another rate leaves the line as issued (Decision 46).
+    *(Domain.Tests)*
 44. **Several lessors appear on one propietario recibo.** *(Domain.Tests)*
 45. **A contract whose administration rate was never entered cannot be committed**, and the preview
     says so.
@@ -1257,7 +1484,8 @@ Testcontainers, Docker running; a skipped test is an unrun test). Tests 3, 4 and
 49. **Both kinds of recibo carry the non-fiscal legend.** *(Domain.Tests)*
 50. **A recibo's total equals the sum of its signed lines**, and no monetary member is `double` or
     `float`. *(Domain.Tests)*
-51. **An annulled recibo is read as annulled**, with number, reason, user and time.
+51. **An annulled recibo is read as annulled**, with number, reason, user and time; the user and time
+    are stamped by the database (`current_user`, `now()`), and a supplied value is ignored.
     *(Infrastructure.Tests)*
 
 **contract-account**
@@ -1276,7 +1504,8 @@ Testcontainers, Docker running; a skipped test is an unrun test). Tests 3, 4 and
     *(Infrastructure.Tests)*
 58. **An instalment *k* attaches to the *k*-th rent period**, is paid with the rent, cannot be paid
     alone and is never raised twice. *(Domain.Tests)*
-59. **Instalments for periods before go-live are not raised** on a pre-existing contract.
+59. **Instalments for periods due on or before the cutover date are not raised** on a pre-existing
+    contract, including a period due exactly on it.
     *(Domain.Tests)*
 
 **lease-contract**
@@ -1292,18 +1521,54 @@ Testcontainers, Docker running; a skipped test is an unrun test). Tests 3, 4 and
 **access-control**
 
 65. **Every new table ships with its GRANTs.** After the migration, each application role performs
-    exactly its intended operations on the new tables: `SELECT` and `INSERT` on recibos, lines and
-    annulments, `SELECT` and `UPDATE` on the counter, and no `UPDATE` or `DELETE` on the others.
-    *(Infrastructure.Tests)*
+    exactly its intended operations on the new tables: `SELECT` and `INSERT` on collections, recibos,
+    lines and annulments, `SELECT` and advancing the counter on the counter, and no `UPDATE` or
+    `DELETE` on the others. Only the Admin role may set the counter's starting number; the Empleado
+    role is refused. *(Infrastructure.Tests)*
 66. **A counter set back by a direct `UPDATE` cannot produce a duplicate number**: the next issuance
-    is refused by the unique constraint. *(Infrastructure.Tests)*
+    against the counter, run raw, followed by its recibo insert, is refused by the unique constraint.
+    *(Infrastructure.Tests)*
 67. **The model matches the migration.** `dotnet ef migrations has-pending-model-changes` reports
     nothing pending for each slice that changes the model. (A command check rather than an xUnit
     test; it needs no database.)
 
 **Added 2026-10-14 (Decisions 22 and 37)**
 
-68. **The current month is paid before its due date**: settled with no recargo, its rent brought onto
-    the account by the payment, and the later accrual does not charge it again. *(Domain.Tests)*
+68. **The current month is paid before its due date**: settled with no recargo, its rent and its
+    instalment (when it carries one) brought onto the account by the payment, and the later accrual
+    raises neither again. The `Payment` is dated on the due date, not the received date
+    (Decision 47). *(Domain.Tests)*
 69. **A contract with a 0% rate is collected**, the preview warns, and the honorarios de
     administración line is zero. *(Domain.Tests)*
+70. **An early payment racing the lazy accrual leaves one charge.** An early payment and the lazy
+    accrual of the same period, committed concurrently from two real sessions, leave exactly one
+    `RentAccrual` and at most one `ContractualFeeInstalment` for the period; the loser writes
+    nothing (Decision 42). *(Infrastructure.Tests)*
+71. **A pre-existing contract accrues nothing due on or before its cutover date.** Domain: the
+    schedule, given a cutover date, yields no period due on or before it, for rent and instalments,
+    and does not renumber instalments. Infrastructure: materialising a loaded pre-existing account
+    writes no `RentAccrual` or instalment before the cutover and writes the later ones
+    (Decision 41). *(Domain.Tests and Infrastructure.Tests)*
+72. **The voiding window is enforced by the database.** An Empleado voiding a pair on day 7
+    succeeds; on day 8 is refused; an Admin voiding on day 8 and on day 30 succeeds; anyone voiding
+    on day 31 is refused; each refusal writes nothing, including when attempted by raw SQL
+    (Decision 45). *(Infrastructure.Tests)*
+
+**Added 2026-10-14, review pass (Decisions 37, 41, 48 and 49)**
+
+73. **A voided early payment can be paid again before its due date.** A period due on the 10th, paid
+    on the 2nd and voided on the 3rd, is payable on the 4th; the new payment writes no second
+    `RentAccrual` or instalment, charges no recargo, and leaves the period at zero (Decision 37).
+    *(Domain.Tests)*
+74. **An early-written rent is final.** A rent adjustment taking effect on or before an early-paid
+    period's due date and confirmed afterwards leaves that period's `RentAccrual` as written and
+    generates no movement for it; the next period accrues at the adjusted canon (Decision 48).
+    *(Domain.Tests)*
+75. **An opening-balance month prints a Saldo Deudor line.** Paying a month loaded as an
+    `OpeningBalance` of 160,000 under a rate of 8% puts a Saldo Deudor line of 160,000 on both recibos,
+    no rent or recargo line, and an honorarios de administración line of -12,800 on the propietario
+    recibo (Decision 49, a default). *(Domain.Tests)*
+76. **A pre-existing contract read before its opening balances are typed accrues nothing.** A
+    contract stored with a cutover date and no opening balance yet, read by the mora worklist, gains no
+    `RentAccrual` or instalment for any period due on or before that date (Decision 41).
+    *(Infrastructure.Tests)*

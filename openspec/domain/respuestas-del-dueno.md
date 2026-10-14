@@ -178,7 +178,7 @@ closes an open question raised at
 > *"Desde donde quedaron. Ellos. No desde 0."*
 
 **What this means.** The sequence carries on from the agency's current number. The receipts analysed
-(24269 / 24270) are from 2025, so the current number is a different one and **is not yet known** —
+(24269 / 24270) are dated 19/08/2026 on their face; the agency keeps numbering after them, so the number at go-live is a different one and **is not yet known** —
 see the open list above. Nothing in the repository addresses numbering at all today.
 
 ### 8. Tax regime — "mostly"
