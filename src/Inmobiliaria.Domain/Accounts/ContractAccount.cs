@@ -125,6 +125,14 @@ public sealed class ContractAccount
                 "This period is already charged; it cannot take a second rent accrual.");
         }
 
+        // An instalment is raised once per period (spec Test 58). Same shape as the rent rule above:
+        // the database's unique index is the backstop for two writers, this is the domain saying it first.
+        if (movement.Kind == MovementKind.ContractualFeeInstalment && HasInstalmentFor(movement.Period!.Value))
+        {
+            throw new InvalidOperationException(
+                "This period already carries its instalment; it cannot take a second one.");
+        }
+
         // A correction must point at a movement this account actually holds. Pointing elsewhere
         // would let one account silently adjust another's history.
         if (movement.Kind == MovementKind.Correction &&

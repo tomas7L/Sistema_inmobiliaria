@@ -25,7 +25,6 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("Inmobiliaria.Domain.Access.AppUser", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
@@ -67,7 +66,6 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("Inmobiliaria.Domain.Accounts.AccountMovement", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
@@ -101,28 +99,45 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
                     b.HasKey("Id")
                         .HasName("pk_account_movements");
 
+                    b.HasIndex("AccountId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_account_movements_opening_zero")
+                        .HasFilter("kind = 'OpeningBalance' AND period IS NULL");
+
                     b.HasIndex("CorrectsMovementId")
                         .HasDatabaseName("ix_account_movements_corrects_movement_id");
 
                     b.HasIndex("AccountId", "Period")
                         .IsUnique()
-                        .HasDatabaseName("ux_account_movements_accrual_period")
-                        .HasFilter("kind = 'RentAccrual'");
+                        .HasDatabaseName("ux_account_movements_period_charge")
+                        .HasFilter("kind IN ('RentAccrual','OpeningBalance')");
+
+                    b.HasIndex(new[] { "AccountId", "Period" }, "ux_account_movements_instalment_period")
+                        .IsUnique()
+                        .HasDatabaseName("ux_account_movements_instalment_period")
+                        .HasFilter("kind = 'ContractualFeeInstalment'");
 
                     b.ToTable("account_movements", null, t =>
                         {
-                            t.HasCheckConstraint("ck_account_movements_accrual_has_period", "kind <> 'RentAccrual' OR period IS NOT NULL");
+                            t.HasCheckConstraint("ck_account_movements_kind", "kind IN ('OpeningBalance','RentAccrual','ContractualFeeInstalment','RecargoFrozen','Correction','Payment','RecargoCharged')");
 
                             t.HasCheckConstraint("ck_account_movements_kind_corrects", "(kind = 'Correction') = (corrects_movement_id IS NOT NULL)");
 
+                            t.HasCheckConstraint("ck_account_movements_opening_balance_period", "kind <> 'OpeningBalance' OR period IS NOT NULL OR amount = 0");
+
+                            t.HasCheckConstraint("ck_account_movements_payment_sign", "kind <> 'Payment' OR amount < 0");
+
                             t.HasCheckConstraint("ck_account_movements_period_first_of_month", "period IS NULL OR EXTRACT(DAY FROM period) = 1");
+
+                            t.HasCheckConstraint("ck_account_movements_period_required", "kind NOT IN ('RentAccrual','ContractualFeeInstalment','Payment','RecargoCharged') OR period IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_account_movements_recargo_charged_sign", "kind <> 'RecargoCharged' OR amount > 0");
                         });
                 });
 
             modelBuilder.Entity("Inmobiliaria.Domain.Accounts.ContractAccount", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
@@ -143,7 +158,6 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("Inmobiliaria.Domain.Indices.EconomicIndex", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
@@ -177,7 +191,6 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("Inmobiliaria.Domain.Indices.IndexValue", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
@@ -212,7 +225,6 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("Inmobiliaria.Domain.Leasing.AdjustmentClause", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
@@ -269,13 +281,16 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("Inmobiliaria.Domain.Leasing.Contract", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<DateOnly?>("ActualEndDate")
                         .HasColumnType("date")
                         .HasColumnName("actual_end_date");
+
+                    b.Property<DateOnly?>("CutoverDate")
+                        .HasColumnType("date")
+                        .HasColumnName("cutover_date");
 
                     b.Property<short>("DueDay")
                         .ValueGeneratedOnAdd()
@@ -320,11 +335,26 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(32)")
                         .HasColumnName("status");
 
+                    b.Property<decimal?>("_contractualFeeAmount")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("contractual_fee_amount");
+
+                    b.Property<short?>("_contractualFeeInstalments")
+                        .HasColumnType("smallint")
+                        .HasColumnName("contractual_fee_instalments");
+
                     b.HasKey("Id")
                         .HasName("pk_contracts");
 
                     b.ToTable("contracts", null, t =>
                         {
+                            t.HasCheckConstraint("ck_contracts_contractual_fee_amount_positive", "contractual_fee_amount IS NULL OR contractual_fee_amount > 0");
+
+                            t.HasCheckConstraint("ck_contracts_contractual_fee_both_or_neither", "(contractual_fee_amount IS NULL) = (contractual_fee_instalments IS NULL)");
+
+                            t.HasCheckConstraint("ck_contracts_contractual_fee_instalments_range", "contractual_fee_instalments IS NULL OR contractual_fee_instalments BETWEEN 1 AND 6");
+
                             t.HasCheckConstraint("ck_contracts_due_day_range", "due_day BETWEEN 1 AND 31");
 
                             t.HasCheckConstraint("ck_contracts_end_reason", "end_reason IS NULL OR end_reason IN ('Expiry', 'EarlyTerminationByTenant', 'TerminationForCause', 'MutualAgreement')");
@@ -338,7 +368,6 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("Inmobiliaria.Domain.Leasing.ContractDocument", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
@@ -447,7 +476,6 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("Inmobiliaria.Domain.Leasing.RentAdjustment", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
@@ -555,7 +583,6 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("Inmobiliaria.Domain.Parties.Party", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
@@ -608,7 +635,6 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("Inmobiliaria.Domain.Units.Unit", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 

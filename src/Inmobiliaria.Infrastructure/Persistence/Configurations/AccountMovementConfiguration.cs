@@ -30,13 +30,37 @@ public sealed class AccountMovementConfiguration : IEntityTypeConfiguration<Acco
                 "ck_account_movements_period_first_of_month",
                 "period IS NULL OR EXTRACT(DAY FROM period) = 1");
 
-            // A rent accrual always covers a period. The other kinds may legitimately carry none:
-            // an opening balance is a single assertion, a frozen recargo belongs to the day a plan
-            // was signed, and a contractual fee instalment has its own due date rather than a
-            // month of rent.
+            // The kinds the ledger knows, mirroring MovementKind. Built from the enum so the list
+            // cannot drift from it: a new member changes this expression, the model then differs
+            // from the last migration, and has-pending-model-changes says so.
             t.HasCheckConstraint(
-                "ck_account_movements_accrual_has_period",
-                "kind <> 'RentAccrual' OR period IS NOT NULL");
+                "ck_account_movements_kind",
+                $"kind IN ({string.Join(",", Enum.GetNames<MovementKind>().Select(name => $"'{name}'"))})");
+
+            // Every kind that is about one month carries it: rent, the instalment that rides with
+            // it, and the payment and recargo that settle it. An opening balance may be period-less
+            // only as a zero (below); a frozen recargo belongs to the day a plan was signed, and a
+            // correction carries the period of what it corrects only when that is period-scoped.
+            // Replaces ck_account_movements_accrual_has_period, which covered the rent alone.
+            t.HasCheckConstraint(
+                "ck_account_movements_period_required",
+                "kind NOT IN ('RentAccrual','ContractualFeeInstalment','Payment','RecargoCharged') " +
+                "OR period IS NOT NULL");
+
+            // A pre-existing debt is loaded month by month. The only figure that may stand without a
+            // month is the zero that says "somebody looked and nothing is owed" (design D18).
+            t.HasCheckConstraint(
+                "ck_account_movements_opening_balance_period",
+                "kind <> 'OpeningBalance' OR period IS NOT NULL OR amount = 0");
+
+            // A payment is a credit and a charged recargo is a debit. The sign lives on the amount,
+            // so the database says which way each of these two kinds may point.
+            t.HasCheckConstraint(
+                "ck_account_movements_payment_sign",
+                "kind <> 'Payment' OR amount < 0");
+            t.HasCheckConstraint(
+                "ck_account_movements_recargo_charged_sign",
+                "kind <> 'RecargoCharged' OR amount > 0");
         });
 
         // The id is application-supplied, which InmobiliariaDbContext declares for every
@@ -72,16 +96,36 @@ public sealed class AccountMovementConfiguration : IEntityTypeConfiguration<Acco
         // database settles it — the second insert fails and that caller re-reads. A constraint and
         // a retry, not a lock.
         //
-        // Scoped to accruals, exactly as the design words it ("for accrual movements"). A broader
-        // index over every kind carrying a period would forbid two things the business does: it
-        // would reject a second correction to a month already corrected once, and — the worse of
-        // the two — it would reject a second payment against one period, which is precisely what
-        // a payment plan is. Collection adds that kind, and this index must not be waiting to
-        // break it.
+        // Scoped to the two kinds that CHARGE a period (cobranza-y-recibos design section 5): a rent
+        // accrual and a monthly opening balance. One charge per period across both, which is also
+        // "a period holding an opening balance takes no accrual". It replaces
+        // ux_account_movements_accrual_period, which covered the rent alone.
+        //
+        // Still scoped, and for the same reason as before: a broader index over every kind carrying
+        // a period would reject a second correction to a month already corrected once and a second
+        // payment against one period, which is what a voided and repeated payment is.
         builder.HasIndex("AccountId", nameof(AccountMovement.Period))
             .IsUnique()
-            .HasFilter("kind = 'RentAccrual'")
-            .HasDatabaseName("ux_account_movements_accrual_period");
+            .HasFilter("kind IN ('RentAccrual','OpeningBalance')")
+            .HasDatabaseName("ux_account_movements_period_charge");
+
+        // At most one instalment per period: the stronger form of "never raised twice", for two
+        // writers (an early payment and the lazy accrual) that both pass the domain check.
+        //
+        // A NAMED index (the overload taking the name), because it covers the same two properties as
+        // the charge index above and EF allows that only when each index has its own name.
+        builder.HasIndex(
+                ["AccountId", nameof(AccountMovement.Period)],
+                "ux_account_movements_instalment_period")
+            .IsUnique()
+            .HasFilter("kind = 'ContractualFeeInstalment'")
+            .HasDatabaseName("ux_account_movements_instalment_period");
+
+        // At most one period-less opening balance per account: the zero that says nothing is owed.
+        builder.HasIndex("AccountId")
+            .IsUnique()
+            .HasFilter("kind = 'OpeningBalance' AND period IS NULL")
+            .HasDatabaseName("ux_account_movements_opening_zero");
 
         // A correction points at another movement. Restrict rather than Cascade: deleting the
         // corrected row is not a thing that may happen, and the append-only trigger refuses it

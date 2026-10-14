@@ -1,3 +1,4 @@
+using Inmobiliaria.Domain.Accounts;
 using Inmobiliaria.Domain.Parties;
 
 namespace Inmobiliaria.Domain.Leasing;
@@ -13,6 +14,13 @@ public sealed class Contract
     private readonly List<ContractParty> _parties = [];
     private readonly List<ContractUnit> _units = [];
     private readonly List<RentAdjustment> _adjustments = [];
+
+    // The three go-live columns, held in fields so a method can set them while the public members
+    // stay get-only (and out of the EF model until ContractConfiguration names these fields).
+    // smallint on the database side, hence short.
+    private DateOnly? _cutoverDate;
+    private decimal? _contractualFeeAmount;
+    private short? _contractualFeeInstalments;
 
     public Guid Id { get; }
     public DateOnly StartDate { get; }
@@ -58,9 +66,27 @@ public sealed class Contract
     ///
     /// Deliberately get-only, like <see cref="DueDay"/>: EF leaves it out of the model until a
     /// configuration names it, which lets the column and its migration ship together in the change
-    /// that adds them. The setter that records it on load arrives with that migration.
+    /// that adds them.
+    ///
+    /// Backed by a private field because a get-only property cannot be assigned by a method, and
+    /// the field is what EF writes when it loads the row (named in ContractConfiguration). It is
+    /// set at construction or by <see cref="SetCutoverDate"/>, never by anything else.
     /// </summary>
-    public DateOnly? CutoverDate { get; }
+    public DateOnly? CutoverDate => _cutoverDate;
+
+    /// <summary>
+    /// The honorarios contractuales plan, or null when the contract has none (the default). Fixed
+    /// once the account holds any movement: <see cref="ChangeContractualFeePlan"/> refuses then.
+    /// The amount never moves when the rent adjusts.
+    ///
+    /// Not mapped as a property: a plan is two columns, so the model names the two private fields
+    /// behind it instead (ContractConfiguration), which keeps this type out of the EF model.
+    /// </summary>
+    public ContractualFeePlan? ContractualFeePlan =>
+        _contractualFeeAmount is { } amount && _contractualFeeInstalments is { } instalments
+            ? new ContractualFeePlan(amount, instalments)
+            : null;
+
     public ContractStatus Status { get; private set; }
     public EndReason? EndReason { get; private set; }
 
@@ -98,7 +124,8 @@ public sealed class Contract
         IReadOnlyCollection<UnitShare> unitShares,
         decimal? honorariosPercentage = null,
         int dueDay = DefaultDueDay,
-        DateOnly? cutoverDate = null)
+        DateOnly? cutoverDate = null,
+        ContractualFeePlan? contractualFeePlan = null)
     {
         // Any calendar day is allowed, including the 29th through the 31st. A month that is too
         // short clamps to its own last day when the due date is computed, rather than being
@@ -134,10 +161,68 @@ public sealed class Contract
         MonthlyRent = monthlyRent;
         HonorariosPercentage = honorariosPercentage;
         DueDay = dueDay;
-        CutoverDate = cutoverDate;
+        _cutoverDate = cutoverDate;
+        StoreFeePlan(contractualFeePlan);
         Status = ContractStatus.Active;
 
         ApplyShares(unitShares);
+    }
+
+    /// <summary>
+    /// Sets or clears the honorarios contractuales plan. Refused once the contract's account holds
+    /// ANY movement, the same rule as <see cref="SetCutoverDate"/>. Stricter than spec Decision 32
+    /// ("not after any instalment"), per review finding R3-fee-plan-after-rent-silently-dropped: the
+    /// materialiser skips an already-charged period as a whole, so a plan accepted after rent was
+    /// written would never raise its instalments, and backfilling them would turn paid months back
+    /// into owed ones. The account is passed in because the contract does not hold it; the database
+    /// trigger says the same thing against raw SQL.
+    /// </summary>
+    public void ChangeContractualFeePlan(ContractualFeePlan? plan, ContractAccount account)
+    {
+        RequireOwnAccount(account);
+
+        if (account.Movements.Count > 0)
+        {
+            throw new InvalidOperationException(
+                "The fee plan cannot change once the account holds a movement.");
+        }
+
+        StoreFeePlan(plan);
+    }
+
+    /// <summary>
+    /// Records that this contract predates the system and goes live on <paramref name="cutoverDate"/>
+    /// (design D17): the schedule then produces nothing due on or before it. One-way once the
+    /// account holds any movement, because by then the account has already been read and either
+    /// carries the history or has been told it does not. The database trigger repeats this rule.
+    /// </summary>
+    public void SetCutoverDate(DateOnly cutoverDate, ContractAccount account)
+    {
+        RequireOwnAccount(account);
+
+        if (account.Movements.Count > 0)
+        {
+            throw new InvalidOperationException(
+                "The cutover date cannot be set once the account holds a movement.");
+        }
+
+        _cutoverDate = cutoverDate;
+    }
+
+    private void RequireOwnAccount(ContractAccount account)
+    {
+        ArgumentNullException.ThrowIfNull(account);
+
+        if (account.ContractId != Id)
+        {
+            throw new ArgumentException("The account must belong to this contract.", nameof(account));
+        }
+    }
+
+    private void StoreFeePlan(ContractualFeePlan? plan)
+    {
+        _contractualFeeAmount = plan?.Amount;
+        _contractualFeeInstalments = plan is null ? null : (short)plan.Instalments;
     }
 
     /// <summary>
