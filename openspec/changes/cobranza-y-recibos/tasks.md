@@ -60,7 +60,7 @@ merge land intact, and does what is about to be built still match the code (task
 | 3 | The recibo document: catalog, lines, signs, both copies, honorarios line, Saldo Deudor, legend, pair numbering in the domain. 380 to 460 lines | PR 3 | `dotnet test tests/Inmobiliaria.Domain.Tests --configuration Release --filter FullyQualifiedName~Recibo` | N/A: pure domain | Revert the PR: new files under `Domain/Collection`, nothing else |
 | 4 | Collection and voiding planners, clock port and adapter, rules constants. 400 to 480 lines | PR 4 | `dotnet test tests/Inmobiliaria.Domain.Tests --configuration Release --filter "FullyQualifiedName~Collection\|FullyQualifiedName~Voiding"` | N/A: pure domain plus a clock test without a container | Revert the PR: no schema, no writers |
 | 5 | **Migration B**: five tables, counter, triggers, grants, configurations, schema tests. 400 to 500 lines | PR 5 | `dotnet test tests/Inmobiliaria.Infrastructure.Tests --configuration Release --filter FullyQualifiedName~Recibo` | Testcontainers applying migrations A and B; raw SQL as superuser and as real login roles | Migration B `Down`; lossless **only before the first real recibo** |
-| 6 | `CollectionDesk`: the transaction, voiding, cutover setter; atomicity and concurrency tests. 380 to 480 lines | PR 6 | `dotnet test tests/Inmobiliaria.Infrastructure.Tests --configuration Release --filter FullyQualifiedName~CollectionDesk` | Two real sessions with a barrier against Testcontainers; PV1 later against the real pooler | Revert the PR: the desk is not wired into `Desktop`, so nothing calls it |
+| 6 | `CollectionDesk`: the transaction, voiding, starting-number adapter; atomicity and concurrency tests. 380 to 480 lines | PR 6 | `dotnet test tests/Inmobiliaria.Infrastructure.Tests --configuration Release --filter FullyQualifiedName~CollectionDesk` | Two real sessions with a barrier against Testcontainers; PV1 later against the real pooler | Revert the PR: the desk is not wired into `Desktop`, so nothing calls it |
 
 ---
 
@@ -225,7 +225,7 @@ Spec tests in this PR: 15, 16, 17, 18, 25, 26, 31, 70.
 - [ ] 6.9 **GREEN, `ReciboNumbering`** in `src/Inmobiliaria.Infrastructure/Persistence/ReciboNumbering.cs`: `SetStartingNumberAsync` updates only `starting_number`. Unnumbered test: an Admin login succeeds, an Empleado login is refused (Test 65 already proves the grant; this proves the adapter surfaces it)
 - [ ] 6.10 **[PV5]** Confirm from tests 15 and 16 that the raw counter `UPDATE ... RETURNING` enlisted in the EF transaction rolls back with it. Record the observed result here; if it does not, stop and report before continuing
 - [ ] 6.11 **[Guardrails]** `ArchitectureGuardTests` green; earlier migrations unchanged; `dotnet ef migrations has-pending-model-changes` reports nothing pending (this PR changes no model)
-- [ ] 6.12 **[Prove guards by making them fail]** Scratch runs, each restored and recorded here: (a) drop `ux_collections_live_attempt`: Test 17 must go red; (b) drop `ux_account_movements_period_charge`: Test 70 must go red; (c) move the counter `UPDATE` to the start of the transaction and run Test 16 and 31: record what changes
+- [ ] 6.12 **[Prove guards by making them fail]** Scratch runs, each restored and recorded here: (a) drop `ux_collections_live_attempt`: Test 17 must go red; (b) drop `ux_account_movements_period_charge`: Test 70 must go red; (c) *exploratory, not a guard proof:* move the counter `UPDATE` to the start of the transaction and run Test 16 and 31: record what changes
 - [ ] 6.13 **[Handover]** File list and commit message (for example `feat(infra): collection desk transaction and voiding`) to Tomas. Remind him of H.5 and H.6
 
 ### Verification, PR 6 (Docker: **yes**)
@@ -233,7 +233,7 @@ Spec tests in this PR: 15, 16, 17, 18, 25, 26, 31, 70.
 | Command | Expected |
 |---|---|
 | `dotnet build Inmobiliaria.sln --configuration Release` | exit code 0, warning and error counts both 0 |
-| `dotnet test Inmobiliaria.sln --configuration Release` | **(PR 5 total) + N passed**, 0 failed, **0 skipped**, **N >= 8** (spec Tests 15, 16, 17, 18, 25, 26, 31, 70) plus the unnumbered mapping and cutover-setter tests |
+| `dotnet test Inmobiliaria.sln --configuration Release` | **(PR 5 total) + N passed**, 0 failed, **0 skipped**, **N >= 8** (spec Tests 15, 16, 17, 18, 25, 26, 31, 70) plus the unnumbered error-mapping test (6.8) and starting-number adapter test (6.9) |
 | `dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure` | no pending model changes |
 
 ---
