@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-10-14, spec corregida tras la lectura de Tomás_
+_Última actualización: 2026-10-14, cierre de sesión_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -8,8 +8,8 @@ _Última actualización: 2026-10-14, spec corregida tras la lectura de Tomás_
 
 ## En qué estamos
 
-**Change activo: `cobranza-y-recibos`, spec y design escritos, revisados y corregidos (2026-10-14).**
-Tasks escritas: `openspec/changes/cobranza-y-recibos/tasks.md` (6 PRs, 73 tareas + H.1–H.8).
+**Change activo: `cobranza-y-recibos`, planificación cerrada; implementación sin empezar.**
+Tasks: `openspec/changes/cobranza-y-recibos/tasks.md` (6 PRs, 73 tareas + H.1–H.8), ninguna tildada.
 
 - Propuesta: `openspec/changes/cobranza-y-recibos/proposal.md`, aprobada y mergeada (PR #53).
 - Spec: `openspec/changes/cobranza-y-recibos/spec.md`, 49 decisiones y 76 tests.
@@ -19,13 +19,17 @@ Tasks escritas: `openspec/changes/cobranza-y-recibos/tasks.md` (6 PRs, 73 tareas
 - El change es el **slice A** de tres: el pago del inquilino y sus dos recibos. Los otros dos son
   changes posteriores, `liquidacion-al-dueno` y `recibo-pdf`.
 
-No hay código nuevo. Spec y design mergeados a `develop` (PRs #54 y #55).
+No hay código nuevo. Spec, design y tasks mergeados a `develop` (PRs #54, #55 y #56).
+`ramatomy` tiene el mismo contenido que `develop`; le faltan sólo los commits de merge, así que
+hay que traer `develop` antes de empezar.
 
 ## Próximos pasos
 
-1. **Tomás commitea `tasks.md`.**
-2. **PR 1 (ledger rules in the domain)**: implementar las tareas 1.x. Sin Docker ni Supabase.
-3. Después, PR 2 en adelante, de a uno: cada PR se mergea a `develop` antes de empezar el siguiente.
+1. **PR 1 (ledger rules in the domain)**: tareas 1.1 a 1.15 de `tasks.md`. Sólo Domain, sin Docker
+   ni Supabase. La tarea 1.2 registra cuántos tests existentes reemplaza (los totales esperados son
+   `241 − R + N`, no `241 + N`).
+2. Después, PR 2 en adelante, de a uno: cada PR se mergea a `develop` antes de empezar el siguiente.
+   PR 2, 5 y 6 necesitan Docker; después de PR 2 y PR 5 Tomás aplica la migración (H.1–H.4).
 
 ## Pendientes / bloqueos
 
@@ -61,11 +65,8 @@ No hay código nuevo. Spec y design mergeados a `develop` (PRs #54 y #55).
 
 | | |
 |---|---|
-| **Docker** | **No.** Leer la spec y el design son documentos |
-| **Supabase** | **No.** Nada toca la base todavía |
-
-Para implementar el slice A van a hacer falta las dos: Docker para Testcontainers y Supabase
-despausada para la migración. La migración la aplica Tomás.
+| **Docker** | **No para el PR 1** (sólo Domain). Sí para PR 2, 5 y 6 |
+| **Supabase** | **No para el PR 1.** Sí despausada para aplicar las migraciones de PR 2 y PR 5 (las aplica Tomás) |
 
 ## Para retomar
 
@@ -95,8 +96,9 @@ no encuentra `error xUnit2029`, y en esta máquina dotnet responde en español.
 | Para qué | Dónde |
 |---|---|
 | Cómo trabajamos | `CLAUDE.md` (raíz) |
-| La spec en revisión | `openspec/changes/cobranza-y-recibos/spec.md` (y el extracto local `lectura-spec-cobranza.md`) |
-| La propuesta aprobada | `openspec/changes/cobranza-y-recibos/proposal.md` |
+| Qué implementar, en orden | `openspec/changes/cobranza-y-recibos/tasks.md` (Phase 1 = PR 1) |
+| Cómo, y por qué | `openspec/changes/cobranza-y-recibos/design.md` (§7 y §8 para el PR 1) |
+| Qué debe cumplir | `openspec/changes/cobranza-y-recibos/spec.md` (cada tarea de `tasks.md` nombra los tests que cubre) |
 | Lo que el dueño respondió, textual | `openspec/domain/respuestas-del-dueno.md` |
 | Decisiones abiertas del proyecto | `openspec/config.yaml`, bloque `open_decisions` |
 

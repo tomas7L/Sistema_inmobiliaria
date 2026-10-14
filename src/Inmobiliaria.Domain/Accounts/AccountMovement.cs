@@ -27,8 +27,10 @@ public sealed class AccountMovement
 
     /// <summary>
     /// The rental period this movement belongs to, as the first day of its month. Present on a
-    /// <see cref="MovementKind.RentAccrual"/> and absent on everything else — a correction or a
-    /// frozen surcharge belongs to the account, not to one month. The database carries a unique
+    /// <see cref="MovementKind.RentAccrual"/>, on an instalment, on a <see cref="MovementKind.Payment"/>
+    /// and a <see cref="MovementKind.RecargoCharged"/>, and on an opening balance that carries a
+    /// month; a frozen surcharge belongs to the account, not to one month, and a correction carries
+    /// the period of what it corrects, when that is period-scoped. The database carries a unique
     /// index on (account, kind, period) where this is not null, which is what stops two concurrent
     /// readers materialising the same period twice (design Decision 1).
     /// </summary>
@@ -62,11 +64,22 @@ public sealed class AccountMovement
     }
 
     /// <summary>
-    /// What a contract already owed at go-live. The amount MAY be zero, for a tenant who is up to
-    /// date: recording it still says somebody asserted zero, rather than that nobody looked.
+    /// What a contract already owed at go-live, for one month. A pre-existing debt is loaded month
+    /// by month, each with its own period and real amount, so that one month can be paid at a time
+    /// (cobranza-y-recibos spec "An Opening Balance Exists Only for a Contract That Predates the
+    /// System"). The amount MAY be zero, for a tenant who is up to date: recording it still says
+    /// somebody asserted zero, rather than that nobody looked. A zero is the only figure allowed
+    /// without a period; <see cref="ContractAccount.Append"/> refuses the rest.
     /// </summary>
-    public static AccountMovement OpeningBalance(Guid id, decimal amount, DateOnly occurredOn) =>
-        new(id, MovementKind.OpeningBalance, amount, occurredOn, period: null, correctsMovementId: null);
+    public static AccountMovement OpeningBalance(Guid id, decimal amount, DateOnly occurredOn, DateOnly? period)
+    {
+        if (period is not null)
+        {
+            RequireFirstOfMonth(period.Value);
+        }
+
+        return new AccountMovement(id, MovementKind.OpeningBalance, amount, occurredOn, period, correctsMovementId: null);
+    }
 
     /// <summary>
     /// One period's rent. The amount must be positive: a period that charges nothing is not a
@@ -79,18 +92,26 @@ public sealed class AccountMovement
             throw new ArgumentException("A rent accrual must be a positive amount.", nameof(amount));
         }
 
+        RequireFirstOfMonth(period);
+
         return new AccountMovement(id, MovementKind.RentAccrual, amount, dueOn, period, correctsMovementId: null);
     }
 
-    /// <summary>One instalment of the tenant's one-off contract commission. Fixed; it never adjusts.</summary>
-    public static AccountMovement ContractualFeeInstalment(Guid id, decimal amount, DateOnly dueOn)
+    /// <summary>
+    /// One instalment of the tenant's one-off contract commission. Fixed; it never adjusts. It
+    /// carries the period of the rent it rides with, so the same payment settles both and the
+    /// period's recargo runs on the two together.
+    /// </summary>
+    public static AccountMovement ContractualFeeInstalment(Guid id, decimal amount, DateOnly period, DateOnly dueOn)
     {
         if (amount <= 0m)
         {
             throw new ArgumentException("A fee instalment must be a positive amount.", nameof(amount));
         }
 
-        return new AccountMovement(id, MovementKind.ContractualFeeInstalment, amount, dueOn, period: null, correctsMovementId: null);
+        RequireFirstOfMonth(period);
+
+        return new AccountMovement(id, MovementKind.ContractualFeeInstalment, amount, dueOn, period, correctsMovementId: null);
     }
 
     /// <summary>
@@ -104,6 +125,39 @@ public sealed class AccountMovement
         }
 
         return new AccountMovement(id, MovementKind.RecargoFrozen, amount, signedOn, period: null, correctsMovementId: null);
+    }
+
+    /// <summary>
+    /// The recargo charged on <paramref name="period"/> when it is paid. A debit, so strictly
+    /// positive: a zero recargo writes no movement at all (spec Test 10).
+    /// </summary>
+    public static AccountMovement RecargoCharged(Guid id, decimal amount, DateOnly period, DateOnly occurredOn)
+    {
+        if (amount <= 0m)
+        {
+            throw new ArgumentException("A charged recargo must be a positive amount.", nameof(amount));
+        }
+
+        RequireFirstOfMonth(period);
+
+        return new AccountMovement(id, MovementKind.RecargoCharged, amount, occurredOn, period, correctsMovementId: null);
+    }
+
+    /// <summary>
+    /// Money received for <paramref name="period"/>. A credit, so strictly negative. Dated by the
+    /// ledger date rule (<see cref="LedgerDating"/>), which can differ from the day the money was
+    /// received.
+    /// </summary>
+    public static AccountMovement Payment(Guid id, decimal amount, DateOnly period, DateOnly occurredOn)
+    {
+        if (amount >= 0m)
+        {
+            throw new ArgumentException("A payment must be a negative amount.", nameof(amount));
+        }
+
+        RequireFirstOfMonth(period);
+
+        return new AccountMovement(id, MovementKind.Payment, amount, occurredOn, period, correctsMovementId: null);
     }
 
     /// <summary>
@@ -133,5 +187,17 @@ public sealed class AccountMovement
         }
 
         return new AccountMovement(id, MovementKind.Correction, difference, occurredOn, period, correctsMovementId);
+    }
+
+    /// <summary>
+    /// A period is the first day of its month. Anything else would let the same month be charged
+    /// twice, because <see cref="ContractAccount.IsChargedFor"/> compares exact dates.
+    /// </summary>
+    private static void RequireFirstOfMonth(DateOnly period)
+    {
+        if (period.Day != 1)
+        {
+            throw new ArgumentException("A period must be the first day of a month.", nameof(period));
+        }
     }
 }

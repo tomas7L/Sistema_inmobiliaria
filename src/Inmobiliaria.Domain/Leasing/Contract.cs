@@ -45,6 +45,22 @@ public sealed class Contract
     /// contract, because the system should not refuse a lease that happens to say the 5th.
     /// </summary>
     public const int DefaultDueDay = 10;
+
+    /// <summary>
+    /// The go-live date of a contract that predates the system, and null for one created here. The
+    /// accrual schedule produces no period whose due date falls on or before it, rent and
+    /// instalments alike: those months are carried by the opening balance, month by month, or are
+    /// not owed (cobranza-y-recibos design D17).
+    ///
+    /// It is stored on the contract rather than derived from the earliest opening balance, because
+    /// an account read before its opening balances are typed would have no cutover and would
+    /// materialise its whole history onto an append-only ledger, permanently.
+    ///
+    /// Deliberately get-only, like <see cref="DueDay"/>: EF leaves it out of the model until a
+    /// configuration names it, which lets the column and its migration ship together in the change
+    /// that adds them. The setter that records it on load arrives with that migration.
+    /// </summary>
+    public DateOnly? CutoverDate { get; }
     public ContractStatus Status { get; private set; }
     public EndReason? EndReason { get; private set; }
 
@@ -81,7 +97,8 @@ public sealed class Contract
         decimal monthlyRent,
         IReadOnlyCollection<UnitShare> unitShares,
         decimal? honorariosPercentage = null,
-        int dueDay = DefaultDueDay)
+        int dueDay = DefaultDueDay,
+        DateOnly? cutoverDate = null)
     {
         // Any calendar day is allowed, including the 29th through the 31st. A month that is too
         // short clamps to its own last day when the due date is computed, rather than being
@@ -117,6 +134,7 @@ public sealed class Contract
         MonthlyRent = monthlyRent;
         HonorariosPercentage = honorariosPercentage;
         DueDay = dueDay;
+        CutoverDate = cutoverDate;
         Status = ContractStatus.Active;
 
         ApplyShares(unitShares);
