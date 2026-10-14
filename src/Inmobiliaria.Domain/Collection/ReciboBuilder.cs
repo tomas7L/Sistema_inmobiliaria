@@ -121,8 +121,9 @@ public static class ReciboBuilder
 
         // Stored as issued, never recomputed. Truncate the positive fee first, then negate, so the
         // cut is toward zero (47,860.80 is -47,860, never -47,861). Printed even when the rate is 0.
-        amounts[ReciboLineKind.HonorariosAdministracion] =
-            -decimal.Truncate(honorariosPercentage / 100m * ledger.HonorariosBase);
+        // A zero fee is 0m and never negative zero: unary minus on 0m sets the sign bit (R3-001).
+        var fee = decimal.Truncate(honorariosPercentage / 100m * ledger.HonorariosBase);
+        amounts[ReciboLineKind.HonorariosAdministracion] = fee == 0m ? 0m : -fee;
 
         var propietario = new ReciboDraft(ReciboCopy.Propietario, ToLines(amounts, ReciboCopy.Propietario));
 

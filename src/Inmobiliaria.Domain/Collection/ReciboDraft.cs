@@ -20,6 +20,12 @@ public sealed class ReciboDraft : IEquatable<ReciboDraft>
         ArgumentNullException.ThrowIfNull(lines);
 
         var copied = lines.ToArray();
+
+        if (copied.Any(line => line is null))
+        {
+            throw new ArgumentException("A draft has no null line.", nameof(lines));
+        }
+
         Validate(copy, copied);
 
         Copy = copy;

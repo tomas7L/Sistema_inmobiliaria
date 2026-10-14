@@ -265,4 +265,53 @@ public class ReciboLinesTests
 
         Assert.Throws<ArgumentException>(() => new ReciboDraft(ReciboCopy.Locatario, lines));
     }
+
+    // R3-002: the header refuses what a printed recibo cannot do without.
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void AHeader_RefusesABlankTenant(string? tenant)
+    {
+        Assert.ThrowsAny<ArgumentException>(() => new ReciboHeader(tenant!, ["Juan Perez"], "Departamento 2B"));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void AHeader_RefusesBlankUnitsText(string? units)
+    {
+        Assert.ThrowsAny<ArgumentException>(() => new ReciboHeader("Maria Gomez", ["Juan Perez"], units!));
+    }
+
+    [Fact]
+    public void AHeader_RefusesAnEmptyLessorList()
+    {
+        Assert.Throws<ArgumentException>(() => new ReciboHeader("Maria Gomez", [], "Departamento 2B"));
+    }
+
+    [Fact]
+    public void AHeader_RefusesANullLessorList()
+    {
+        Assert.Throws<ArgumentNullException>(() => new ReciboHeader("Maria Gomez", null!, "Departamento 2B"));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(null)]
+    public void AHeader_RefusesABlankLessorName(string? blank)
+    {
+        Assert.Throws<ArgumentException>(() => new ReciboHeader("Maria Gomez", ["Juan Perez", blank!], "Departamento 2B"));
+    }
+
+    // R3-003: a null line is a caller bug named as one, not a NullReferenceException from inside the check.
+    [Fact]
+    public void ADraft_RefusesANullLineElement()
+    {
+        var lines = new ReciboLine?[] { new(ReciboLineKind.Rent, 1, 100m), null };
+
+        Assert.Throws<ArgumentException>(() => new ReciboDraft(ReciboCopy.Locatario, lines!));
+    }
 }
