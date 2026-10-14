@@ -249,6 +249,71 @@ public sealed class ContractAccount
         _movements.Where(m => m.Period == period && m.OccurredOn <= asOf).Sum(m => m.Amount);
 
     /// <summary>
+    /// The sum of everything this account holds for <paramref name="period"/>, whatever its date: the
+    /// period AS IT STANDS. Whether a period is owed, settled or payable is read from this figure and
+    /// not from <see cref="PeriodNet(DateOnly, DateOnly)"/>, because a movement dated after the
+    /// received date (an opening balance typed after the money arrived, the corrections of a voiding
+    /// made later) is still part of the account (cobranza-y-recibos Issues found 8).
+    /// </summary>
+    public decimal PeriodNet(DateOnly period) =>
+        _movements.Where(m => m.Period == period).Sum(m => m.Amount);
+
+    /// <summary>
+    /// The recargo a payment received on <paramref name="receivedOn"/> charges on
+    /// <paramref name="period"/>: measured to the received date, on the period as it stands (so a
+    /// payment voided on a later day is as if it never existed). Differs from
+    /// <see cref="RecargoProjectedFor"/>, which dates the principal too and is what
+    /// <see cref="AmountOwed"/> adds. Zero for a month carried by an opening balance (spec Decision
+    /// 31) and on a frozen account.
+    /// </summary>
+    public decimal RecargoProjectedForPayment(DateOnly period, DateOnly receivedOn, RecargoTerms terms)
+    {
+        ArgumentNullException.ThrowIfNull(terms);
+
+        if (IsFrozen(receivedOn))
+        {
+            return 0m;
+        }
+
+        var owing = PeriodNet(period);
+        if (owing <= 0m)
+        {
+            return 0m;
+        }
+
+        var accrual = _movements.FirstOrDefault(m => m.Kind == MovementKind.RentAccrual && m.Period == period);
+
+        return accrual is null ? 0m : RecargoMath.For(owing, accrual.OccurredOn, receivedOn, terms);
+    }
+
+    /// <summary>
+    /// What the account owes AS IT STANDS (every movement, whatever its date) with the recargo measured
+    /// to <paramref name="receivedOn"/>: the basis a payment received that day charges on, so a preview
+    /// built from it agrees with the figure charged. Not <see cref="AmountOwed"/>, which dates the
+    /// principal too and stays the figure of the mora worklist. Frozen as of the received date, the
+    /// recargo is already written and nothing more is projected.
+    /// </summary>
+    public decimal AmountOwedForPayment(DateOnly receivedOn, RecargoTerms terms)
+    {
+        ArgumentNullException.ThrowIfNull(terms);
+
+        var ledger = _movements.Sum(m => m.Amount);
+
+        if (IsFrozen(receivedOn))
+        {
+            return ledger;
+        }
+
+        var projected = _movements
+            .Where(m => m.Period is not null)
+            .Select(m => m.Period!.Value)
+            .Distinct()
+            .Sum(period => RecargoProjectedForPayment(period, receivedOn, terms));
+
+        return ledger + projected;
+    }
+
+    /// <summary>
     /// Whether a novación froze the recargo on or before <paramref name="asOf"/>. A frozen account
     /// projects nothing further and accepts no payment.
     /// </summary>
@@ -341,7 +406,7 @@ public sealed class ContractAccount
             return PeriodPayability.AlreadySettled;
         }
 
-        var owed = PeriodNet(period, asOf) > 0m;
+        var owed = PeriodNet(period) > 0m;
         var begunNotYetDue = scheduled is not null && scheduled.DueDate > asOf;
 
         return owed || begunNotYetDue ? PeriodPayability.Payable : PeriodPayability.AlreadySettled;
@@ -362,7 +427,7 @@ public sealed class ContractAccount
             .Where(m => m.Period is not null)
             .Select(m => m.Period!.Value)
             .Distinct()
-            .Where(period => PeriodNet(period, asOf) > 0m)
+            .Where(period => PeriodNet(period) > 0m)
             .OrderBy(period => period)
             .Cast<DateOnly?>()
             .FirstOrDefault(period => PayabilityOf(period!.Value, asOf, contract) == PeriodPayability.Payable);

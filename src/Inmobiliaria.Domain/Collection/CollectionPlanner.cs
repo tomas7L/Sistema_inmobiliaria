@@ -178,6 +178,16 @@ public static class CollectionPlanner
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(header);
 
+        if (request.AccountId != account.Id)
+        {
+            throw new ArgumentException("The request names another account.", nameof(request));
+        }
+
+        if (contract.Id != account.ContractId)
+        {
+            throw new ArgumentException("The contract is not the account's contract.", nameof(contract));
+        }
+
         var receivedOn = request.ReceivedOn ?? today;
 
         CollectionPreview Refused(CollectionRefusal refusal, DateOnly? period = null, decimal previous = 0m) =>
@@ -194,7 +204,7 @@ public static class CollectionPlanner
             return Refused(CollectionRefusal.ReceivedOnBeyondBound);
         }
 
-        var previous = account.AmountOwed(receivedOn, terms);
+        var previous = account.AmountOwedForPayment(receivedOn, terms);
 
         // Refused on what was typed, before truncation: -0.5 is a negative tasa.
         if (request.TasaMunicipal is < 0)
@@ -236,7 +246,10 @@ public static class CollectionPlanner
             return Refused(CollectionRefusal.PeriodAlreadySettled, period, previous);
         }
 
-        var resulting = previous - Math.Max(account.PeriodNet(period, receivedOn), 0m) - figures.Ledger.Recargo;
+        // What the account owes after the commit, on the same basis as the charge: the period as it
+        // stands (its net) and the recargo measured to the received date leave, exactly what this
+        // payment settles, because a paid period projects nothing afterwards.
+        var resulting = previous - Math.Max(account.PeriodNet(period), 0m) - figures.Ledger.Recargo;
 
         CollectionPreview WithFigures(CollectionRefusal? refusal, ReciboDraftPair? drafts, CollectionWarning[] warnings) =>
             new(
@@ -325,7 +338,11 @@ public static class CollectionPlanner
             written.Add(AccountMovement.ContractualFeeInstalment(Guid.NewGuid(), fee, period, chargeDate));
         }
 
-        var paymentDate = LedgerDating.PaymentDate(preview.ReceivedOn, chargeDate);
+        var latestCorrection = account.Movements
+            .Where(m => m.Kind == MovementKind.Correction && m.Period == period)
+            .Select(m => (DateOnly?)m.OccurredOn)
+            .Max();
+        var paymentDate = LedgerDating.PaymentDate(preview.ReceivedOn, chargeDate, latestCorrection);
 
         if (preview.Locatario!.Lines.SingleOrDefault(l => l.Kind == ReciboLineKind.Recargo) is { } recargo)
         {
@@ -361,7 +378,7 @@ public static class CollectionPlanner
 
         if (openingBalance is not null)
         {
-            var figure = account.PeriodNet(period, LedgerDating.PaymentDate(receivedOn, openingBalance.OccurredOn));
+            var figure = account.PeriodNet(period);
 
             return figure > 0m
                 ? new PeriodFigures(false, ReciboLedgerFigures.ForOpeningBalance(figure), figure)
@@ -384,17 +401,15 @@ public static class CollectionPlanner
             return null;
         }
 
-        var paymentDate = LedgerDating.PaymentDate(receivedOn, dueDate);
-
         var heldInstalment = account.Movements
-            .Where(m => m.Kind == MovementKind.ContractualFeeInstalment && m.Period == period && m.OccurredOn <= paymentDate)
+            .Where(m => m.Kind == MovementKind.ContractualFeeInstalment && m.Period == period)
             .Sum(m => m.Amount);
         var newInstalment = early && !account.HasInstalmentFor(period)
             ? AccrualSchedule.InstalmentAmountFor(contract, period) ?? 0m
             : 0m;
         var newRent = accrual is null ? begun!.Canon : 0m;
 
-        var rent = account.PeriodNet(period, paymentDate) - heldInstalment + newRent;
+        var rent = account.PeriodNet(period) - heldInstalment + newRent;
         var instalment = heldInstalment + newInstalment;
 
         if (rent <= 0m)
@@ -403,7 +418,7 @@ public static class CollectionPlanner
         }
 
         // Charged on the recargo projected as of the received date, truncated to a whole peso (spec Test 8).
-        var recargo = decimal.Truncate(account.RecargoProjectedFor(period, receivedOn, terms));
+        var recargo = decimal.Truncate(account.RecargoProjectedForPayment(period, receivedOn, terms));
 
         return new PeriodFigures(
             early,
