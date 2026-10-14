@@ -328,6 +328,24 @@ public class EarlyAccrualTests
     }
 
     /// <summary>
+    /// R3-payment-dated-before-settled-movements: a payment entered again after a voiding is never
+    /// dated before the latest correction on its period, whatever its received date.
+    /// </summary>
+    [Fact]
+    public void APaymentIsNeverDatedBeforeTheLatestCorrectionOnItsPeriod()
+    {
+        var chargedOn = new DateOnly(2026, 9, 10);
+        var receivedOn = new DateOnly(2026, 9, 15);
+        var correctedOn = new DateOnly(2026, 9, 20);
+
+        Assert.Equal(correctedOn, LedgerDating.PaymentDate(receivedOn, chargedOn, correctedOn));
+        Assert.Equal(receivedOn, LedgerDating.PaymentDate(receivedOn, chargedOn, new DateOnly(2026, 9, 12)));
+        Assert.Equal(receivedOn, LedgerDating.PaymentDate(receivedOn, chargedOn, receivedOn));
+        Assert.Equal(receivedOn, LedgerDating.PaymentDate(receivedOn, chargedOn, null));
+        Assert.Equal(LedgerDating.PaymentDate(receivedOn, chargedOn), LedgerDating.PaymentDate(receivedOn, chargedOn, null));
+    }
+
+    /// <summary>
     /// A back-dated payment of an opening-balance month typed after the money arrived is dated on
     /// the day the balance was typed, never before it was charged.
     /// </summary>

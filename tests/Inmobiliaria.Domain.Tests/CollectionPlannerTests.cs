@@ -1,4 +1,5 @@
 using System.Reflection;
+using Inmobiliaria.Domain.Access;
 using Inmobiliaria.Domain.Accounts;
 using Inmobiliaria.Domain.Collection;
 using Inmobiliaria.Domain.Leasing;
@@ -439,5 +440,171 @@ public class CollectionPlannerTests
         Assert.Equal(CollectionRefusal.AmountNotTotal, instalmentOnly.Refusal);
         Assert.Contains(exact.Locatario!.Lines, l => l.Kind == ReciboLineKind.ContractualFeeInstalment && l.Amount == 90_000m);
         Assert.DoesNotContain(typeof(CollectionRequest).GetProperties(), p => p.Name.Contains("Instalment", StringComparison.Ordinal));
+    }
+
+    // Issues found 8 (a): a month loaded as an opening balance typed AFTER the money arrived.
+    [Fact]
+    public void AnOpeningBalanceTypedAfterTheReceivedDate_IsPayable_AtItsFigure_WithNoRecargo()
+    {
+        var contract = Scenario.NewContract(start: August);
+        var account = new ContractAccount(Guid.NewGuid(), contract.Id);
+        var typedOn = new DateOnly(2026, 9, 5);
+        var receivedOn = new DateOnly(2026, 9, 2);
+        account.Append(AccountMovement.OpeningBalance(Guid.NewGuid(), 400_000m, typedOn, August));
+
+        Assert.Equal(PeriodPayability.Payable, account.PayabilityOf(August, receivedOn, contract));
+        Assert.Equal(August, account.DefaultPeriodToPay(receivedOn, contract));
+
+        var preview = Scenario.PlanExact(account, contract, received: receivedOn, today: typedOn);
+        var written = CollectionPlanner.MovementsToWrite(account, contract, preview);
+
+        Assert.Null(preview.Refusal);
+        Assert.Equal(August, preview.Period);
+        Assert.Equal(400_000m, preview.LedgerFigure);
+        Assert.Equal(400_000m, preview.PreviousAmountOwed);
+        Assert.Equal(0m, preview.ResultingAmountOwed);
+        Assert.DoesNotContain(written, m => m.Kind == MovementKind.RecargoCharged);
+
+        var payment = Assert.Single(written);
+        Assert.Equal(-400_000m, payment.Amount);
+        Assert.Equal(LedgerDating.PaymentDate(receivedOn, typedOn), payment.OccurredOn);
+    }
+
+    // Issues found 8 (b): a late payment voided on a later day and entered again with its original received date.
+    [Fact]
+    public void ALatePaymentVoidedLater_AndEnteredAgainWithTheSameReceivedDate_IsPayable_WithTheRecargoOfThatDate()
+    {
+        var contract = Scenario.NewContract(start: September);
+        var due = new DateOnly(2026, 9, 10);
+        var receivedOn = new DateOnly(2026, 9, 15);
+        var voidedOn = new DateOnly(2026, 9, 20);
+        var account = Scenario.AccountFor(contract, receivedOn);
+
+        var first = Scenario.PlanExact(account, contract, named: September, received: receivedOn, today: receivedOn);
+        var firstWritten = CollectionPlanner.MovementsToWrite(account, contract, first);
+        Scenario.Apply(account, firstWritten);
+        Assert.Equal(50_000m, firstWritten.Single(m => m.Kind == MovementKind.RecargoCharged).Amount);
+
+        var voiding = VoidingPlanner.Plan(
+            account,
+            VoidingPlannerTests.RecordOf(account, firstWritten, first),
+            VoidingPlannerTests.PairOf(first).Recibos,
+            "Mistyped",
+            voidedOn,
+            Scenario.Terms,
+            UserRole.Empleado,
+            recordedOn: receivedOn);
+        Assert.Null(voiding.Refusal);
+        Scenario.Apply(account, voiding.Corrections);
+        Assert.All(voiding.Corrections, c => Assert.Equal(voidedOn, c.OccurredOn));
+
+        // As of the 15th the old payment and recargo still stand and the period nets zero; as it stands, it is owed.
+        Assert.Equal(0m, account.PeriodNet(September, receivedOn));
+        Assert.Equal(PeriodPayability.Payable, account.PayabilityOf(September, receivedOn, contract));
+
+        var again = Scenario.PlanExact(account, contract, named: September, received: receivedOn, today: voidedOn);
+        var written = CollectionPlanner.MovementsToWrite(account, contract, again);
+
+        Assert.Null(again.Refusal);
+        Assert.Equal(550_000m, again.LedgerFigure);
+        Assert.Equal(550_000m, again.PreviousAmountOwed);
+        Assert.Equal(0m, again.ResultingAmountOwed);
+        Assert.Equal(
+            [MovementKind.RecargoCharged, MovementKind.Payment],
+            written.Select(m => m.Kind));
+        Assert.Equal(50_000m, written[0].Amount);
+        Assert.Equal(receivedOn, LedgerDating.PaymentDate(receivedOn, due));
+
+        // R3-payment-dated-before-settled-movements: the new movements are dated after the corrections
+        // they follow (the 20th), so a dated view never sees two payments and no corrections.
+        Assert.All(written, m => Assert.Equal(voidedOn, m.OccurredOn));
+
+        // With no period named, the default finds it too.
+        Assert.Equal(September, Scenario.Plan(account, contract, 0m, received: receivedOn, today: voidedOn).Period);
+
+        Scenario.Apply(account, written);
+
+        for (var d = receivedOn; d < voidedOn; d = d.AddDays(1))
+        {
+            Assert.Equal(0m, account.PeriodNet(September, d));
+            Assert.Equal(0m, account.AmountOwed(d, Scenario.Terms));
+        }
+
+        Assert.Equal(0m, account.PeriodNet(September, voidedOn));
+        Assert.Equal(0m, account.PeriodNet(September));
+    }
+
+    // R3-resulting-owed-truncation-residue
+    [Fact]
+    public void TheResultingAmountOwed_EqualsWhatTheAccountOwesAfterTheCommit()
+    {
+        // The projection subtracted is the one the charge uses, so the preview and the account agree after the commit.
+        var contract = Scenario.NewContract(rent: 333_333m);
+        var account = Scenario.AccountFor(contract, Today);
+
+        var preview = Scenario.PlanExact(account, contract, named: August);
+        Scenario.Apply(account, CollectionPlanner.MovementsToWrite(account, contract, preview));
+
+        Assert.Equal(account.AmountOwed(Today, Scenario.Terms), preview.ResultingAmountOwed);
+    }
+
+    // R3-frozen-branch-of-payment-basis-untested
+    [Fact]
+    public void AFrozenAccount_OwesItsLedgerOnly_AndProjectsNoRecargoForAPayment()
+    {
+        var contract = Scenario.NewContract();
+        var account = Scenario.AccountFor(contract, Today);
+        account.Append(AccountMovement.RecargoFrozen(Guid.NewGuid(), 50_000m, Today));
+        var ledger = account.Movements.Sum(m => m.Amount);
+
+        Assert.True(account.IsFrozen(Today));
+        Assert.Equal(ledger, account.AmountOwedForPayment(Today, Scenario.Terms));
+        Assert.Equal(0m, account.RecargoProjectedForPayment(Scenario.August, Today, Scenario.Terms));
+        Assert.True(account.AmountOwed(Today, Scenario.Terms) >= 0m);
+    }
+
+    // R3-frozen-branch-of-payment-basis-untested
+    [Fact]
+    public void AnAccountWithSeveralOwingPeriods_OwesTheLedgerPlusTheRecargoOfEachOne()
+    {
+        var contract = Scenario.NewContract();
+        var account = Scenario.AccountFor(contract, Today);
+
+        var expectedRecargo = 0m;
+        var periods = account.Movements.Where(m => m.Kind == MovementKind.RentAccrual).ToList();
+
+        foreach (var accrual in periods)
+        {
+            expectedRecargo += RecargoMath.For(accrual.Amount, accrual.OccurredOn, Today, Scenario.Terms);
+        }
+
+        Assert.Equal(3, periods.Count);
+        Assert.True(expectedRecargo > 0m);
+        Assert.Equal(1_500_000m + expectedRecargo, account.AmountOwedForPayment(Today, Scenario.Terms));
+    }
+
+    // R3-request-account-id-unchecked
+    [Fact]
+    public void ARequestForAnotherAccount_IsRefusedAsABug()
+    {
+        var contract = Scenario.NewContract();
+        var account = Scenario.AccountFor(contract, Today);
+        var request = new CollectionRequest(Guid.NewGuid(), August, null, 1m);
+
+        Assert.Throws<ArgumentException>(
+            () => CollectionPlanner.Plan(account, contract, Scenario.Terms, request, Today, Scenario.Header()));
+    }
+
+    // R3-request-account-id-unchecked
+    [Fact]
+    public void AContractThatIsNotTheAccountsContract_IsRefusedAsABug()
+    {
+        var contract = Scenario.NewContract();
+        var account = Scenario.AccountFor(contract, Today);
+        var other = Scenario.NewContract();
+        var request = new CollectionRequest(account.Id, August, null, 1m);
+
+        Assert.Throws<ArgumentException>(
+            () => CollectionPlanner.Plan(account, other, Scenario.Terms, request, Today, Scenario.Header()));
     }
 }
