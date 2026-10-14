@@ -11,7 +11,8 @@ namespace Inmobiliaria.Domain.Tests;
 ///
 /// The planner that does this for real arrives in PR 4; these tests assemble the same steps from
 /// the pieces PR 1 adds, so the rule is fixed before anything is built on it. The instalment half
-/// of Test 68 is task 2.5.
+/// of Test 68 (task 2.5) lives in the same file: no planner class exists yet, so the same helper
+/// assembles the instalment step from AccrualSchedule.InstalmentAmountFor and HasInstalmentFor.
 /// </summary>
 public class EarlyAccrualTests
 {
@@ -21,15 +22,16 @@ public class EarlyAccrualTests
     private static readonly DateOnly SeptemberDue = new(2026, 9, 10);
     private static readonly DateOnly ReceivedOn = new(2026, 9, 2);
 
-    private static Contract NewContract() =>
+    private static Contract NewContract(ContractualFeePlan? plan = null) =>
         new(
             Guid.NewGuid(),
             new DateOnly(2026, 7, 1),
             new DateOnly(2027, 12, 31),
             monthlyRent: 500_000m,
-            unitShares: [new UnitShare(Guid.NewGuid(), 100m)]);
+            unitShares: [new UnitShare(Guid.NewGuid(), 100m)],
+            contractualFeePlan: plan);
 
-    /// <summary>What lazy accrual writes: every due period the account does not hold yet.</summary>
+    /// <summary>What lazy accrual writes: every due period the account does not hold yet, with its instalment.</summary>
     private static int Materialise(ContractAccount account, Contract contract, DateOnly asOf)
     {
         var written = 0;
@@ -43,14 +45,25 @@ public class EarlyAccrualTests
 
             account.Append(AccountMovement.RentAccrual(Guid.NewGuid(), due.Canon, due.Period, due.DueDate));
             written++;
+
+            if (AccrualSchedule.InstalmentAmountFor(contract, due.Period) is { } fee &&
+                !account.HasInstalmentFor(due.Period))
+            {
+                account.Append(AccountMovement.ContractualFeeInstalment(
+                    Guid.NewGuid(), fee, due.Period, due.DueDate));
+                written++;
+            }
         }
 
         return written;
     }
 
     /// <summary>
-    /// The early payment's plan for the rent: write the period's accrual when it is missing, then a
-    /// payment dated by the ledger date rule. Returns the movements written.
+    /// The early payment's plan: write the rent of the period when <see cref="ContractAccount.IsChargedFor"/>
+    /// says it is missing, its instalment when the plan assigns one and
+    /// <see cref="ContractAccount.HasInstalmentFor"/> says it is missing, then a payment of the whole
+    /// period dated by the ledger date rule. Each charge is guarded on its own, which is what makes
+    /// the voided-early-payment case write only the payment. Returns the movements written.
     /// </summary>
     private static List<AccountMovement> PayEarly(
         ContractAccount account, Contract contract, DateOnly period, DateOnly receivedOn)
@@ -64,11 +77,21 @@ public class EarlyAccrualTests
             account.Append(written[^1]);
         }
 
+        if (AccrualSchedule.InstalmentAmountFor(contract, period) is { } fee && !account.HasInstalmentFor(period))
+        {
+            written.Add(AccountMovement.ContractualFeeInstalment(Guid.NewGuid(), fee, period, begun.DueDate));
+            account.Append(written[^1]);
+        }
+
+        // Everything the period holds as of its due date: the rent and the instalment, however they
+        // came to be on the account.
+        var owing = account.PeriodNet(period, begun.DueDate);
+
         // Not late, so no recargo: received minus due is negative and the arithmetic already says zero.
-        Assert.Equal(0m, RecargoMath.For(begun.Canon, begun.DueDate, receivedOn, LeaseTerms));
+        Assert.Equal(0m, RecargoMath.For(owing, begun.DueDate, receivedOn, LeaseTerms));
 
         var paymentDate = LedgerDating.PaymentDate(receivedOn, chargeDate: begun.DueDate);
-        written.Add(AccountMovement.Payment(Guid.NewGuid(), -begun.Canon, period, paymentDate));
+        written.Add(AccountMovement.Payment(Guid.NewGuid(), -owing, period, paymentDate));
         account.Append(written[^1]);
 
         return written;
@@ -188,6 +211,105 @@ public class EarlyAccrualTests
         Assert.Equal(
             RecargoMath.For(500_000m, SeptemberDue, new DateOnly(2026, 9, 15), LeaseTerms),
             account.RecargoProjectedFor(September, new DateOnly(2026, 9, 15), LeaseTerms));
+    }
+
+    /// <summary>
+    /// Spec test 68, instalment part: an early payment of a period that carries an instalment brings
+    /// the rent AND the instalment onto the account, and the payment settles both, dated on the due
+    /// date, with no recargo.
+    /// </summary>
+    [Fact]
+    public void AnEarlyPayment_OfAPeriodWithAnInstalment_WritesTheInstalmentToo()
+    {
+        var contract = NewContract(new ContractualFeePlan(120_000m, 6));
+        var account = new ContractAccount(Guid.NewGuid(), contract.Id);
+        Materialise(account, contract, new DateOnly(2026, 8, 31));
+
+        // July and August carry instalments 1 and 2, written on their due dates; September is the 3rd.
+        Assert.False(account.HasInstalmentFor(September));
+        Assert.Equal(3, AccrualSchedule.InstalmentNumberFor(contract, September));
+
+        var written = PayEarly(account, contract, September, ReceivedOn);
+
+        Assert.Equal(
+            [MovementKind.RentAccrual, MovementKind.ContractualFeeInstalment, MovementKind.Payment],
+            written.Select(m => m.Kind));
+        Assert.Equal(SeptemberDue, written[1].OccurredOn);
+        Assert.Equal(120_000m, written[1].Amount);
+        Assert.Equal(-620_000m, written[2].Amount);
+        Assert.Equal(SeptemberDue, written[2].OccurredOn);
+        Assert.DoesNotContain(written, m => m.Kind == MovementKind.RecargoCharged);
+        Assert.Equal(0m, account.PeriodNet(September, SeptemberDue));
+    }
+
+    /// <summary>The later accrual raises neither the rent nor the instalment again.</summary>
+    [Fact]
+    public void ALaterMaterialisation_RaisesNeitherTheRentNorTheInstalmentAgain()
+    {
+        var contract = NewContract(new ContractualFeePlan(120_000m, 6));
+        var account = new ContractAccount(Guid.NewGuid(), contract.Id);
+        Materialise(account, contract, new DateOnly(2026, 8, 31));
+        PayEarly(account, contract, September, ReceivedOn);
+
+        var raised = Materialise(account, contract, new DateOnly(2026, 9, 11));
+
+        Assert.Equal(0, raised);
+        Assert.Single(account.Movements, m => m.Kind == MovementKind.RentAccrual && m.Period == September);
+        Assert.Single(account.Movements, m => m.Kind == MovementKind.ContractualFeeInstalment && m.Period == September);
+    }
+
+    /// <summary>
+    /// The voided-early-payment case (design section 1): voiding reverses the payment but leaves the
+    /// rent and instalment it wrote, which are the charge of the period. Paying it again writes only
+    /// the payment, because IsChargedFor and HasInstalmentFor say nothing is missing.
+    /// </summary>
+    [Fact]
+    public void AVoidedEarlyPayment_PaidAgain_WritesNoSecondRentOrInstalment()
+    {
+        var contract = NewContract(new ContractualFeePlan(120_000m, 6));
+        var account = new ContractAccount(Guid.NewGuid(), contract.Id);
+        Materialise(account, contract, new DateOnly(2026, 8, 31));
+        var first = PayEarly(account, contract, September, ReceivedOn);
+
+        var voidedOn = new DateOnly(2026, 9, 3);
+        var payment = first[^1];
+        account.Append(AccountMovement.Correction(
+            Guid.NewGuid(), -payment.Amount, LedgerDating.CorrectionDate(voidedOn, payment.OccurredOn), payment.Id, September));
+        Assert.False(account.HasLivePaymentFor(September));
+        Assert.True(account.IsChargedFor(September));
+        Assert.True(account.HasInstalmentFor(September));
+
+        var second = PayEarly(account, contract, September, new DateOnly(2026, 9, 4));
+
+        var only = Assert.Single(second);
+        Assert.Equal(MovementKind.Payment, only.Kind);
+        Assert.Equal(SeptemberDue, only.OccurredOn);
+        Assert.Equal(-620_000m, only.Amount);
+        Assert.Equal(0m, account.PeriodNet(September, SeptemberDue));
+        Assert.Single(account.Movements, m => m.Kind == MovementKind.RentAccrual && m.Period == September);
+        Assert.Single(account.Movements, m => m.Kind == MovementKind.ContractualFeeInstalment && m.Period == September);
+    }
+
+    /// <summary>
+    /// The early path and the lazy path write the identical instalment row (same kind, period, amount
+    /// and date), so there is nothing to reconcile.
+    /// </summary>
+    [Fact]
+    public void TheEarlyInstalmentRow_IsIdenticalToTheRowLazyAccrualWouldWrite()
+    {
+        var contract = NewContract(new ContractualFeePlan(120_000m, 6));
+        var early = new ContractAccount(Guid.NewGuid(), contract.Id);
+        var lazy = new ContractAccount(Guid.NewGuid(), contract.Id);
+        Materialise(early, contract, new DateOnly(2026, 8, 31));
+        Materialise(lazy, contract, new DateOnly(2026, 8, 31));
+
+        PayEarly(early, contract, September, ReceivedOn);
+        Materialise(lazy, contract, new DateOnly(2026, 9, 11));
+
+        var earlyFee = Assert.Single(early.Movements, m => m.Kind == MovementKind.ContractualFeeInstalment && m.Period == September);
+        var lazyFee = Assert.Single(lazy.Movements, m => m.Kind == MovementKind.ContractualFeeInstalment && m.Period == September);
+        Assert.Equal(lazyFee.Amount, earlyFee.Amount);
+        Assert.Equal(lazyFee.OccurredOn, earlyFee.OccurredOn);
     }
 
     /// <summary>

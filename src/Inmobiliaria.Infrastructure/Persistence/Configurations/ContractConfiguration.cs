@@ -28,6 +28,19 @@ public sealed class ContractConfiguration : IEntityTypeConfiguration<Contract>
             t.HasCheckConstraint(
                 "ck_contracts_due_day_range",
                 "due_day BETWEEN 1 AND 31");
+
+            // The honorarios contractuales plan is an amount AND a count, never one of them
+            // (cobranza-y-recibos design section 5). Three checks rather than one so a refusal
+            // names the rule that was broken.
+            t.HasCheckConstraint(
+                "ck_contracts_contractual_fee_both_or_neither",
+                "(contractual_fee_amount IS NULL) = (contractual_fee_instalments IS NULL)");
+            t.HasCheckConstraint(
+                "ck_contracts_contractual_fee_amount_positive",
+                "contractual_fee_amount IS NULL OR contractual_fee_amount > 0");
+            t.HasCheckConstraint(
+                "ck_contracts_contractual_fee_instalments_range",
+                "contractual_fee_instalments IS NULL OR contractual_fee_instalments BETWEEN 1 AND 6");
         });
 
         builder.HasKey(c => c.Id);
@@ -50,6 +63,26 @@ public sealed class ContractConfiguration : IEntityTypeConfiguration<Contract>
             .HasColumnType("smallint")
             .HasDefaultValue(Contract.DefaultDueDay)
             .IsRequired();
+
+        // The go-live date of a contract that predates the system, null for one created here. The
+        // domain exposes it get-only and sets it through Contract.SetCutoverDate, so the column is
+        // bound to the private field behind it. Nullable, and existing rows take null: nothing about
+        // them moves (spec Test 64).
+        builder.Property(c => c.CutoverDate)
+            .HasField("_cutoverDate")
+            .HasColumnName("cutover_date");
+
+        // The fee plan is two columns. Contract.ContractualFeePlan is a value assembled from them,
+        // so it is ignored and the two private fields behind it are mapped by name instead. That is
+        // also what keeps a plan that is "an amount without a count" out of the domain: the type
+        // cannot be built from half a plan, and the checks above refuse it in the table.
+        builder.Property<decimal?>("_contractualFeeAmount")
+            .HasColumnName("contractual_fee_amount")
+            .HasPrecision(14, 2);
+        builder.Property<short?>("_contractualFeeInstalments")
+            .HasColumnName("contractual_fee_instalments")
+            .HasColumnType("smallint");
+        builder.Ignore(c => c.ContractualFeePlan);
 
         builder.Property(c => c.MonthlyRent)
             .HasColumnName("monthly_rent")

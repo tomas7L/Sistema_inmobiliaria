@@ -92,9 +92,12 @@ public static class AccrualSchedule
     ///
     /// It counts from the contract's start and so INCLUDES the periods before a cutover date: a
     /// pre-existing contract skips instalments 1 and 2 when its first two periods predate go-live,
-    /// rather than renumbering them onto later months. The cap at the fee plan's instalment count
-    /// is applied by the caller that holds the plan; the plan itself arrives with the fee-plan
-    /// change.
+    /// rather than renumbering them onto later months.
+    ///
+    /// When the contract has a fee plan the number is capped at the plan's instalment count: the
+    /// period after the last instalment has none. A contract with no plan has no cap to apply, so
+    /// the bare position is returned and <see cref="InstalmentAmountFor"/> is what says there is
+    /// nothing to charge.
     /// </summary>
     public static int? InstalmentNumberFor(Contract contract, DateOnly period)
     {
@@ -116,7 +119,9 @@ public static class AccrualSchedule
 
                 if (candidate == period)
                 {
-                    return number;
+                    return contract.ContractualFeePlan is { } plan && number > plan.Instalments
+                        ? null
+                        : number;
                 }
             }
 
@@ -124,6 +129,30 @@ public static class AccrualSchedule
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The amount of the instalment that rides with <paramref name="period"/>'s rent, or null when
+    /// there is none: the contract has no plan, the period carries no instalment number (the schedule
+    /// never produces it, or it is past the plan's count), or it falls due on or before the cutover
+    /// date, where the opening balance carries the history instead (spec Test 59).
+    ///
+    /// The one place that answers "does this period take an instalment, and for how much", so the
+    /// materialiser and the early payment cannot disagree. The caller still asks
+    /// <see cref="ContractAccount.HasInstalmentFor"/> before writing, so it is never raised twice.
+    /// </summary>
+    public static decimal? InstalmentAmountFor(Contract contract, DateOnly period)
+    {
+        ArgumentNullException.ThrowIfNull(contract);
+
+        if (contract.ContractualFeePlan is not { } plan ||
+            InstalmentNumberFor(contract, period) is null ||
+            IsOnOrBeforeCutover(contract, DueDateFor(period, contract.DueDay)))
+        {
+            return null;
+        }
+
+        return plan.Amount;
     }
 
     /// <summary>

@@ -41,9 +41,16 @@ public sealed class AccountMaterialiser : IAccountMaterialiser
 
         var written = 0;
 
+        // AccrualSchedule already applies the cutover floor, so a pre-existing contract is never
+        // asked for a period its opening balance carries (design D17). It is the only place that
+        // rule lives, which is why this loop does not repeat it.
         foreach (var due in AccrualSchedule.PeriodsDue(contract, through))
         {
-            if (account.HasAccrualFor(due.Period))
+            // IsChargedFor, not HasAccrualFor: a period holding a monthly opening balance is charged
+            // already, and the domain refuses a rent accrual on top of it (cobranza-y-recibos D18).
+            // An early payment may also have brought the rent onto the account before its due date;
+            // the row it wrote is identical to this one, so there is nothing left to write.
+            if (account.IsChargedFor(due.Period))
             {
                 continue;
             }
@@ -52,6 +59,18 @@ public sealed class AccountMaterialiser : IAccountMaterialiser
                 Guid.NewGuid(), due.Canon, due.Period, due.DueDate));
 
             written++;
+
+            // The honorarios contractuales instalment rides with the rent of the k-th period
+            // (design D19), dated on the same due date. HasInstalmentFor keeps it from being raised
+            // twice; the unique index is the backstop for two writers at once.
+            if (AccrualSchedule.InstalmentAmountFor(contract, due.Period) is { } fee &&
+                !account.HasInstalmentFor(due.Period))
+            {
+                account.Append(AccountMovement.ContractualFeeInstalment(
+                    Guid.NewGuid(), fee, due.Period, due.DueDate));
+
+                written++;
+            }
         }
 
         if (written == 0)
