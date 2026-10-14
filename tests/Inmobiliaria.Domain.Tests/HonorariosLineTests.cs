@@ -169,4 +169,18 @@ public class HonorariosLineTests
     private static ReciboPair Issue(ReciboDraftPair drafts) =>
         ReciboPair.Issue(
             24_270, Period, ReceivedOn, new ReciboHeader("Maria Gomez", ["Juan Perez"], "Departamento 2B"), drafts);
+
+    // R3-001: a zero fee is 0m, never negative zero.
+    [Theory]
+    [InlineData(0, 507_000, 91_260)]
+    [InlineData(8, 0, 0)]
+    [InlineData(8, 5, 0)]
+    public void AZeroFee_IsPrintedAsPlainZero_NeverNegativeZero(int rate, int rent, int recargo)
+    {
+        var fee = Honorarios(Build(rent, recargo, rate).Propietario);
+
+        Assert.Equal(0m, fee);
+        Assert.False(decimal.IsNegative(fee!.Value));
+        Assert.Equal("0", fee.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
 }
