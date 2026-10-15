@@ -654,6 +654,256 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
                     b.UseTphMappingStrategy();
                 });
 
+            modelBuilder.Entity("collections", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("account_id");
+
+                    b.Property<short>("Attempt")
+                        .HasColumnType("smallint")
+                        .HasColumnName("attempt");
+
+                    b.Property<Guid>("PaymentMovementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("payment_movement_id");
+
+                    b.Property<DateOnly>("Period")
+                        .HasColumnType("date")
+                        .HasColumnName("period");
+
+                    b.Property<Guid?>("RecargoMovementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recargo_movement_id");
+
+                    b.Property<DateOnly>("ReceivedOn")
+                        .HasColumnType("date")
+                        .HasColumnName("received_on");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("recorded_at");
+
+                    b.Property<string>("RecordedBy")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("name")
+                        .HasColumnName("recorded_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_collections");
+
+                    b.HasIndex("PaymentMovementId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_collections_payment_movement");
+
+                    b.HasIndex("RecargoMovementId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_collections_recargo_movement");
+
+                    b.HasIndex("AccountId", "Period", "Attempt")
+                        .IsUnique()
+                        .HasDatabaseName("ux_collections_live_attempt");
+
+                    b.ToTable("collections", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_collections_attempt_positive", "attempt >= 1");
+
+                            t.HasCheckConstraint("ck_collections_period_first_of_month", "EXTRACT(DAY FROM period) = 1");
+                        });
+                });
+
+            modelBuilder.Entity("recibo_annulments", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("AnnulledAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("annulled_at");
+
+                    b.Property<string>("AnnulledBy")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("name")
+                        .HasColumnName("annulled_by");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("reason");
+
+                    b.Property<Guid>("ReciboId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recibo_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_recibo_annulments");
+
+                    b.HasIndex("ReciboId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_recibo_annulments_recibo");
+
+                    b.ToTable("recibo_annulments", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_recibo_annulments_reason_not_blank", "reason ~ '\\S'");
+                        });
+                });
+
+            modelBuilder.Entity("recibo_lines", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("kind");
+
+                    b.Property<short>("Position")
+                        .HasColumnType("smallint")
+                        .HasColumnName("position");
+
+                    b.Property<Guid>("ReciboId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recibo_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_recibo_lines");
+
+                    b.HasIndex("ReciboId", "Kind")
+                        .IsUnique()
+                        .HasDatabaseName("ux_recibo_lines_kind");
+
+                    b.HasIndex("ReciboId", "Position")
+                        .IsUnique()
+                        .HasDatabaseName("ux_recibo_lines_position");
+
+                    b.ToTable("recibo_lines", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_recibo_lines_honorarios_not_positive", "kind <> 'HonorariosAdministracion' OR amount <= 0");
+
+                            t.HasCheckConstraint("ck_recibo_lines_kind", "kind IN ('Rent','ContractualFeeInstalment','Recargo','TasaMunicipal','Seguro','OtrosConceptos','SaldoDeudor','HonorariosAdministracion')");
+
+                            t.HasCheckConstraint("ck_recibo_lines_tasa_not_negative", "kind <> 'TasaMunicipal' OR amount >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("recibo_numbering", b =>
+                {
+                    b.Property<short>("Id")
+                        .HasColumnType("smallint")
+                        .HasColumnName("id");
+
+                    b.Property<int?>("NextNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("next_number");
+
+                    b.Property<int?>("StartingNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("starting_number");
+
+                    b.HasKey("Id")
+                        .HasName("pk_recibo_numbering");
+
+                    b.ToTable("recibo_numbering", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_recibo_numbering_single_row", "id = 1");
+
+                            t.HasCheckConstraint("ck_recibo_numbering_starting_positive", "starting_number IS NULL OR starting_number > 0");
+                        });
+                });
+
+            modelBuilder.Entity("recibos", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CollectionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("collection_id");
+
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("contract_id");
+
+                    b.Property<string>("Copy")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("copy");
+
+                    b.Property<string>("Legend")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("legend");
+
+                    b.Property<string>("LessorNames")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("lessor_names");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("integer")
+                        .HasColumnName("number");
+
+                    b.Property<DateOnly>("Period")
+                        .HasColumnType("date")
+                        .HasColumnName("period");
+
+                    b.Property<DateOnly>("ReceivedOn")
+                        .HasColumnType("date")
+                        .HasColumnName("received_on");
+
+                    b.Property<string>("TenantName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("tenant_name");
+
+                    b.Property<decimal>("Total")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("total");
+
+                    b.Property<string>("UnitsDescription")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("units_description");
+
+                    b.HasKey("Id")
+                        .HasName("pk_recibos");
+
+                    b.HasIndex("Number")
+                        .IsUnique()
+                        .HasDatabaseName("ux_recibos_number");
+
+                    b.HasIndex("CollectionId", "Copy")
+                        .IsUnique()
+                        .HasDatabaseName("ux_recibos_collection_copy");
+
+                    b.ToTable("recibos", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_recibos_copy", "copy IN ('Locatario','Propietario')");
+
+                            t.HasCheckConstraint("ck_recibos_number_positive", "number > 0");
+                        });
+                });
+
             modelBuilder.Entity("Inmobiliaria.Domain.Units.ParkingUnit", b =>
                 {
                     b.HasBaseType("Inmobiliaria.Domain.Units.Unit");
@@ -864,6 +1114,59 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
 
                     b.Navigation("Address")
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("collections", b =>
+                {
+                    b.HasOne("Inmobiliaria.Domain.Accounts.ContractAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_collections_contract_accounts_account_id");
+
+                    b.HasOne("Inmobiliaria.Domain.Accounts.AccountMovement", null)
+                        .WithMany()
+                        .HasForeignKey("PaymentMovementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_collections_account_movements_payment_movement_id");
+
+                    b.HasOne("Inmobiliaria.Domain.Accounts.AccountMovement", null)
+                        .WithMany()
+                        .HasForeignKey("RecargoMovementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_collections_account_movements_recargo_movement_id");
+                });
+
+            modelBuilder.Entity("recibo_annulments", b =>
+                {
+                    b.HasOne("recibos", null)
+                        .WithMany()
+                        .HasForeignKey("ReciboId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_recibo_annulments_recibos_recibo_id");
+                });
+
+            modelBuilder.Entity("recibo_lines", b =>
+                {
+                    b.HasOne("recibos", null)
+                        .WithMany()
+                        .HasForeignKey("ReciboId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_recibo_lines_recibos_recibo_id");
+                });
+
+            modelBuilder.Entity("recibos", b =>
+                {
+                    b.HasOne("collections", null)
+                        .WithMany()
+                        .HasForeignKey("CollectionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_recibos_collections_collection_id");
                 });
 
             modelBuilder.Entity("Inmobiliaria.Domain.Accounts.ContractAccount", b =>
