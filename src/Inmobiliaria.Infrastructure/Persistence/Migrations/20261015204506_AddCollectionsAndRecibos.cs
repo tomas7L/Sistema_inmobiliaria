@@ -240,7 +240,9 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
             //    a test probes the boundary so the two cannot drift.
             //  - the attempt rule (design section 4): an attempt must be the number of collections the
             //    period already has plus one, and nothing may be inserted while an earlier collection of
-            //    the period is live, meaning none of its recibos carries an annulment. Two operators who
+            //    the period is live: at least one of its recibos has no annulment (voiding always annuls
+            //    the pair, design D15, so one annulled copy alone does not retire it), or it has no
+            //    recibo at all. Two operators who
             //    both compute attempt 1 pass this together and collide on ux_collections_live_attempt.
             migrationBuilder.Sql(
                 """
@@ -272,11 +274,14 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
                             FROM collections c
                             WHERE c.account_id = NEW.account_id
                               AND c.period = NEW.period
-                              AND NOT EXISTS (
-                                    SELECT 1
-                                    FROM recibos r
-                                    JOIN recibo_annulments a ON a.recibo_id = r.id
-                                    WHERE r.collection_id = c.id))
+                              AND (NOT EXISTS (
+                                        SELECT 1 FROM recibos r WHERE r.collection_id = c.id)
+                                   OR EXISTS (
+                                        SELECT 1
+                                        FROM recibos r
+                                        WHERE r.collection_id = c.id
+                                          AND NOT EXISTS (
+                                                SELECT 1 FROM recibo_annulments a WHERE a.recibo_id = r.id))))
                     THEN
                         RAISE EXCEPTION 'Attempt % is not the next attempt for period % of account %', NEW.attempt, NEW.period, NEW.account_id
                             USING ERRCODE = 'P0001', CONSTRAINT = 'collections_attempt_rule';
@@ -345,7 +350,10 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
             // recibo_numbering_cutover (design section 3, D7). Setting or changing starting_number sets
             // next_number to it, and is refused once any recibo exists; so the number may be set and
             // corrected freely until the first recibo, and the first recibo carries exactly that number.
-            // next_number cannot move while there is no starting number: no issuance before cutover.
+            // next_number cannot move while there is no starting number: no issuance before cutover, and
+            // once started it can only increase (never NULL, never back to a number already handed out);
+            // a set-back is refused here, and ux_recibos_number remains the backstop when triggers are
+            // bypassed (restore, session_replication_role = replica).
             //
             // The EXISTS is a new statement under READ COMMITTED, so an Admin correcting the number while
             // the first issuance is in flight waits on the row lock, then sees the committed recibo and is
@@ -361,9 +369,16 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
                         END IF;
 
                         NEW.next_number := NEW.starting_number;
-                    ELSIF NEW.next_number IS DISTINCT FROM OLD.next_number AND NEW.starting_number IS NULL THEN
-                        RAISE EXCEPTION 'No recibo can be numbered before the starting number is set'
-                            USING ERRCODE = 'P0001', CONSTRAINT = 'recibo_numbering_not_started';
+                    ELSIF NEW.next_number IS DISTINCT FROM OLD.next_number THEN
+                        IF NEW.starting_number IS NULL THEN
+                            RAISE EXCEPTION 'No recibo can be numbered before the starting number is set'
+                                USING ERRCODE = 'P0001', CONSTRAINT = 'recibo_numbering_not_started';
+                        END IF;
+
+                        IF NEW.next_number IS NULL OR NEW.next_number <= OLD.next_number THEN
+                            RAISE EXCEPTION 'The next recibo number can only move forward (from % to %)', OLD.next_number, NEW.next_number
+                                USING ERRCODE = 'P0001', CONSTRAINT = 'recibo_numbering_next_number_forward';
+                        END IF;
                     END IF;
 
                     RETURN NEW;

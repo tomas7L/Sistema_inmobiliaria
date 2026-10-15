@@ -1,3 +1,4 @@
+using Inmobiliaria.Domain.Access;
 using Inmobiliaria.Domain.Accounts;
 using Inmobiliaria.Domain.Collection;
 using Inmobiliaria.Infrastructure.Persistence;
@@ -272,6 +273,7 @@ public sealed class ReciboSchemaTests
         var paid = await ReciboTestSupport.SeedPaidPeriodAsync(context, connection, July);
 
         await ReciboTestSupport.InsertAnnulmentAsync(connection, null, paid.LocatarioId, "Cobrado por error");
+        await ReciboTestSupport.InsertAnnulmentAsync(connection, null, paid.PropietarioId, "Cobrado por error");
         var (secondPayment, _) = await ReciboTestSupport.InsertSettlementMovementsAsync(connection, paid.AccountId, July);
 
         await ReciboTestSupport.InsertCollectionAsync(
@@ -282,6 +284,67 @@ public sealed class ReciboSchemaTests
             "SELECT count(*) FROM collections WHERE account_id = @account AND period = @period",
             ("account", paid.AccountId), ("period", July));
         Assert.Equal(2, attempts);
+    }
+
+    /// <summary>
+    /// Design D15: voiding always annuls the pair, and a collection is live while ANY of its recibos
+    /// has no annulment. With only the Locatario copy annulled a new attempt is refused; once the
+    /// Propietario copy is annulled too it is accepted.
+    /// </summary>
+    [SkippableFact]
+    public async Task ACollection_StaysLive_WhileOnlyOneOfItsRecibosIsAnnulled()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var context = _fixture.CreateDbContext();
+        await using var connection = await ReciboTestSupport.OpenAsync(context);
+        var today = await ReciboTestSupport.LocalTodayAsync(connection);
+        var paid = await ReciboTestSupport.SeedPaidPeriodAsync(context, connection, July);
+        var (secondPayment, _) = await ReciboTestSupport.InsertSettlementMovementsAsync(connection, paid.AccountId, July);
+
+        await ReciboTestSupport.InsertAnnulmentAsync(connection, null, paid.LocatarioId, "Cobrado por error");
+
+        var refused = await ReciboTestSupport.RefusedAsync(() =>
+            ReciboTestSupport.InsertCollectionAsync(
+                connection, null, Guid.NewGuid(), paid.AccountId, July, 2, today, secondPayment, null));
+
+        Assert.Equal(RaiseException, refused.SqlState);
+        Assert.Equal("collections_attempt_rule", refused.ConstraintName);
+
+        await ReciboTestSupport.InsertAnnulmentAsync(connection, null, paid.PropietarioId, "Cobrado por error");
+
+        await ReciboTestSupport.InsertCollectionAsync(
+            connection, null, Guid.NewGuid(), paid.AccountId, July, 2, today, secondPayment, null);
+
+        Assert.Equal(
+            2L,
+            await ReciboTestSupport.ScalarAsync<long>(
+                connection,
+                "SELECT count(*) FROM collections WHERE account_id = @account AND period = @period",
+                ("account", paid.AccountId), ("period", July)));
+    }
+
+    /// <summary>
+    /// A collection with no recibo at all is still live (nothing annuls it), so it keeps blocking a
+    /// new attempt, as it did before.
+    /// </summary>
+    [SkippableFact]
+    public async Task ACollectionWithNoRecibos_StaysLive()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var context = _fixture.CreateDbContext();
+        await using var connection = await ReciboTestSupport.OpenAsync(context);
+        var today = await ReciboTestSupport.LocalTodayAsync(connection);
+        var seed = await ReciboTestSupport.SeedCollectionOnlyAsync(context, connection, July);
+        var (secondPayment, _) = await ReciboTestSupport.InsertSettlementMovementsAsync(connection, seed.AccountId, July);
+
+        var refused = await ReciboTestSupport.RefusedAsync(() =>
+            ReciboTestSupport.InsertCollectionAsync(
+                connection, null, Guid.NewGuid(), seed.AccountId, July, 2, today, secondPayment, null));
+
+        Assert.Equal(RaiseException, refused.SqlState);
+        Assert.Equal("collections_attempt_rule", refused.ConstraintName);
     }
 
     /// <summary>
@@ -737,6 +800,77 @@ public sealed class ReciboSchemaTests
     }
 
     /// <summary>
+    /// The counter only moves forward: once started, an UPDATE that sets <c>next_number</c> to NULL or
+    /// to a value below the current one is refused, and nothing moves. Advancing still works. (Setting
+    /// the value it already holds changes nothing and is not an UPDATE the trigger can tell apart from
+    /// one that leaves the column alone, so it is let through; it cannot produce a duplicate.)
+    /// </summary>
+    [SkippableFact]
+    public async Task TheCounter_OnlyMovesForward()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var database = await IsolatedDatabase.CreateAsync(_fixture);
+        await using var connection = await ReciboTestSupport.OpenAsync(database.Context);
+
+        await ReciboTestSupport.ExecAsync(connection, "UPDATE recibo_numbering SET starting_number = 31001 WHERE id = 1");
+        Assert.Equal(31001, await ReciboTestSupport.IssueAsync(connection, null));
+        Assert.Equal((31001, 31003), await ReciboTestSupport.ReadCounterAsync(connection));
+
+        foreach (var statement in new[]
+                 {
+                     "UPDATE recibo_numbering SET next_number = 31001 WHERE id = 1",
+                     "UPDATE recibo_numbering SET next_number = 31002 WHERE id = 1",
+                     "UPDATE recibo_numbering SET next_number = NULL WHERE id = 1",
+                 })
+        {
+            var refused = await ReciboTestSupport.RefusedAsync(() => ReciboTestSupport.ExecAsync(connection, statement));
+
+            Assert.Equal(RaiseException, refused.SqlState);
+            Assert.Equal("recibo_numbering_next_number_forward", refused.ConstraintName);
+            Assert.Equal((31001, 31003), await ReciboTestSupport.ReadCounterAsync(connection));
+        }
+
+        await ReciboTestSupport.ExecAsync(connection, "UPDATE recibo_numbering SET next_number = 31004 WHERE id = 1");
+        Assert.Equal((31001, 31004), await ReciboTestSupport.ReadCounterAsync(connection));
+    }
+
+    /// <summary>The forward-only rule binds the application roles too, and advancing still works for both.</summary>
+    [SkippableTheory]
+    [InlineData(UserRole.Admin)]
+    [InlineData(UserRole.Empleado)]
+    public async Task TheCounter_OnlyMovesForward_ForBothRoles(UserRole role)
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var database = await IsolatedDatabase.CreateAsync(_fixture);
+        var username = $"f{Guid.NewGuid():N}"[..20];
+        await AccessTestSupport.ProvisionUserAsync(database.Context, username, role);
+
+        await using var superuser = await ReciboTestSupport.OpenAsync(database.Context);
+        await using var asRole = AccessTestSupport.BuildRawConnectionAs(database.Context, username);
+        await asRole.OpenAsync();
+
+        await ReciboTestSupport.ExecAsync(superuser, "UPDATE recibo_numbering SET starting_number = 31001 WHERE id = 1");
+        Assert.Equal(31001, await ReciboTestSupport.IssueAsync(asRole, null));
+
+        foreach (var statement in new[]
+                 {
+                     "UPDATE recibo_numbering SET next_number = 31001 WHERE id = 1",
+                     "UPDATE recibo_numbering SET next_number = NULL WHERE id = 1",
+                 })
+        {
+            var refused = await ReciboTestSupport.RefusedAsync(() => ReciboTestSupport.ExecAsync(asRole, statement));
+
+            Assert.Equal(RaiseException, refused.SqlState);
+            Assert.Equal("recibo_numbering_next_number_forward", refused.ConstraintName);
+        }
+
+        Assert.Equal(31003, await ReciboTestSupport.IssueAsync(asRole, null));
+        Assert.Equal((31001, 31005), await ReciboTestSupport.ReadCounterAsync(asRole));
+    }
+
+    /// <summary>
     /// Spec test 66: a counter set back by a direct UPDATE cannot produce a duplicate. The next raw
     /// issuance plus its recibo INSERT is refused by the unique constraint, loudly, and rolls back with
     /// the whole payment.
@@ -753,9 +887,16 @@ public sealed class ReciboSchemaTests
         var first = await ReciboTestSupport.IssueAsync(connection, null);
         var paid = await ReciboTestSupport.SeedPaidPeriodAsync(database.Context, connection, July, first!.Value);
 
-        // The tampering: back to the number already used. Allowed by the grant, which cannot tell it
-        // from an honest increment (spec Decision 36); the unique index is what makes it loud.
-        await ReciboTestSupport.ExecAsync(connection, "UPDATE recibo_numbering SET next_number = 31001 WHERE id = 1");
+        // The tampering: back to the number already used. The forward-only trigger now refuses this from
+        // the application roles (see TheCounter_OnlyMovesForward), so the set-back is made as the
+        // superuser with triggers off (session_replication_role = replica), the way a restore or a
+        // DBA's mistake would bypass them. The unique index is the last line, and what is proved here.
+        await using (var tamper = await connection.BeginTransactionAsync())
+        {
+            await ReciboTestSupport.ExecAsync(connection, tamper, "SET LOCAL session_replication_role = replica");
+            await ReciboTestSupport.ExecAsync(connection, tamper, "UPDATE recibo_numbering SET next_number = 31001 WHERE id = 1");
+            await tamper.CommitAsync();
+        }
 
         var other = await ReciboTestSupport.SeedCollectionOnlyAsync(database.Context, connection, new DateOnly(2026, 8, 1));
 
