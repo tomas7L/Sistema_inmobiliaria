@@ -112,4 +112,122 @@ public sealed class CollectionDeskVoidingTests
 
         return attempts;
     }
+
+    // ---- Review follow-ups (tasks.md 6.14): VoidAsync plans again inside its transaction ----
+
+    [SkippableFact]
+    public async Task AVoidingConfirmedOnAnotherDay_IsStale_AndWritesNothing()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var world = await DeskWorld.CreateAsync(_fixture);
+        var accountId = await world.SeedAccountAsync();
+        var desk = world.NewDesk();
+        Assert.True((await DeskWorld.PayAsync(desk, accountId)).Succeeded);
+
+        var preview = await desk.PreviewVoidAsync(await world.LatestReciboIdAsync(accountId), "Error de carga", UserRole.Admin);
+        Assert.True(preview.CanCommit);
+
+        // The day turns over before the operator confirms: the reversals would be dated differently,
+        // so what would be written is no longer what was shown.
+        var tomorrow = world.NewDesk(new FixedClock(DeskWorld.Today.AddDays(1)));
+        var before = await world.CountsAsync();
+        var result = await tomorrow.VoidAsync(preview);
+
+        Assert.Equal(VoidingRefusal.PreviewStale, result.Refusal);
+        Assert.Equal(before, await world.CountsAsync());
+        Assert.Equal(0L, await world.CountAsync("SELECT count(*) FROM account_movements WHERE kind = 'Correction'"));
+        Assert.Equal(0L, await world.CountAsync("SELECT count(*) FROM recibo_annulments"));
+    }
+
+    [SkippableFact]
+    public async Task APairVoidedByAnotherSessionMeanwhile_IsRefusedAsAlreadyAnnulled_AndWritesNothingMore()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var world = await DeskWorld.CreateAsync(_fixture);
+        var accountId = await world.SeedAccountAsync();
+        var desk = world.NewDesk();
+        Assert.True((await DeskWorld.PayAsync(desk, accountId)).Succeeded);
+
+        var reciboId = await world.LatestReciboIdAsync(accountId);
+        var preview = await desk.PreviewVoidAsync(reciboId, "Error de carga", UserRole.Admin);
+        await VoidAsync(world.NewDesk(), reciboId, "Otro operador");
+
+        var before = await world.CountsAsync();
+        var result = await desk.VoidAsync(preview);
+
+        Assert.Equal(VoidingRefusal.AlreadyAnnulled, result.Refusal);
+        Assert.Equal(before, await world.CountsAsync());
+    }
+
+    [SkippableFact]
+    public async Task AVoidingWhoseRoleNoLongerFitsTheWindow_IsRefusedByTheReplan_NotByTheDatabase()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        // An Empleado previews on day 0; the confirming desk's clock says day 8, when only an Admin may void.
+        // The database measures with its own clock and would still allow it: only the re-plan can refuse.
+        await using var world = await DeskWorld.CreateAsync(_fixture);
+        var accountId = await world.SeedAccountAsync();
+        var desk = world.NewDesk();
+        Assert.True((await DeskWorld.PayAsync(desk, accountId)).Succeeded);
+
+        var preview = await desk.PreviewVoidAsync(await world.LatestReciboIdAsync(accountId), "Error", UserRole.Empleado);
+        Assert.True(preview.CanCommit);
+
+        var later = world.NewDesk(new FixedClock(DeskWorld.Today.AddDays(CollectionRules.VoidingFreeWindowDays + 1)));
+        var before = await world.CountsAsync();
+        var result = await later.VoidAsync(preview);
+
+        Assert.Equal(VoidingRefusal.AdminOnly, result.Refusal);
+        Assert.Equal(before, await world.CountsAsync());
+    }
+
+    // ---- VoidAsync guards ----
+
+    [SkippableFact]
+    public async Task APreviewWithoutAnnulments_IsAnError_AndWritesNothing()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var world = await DeskWorld.CreateAsync(_fixture);
+        var accountId = await world.SeedAccountAsync();
+        var desk = world.NewDesk();
+        Assert.True((await DeskWorld.PayAsync(desk, accountId)).Succeeded);
+
+        var preview = await desk.PreviewVoidAsync(await world.LatestReciboIdAsync(accountId), "Error", UserRole.Admin);
+        var before = await world.CountsAsync();
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => desk.VoidAsync(preview with { Annulments = [] }));
+
+        Assert.Contains("annulment", failure.Message);
+        Assert.Equal(before, await world.CountsAsync());
+    }
+
+    [SkippableFact]
+    public async Task APreviewNamingRecibosOfTwoCollections_IsAnError_AndWritesNothing()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var world = await DeskWorld.CreateAsync(_fixture);
+        var accountId = await world.SeedAccountAsync();
+        var desk = world.NewDesk();
+        var first = await DeskWorld.PayAsync(desk, accountId, DeskWorld.OldestPeriod);
+        var second = await DeskWorld.PayAsync(desk, accountId, DeskWorld.OldestPeriod.AddMonths(1));
+        Assert.True(first.Succeeded && second.Succeeded);
+
+        var preview = await desk.PreviewVoidAsync(await world.LatestReciboIdAsync(accountId), "Error", UserRole.Admin);
+        var crossed = preview with
+        {
+            Annulments = [new ReciboAnnulment(first.LocatarioNumber!.Value, "Error"), preview.Annulments[1]],
+        };
+        var before = await world.CountsAsync();
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => desk.VoidAsync(crossed));
+
+        Assert.Contains("one collection", failure.Message);
+        Assert.Equal(before, await world.CountsAsync());
+    }
 }

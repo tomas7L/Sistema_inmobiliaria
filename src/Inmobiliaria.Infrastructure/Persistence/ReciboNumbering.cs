@@ -25,7 +25,15 @@ public sealed class ReciboNumbering : IReciboNumbering
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(startingNumber, 1);
 
-        await _context.Database.ExecuteSqlInterpolatedAsync(
+        var affected = await _context.Database.ExecuteSqlInterpolatedAsync(
             $"UPDATE recibo_numbering SET starting_number = {startingNumber} WHERE id = 1", ct);
+
+        // The counter is a singleton row the migration seeds. Zero rows means it is gone, and a starting
+        // number nobody stored must not look like one that was.
+        if (affected != 1)
+        {
+            throw new InvalidOperationException(
+                $"The starting number was not stored: the singleton row of recibo_numbering is missing ({affected} rows updated).");
+        }
     }
 }

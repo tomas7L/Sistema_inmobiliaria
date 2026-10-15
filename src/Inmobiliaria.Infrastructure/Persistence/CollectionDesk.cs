@@ -150,7 +150,100 @@ public sealed class CollectionDesk : ICollectionDesk
             .SingleOrDefaultAsync(r => EF.Property<Guid>(r, "Id") == reciboId, ct)
             ?? throw new InvalidOperationException($"No recibo exists with id '{reciboId}'.");
 
-        var collectionId = Read<Guid>(named, "CollectionId");
+        var loaded = await LoadVoidingAsync(Read<Guid>(named, "CollectionId"), track: false, ct);
+
+        return PlanVoiding(loaded, reason, actingRole);
+    }
+
+    public async Task<VoidingResult> VoidAsync(VoidingPreview preview, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(preview);
+
+        if (preview.Refusal is { } shownRefusal)
+        {
+            return VoidingResult.Refused(shownRefusal);
+        }
+
+        // A committable preview always names the two recibos of the pair; one without annulments is a caller bug.
+        if (preview.Annulments.Count == 0)
+        {
+            throw new InvalidOperationException("The voiding preview names no annulment: there is nothing to void.");
+        }
+
+        try
+        {
+            await using var transaction = await _context.Database.BeginTransactionAsync(ct);
+            _context.ChangeTracker.Clear();
+
+            var numbers = preview.Annulments.Select(a => checked((int)a.ReciboNumber)).Distinct().ToList();
+            var named = await _context.Recibos.AsNoTracking()
+                .Where(r => numbers.Contains(EF.Property<int>(r, "Number")))
+                .ToListAsync(ct);
+
+            if (named.Count != numbers.Count)
+            {
+                throw new InvalidOperationException("The voiding names a recibo that does not exist.");
+            }
+
+            var collectionIds = named.Select(r => Read<Guid>(r, "CollectionId")).Distinct().ToList();
+            if (collectionIds.Count != 1)
+            {
+                throw new InvalidOperationException("The voiding names recibos that do not all belong to one collection.");
+            }
+
+            // Plan again against what the database holds now, with the inputs the preview was made with, and
+            // compare: the same discipline as the payment (design D21). The reason rides on the annulments
+            // and the role on the preview; when the payment was recorded is read again from the database.
+            var loaded = await LoadVoidingAsync(collectionIds[0], track: true, ct);
+            var fresh = PlanVoiding(loaded, preview.Annulments[0].Reason, preview.ActingRole);
+
+            if (fresh.Refusal is { } freshRefusal)
+            {
+                return VoidingResult.Refused(freshRefusal);
+            }
+
+            if (!SamePlan(preview, fresh))
+            {
+                return VoidingResult.Refused(VoidingRefusal.PreviewStale);
+            }
+
+            // The corrections first, then the annulments: a refusal at the annulment, which is where the
+            // database checks the window and the role, rolls the corrections back with it.
+            foreach (var correction in fresh.Corrections)
+            {
+                loaded.Account.Append(correction);
+            }
+
+            await _context.SaveChangesAsync(ct);
+
+            foreach (var annulment in fresh.Annulments)
+            {
+                var recibo = loaded.Rows.Single(r => Read<int>(r, "Number") == annulment.ReciboNumber);
+                _context.ReciboAnnulments.Add(AnnulmentBag(Read<Guid>(recibo, "Id"), annulment.Reason));
+            }
+
+            await _context.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+
+            return VoidingResult.Done();
+        }
+        catch (Exception ex) when (VoidingRefusalOf(ex) is { } refusal)
+        {
+            return VoidingResult.Refused(refusal);
+        }
+        finally
+        {
+            _context.ChangeTracker.Clear();
+        }
+    }
+
+    /// <summary>What a voiding is planned against: the account, the collection, its pair and the rows the pair was built from.</summary>
+    private sealed record VoidingLoaded(
+        ContractAccount Account, CollectionRecord Record, IReadOnlyList<Recibo> Pair, DateOnly RecordedOn,
+        IReadOnlyList<Dictionary<string, object>> Rows);
+
+    private async Task<VoidingLoaded> LoadVoidingAsync(Guid collectionId, bool track, CancellationToken ct)
+    {
         var collection = await _context.Collections.AsNoTracking()
             .SingleAsync(c => EF.Property<Guid>(c, "Id") == collectionId, ct);
 
@@ -169,74 +262,30 @@ public sealed class CollectionDesk : ICollectionDesk
             .Select(row => ReciboFrom(row, lines.Where(l => Read<Guid>(l, "ReciboId") == Read<Guid>(row, "Id"))))
             .ToList();
         var record = CollectionFrom(collection, isAnnulled);
-
-        var account = (await LoadAccountAsync(record.AccountId, track: false, ct));
+        var account = await LoadAccountAsync(record.AccountId, track, ct);
 
         // When the payment was recorded is the database's answer, converted through the agency's zone;
         // it is never something the operator supplies (design 7.5).
         var recordedOn = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(Read<DateTimeOffset>(collection, "RecordedAt"), AgencyZone).DateTime);
 
-        return VoidingPlanner.Plan(account, record, pair, reason, _clock.Today, _terms, actingRole, recordedOn);
+        return new VoidingLoaded(account, record, pair, recordedOn, rows);
     }
 
-    public async Task<VoidingResult> VoidAsync(VoidingPreview preview, CancellationToken ct = default)
-    {
-        ArgumentNullException.ThrowIfNull(preview);
+    private VoidingPreview PlanVoiding(VoidingLoaded loaded, string reason, UserRole actingRole) =>
+        VoidingPlanner.Plan(loaded.Account, loaded.Record, loaded.Pair, reason, _clock.Today, _terms, actingRole, loaded.RecordedOn);
 
-        if (preview.Refusal is { } shownRefusal)
-        {
-            return VoidingResult.Refused(shownRefusal);
-        }
+    /// <summary>
+    /// Whether the fresh plan would write what the operator saw. The reversals are compared by what they say
+    /// and not by identity: each plan gives its own ones new ids, which no operator ever sees.
+    /// </summary>
+    private static bool SamePlan(VoidingPreview shown, VoidingPreview fresh) =>
+        shown.Period == fresh.Period &&
+        shown.ResultingAmountOwed == fresh.ResultingAmountOwed &&
+        shown.Annulments.OrderBy(a => a.ReciboNumber).SequenceEqual(fresh.Annulments.OrderBy(a => a.ReciboNumber)) &&
+        shown.Corrections.Select(CorrectionKey).SequenceEqual(fresh.Corrections.Select(CorrectionKey));
 
-        try
-        {
-            await using var transaction = await _context.Database.BeginTransactionAsync(ct);
-            _context.ChangeTracker.Clear();
-
-            var numbers = preview.Annulments.Select(a => checked((int)a.ReciboNumber)).ToList();
-            var rows = await _context.Recibos.AsNoTracking()
-                .Where(r => numbers.Contains(EF.Property<int>(r, "Number")))
-                .ToListAsync(ct);
-
-            if (rows.Count != numbers.Count)
-            {
-                throw new InvalidOperationException("The voiding names a recibo that does not exist.");
-            }
-
-            var collectionId = Read<Guid>(rows[0], "CollectionId");
-            var collection = await _context.Collections.AsNoTracking()
-                .SingleAsync(c => EF.Property<Guid>(c, "Id") == collectionId, ct);
-            var account = await LoadAccountAsync(Read<Guid>(collection, "AccountId"), track: true, ct);
-
-            // The corrections first, then the annulments: a refusal at the annulment, which is where the
-            // database checks the window and the role, rolls the corrections back with it.
-            foreach (var correction in preview.Corrections)
-            {
-                account.Append(correction);
-            }
-
-            await _context.SaveChangesAsync(ct);
-
-            foreach (var annulment in preview.Annulments)
-            {
-                var recibo = rows.Single(r => Read<int>(r, "Number") == annulment.ReciboNumber);
-                _context.ReciboAnnulments.Add(AnnulmentBag(Read<Guid>(recibo, "Id"), annulment.Reason));
-            }
-
-            await _context.SaveChangesAsync(ct);
-            await transaction.CommitAsync(ct);
-
-            return VoidingResult.Done();
-        }
-        catch (Exception ex) when (VoidingRefusalOf(ex) is { } refusal)
-        {
-            return VoidingResult.Refused(refusal);
-        }
-        finally
-        {
-            _context.ChangeTracker.Clear();
-        }
-    }
+    private static (MovementKind, decimal, DateOnly, DateOnly?, Guid?) CorrectionKey(AccountMovement movement) =>
+        (movement.Kind, movement.Amount, movement.OccurredOn, movement.Period, movement.CorrectsMovementId);
 
     /// <summary>What a payment is planned against: the account, its contract and the header the recibos will print.</summary>
     private sealed record Loaded(ContractAccount Account, Contract Contract, ReciboHeader Header);

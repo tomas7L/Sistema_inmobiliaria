@@ -53,4 +53,26 @@ public sealed class ReciboNumberingTests
         await using var connection = await ReciboTestSupport.OpenAsync(world.Database.Context);
         Assert.Equal(((int?)null, (int?)null), await ReciboTestSupport.ReadCounterAsync(connection));
     }
+
+    [SkippableFact]
+    public async Task AMissingCounterRow_IsNotASilentSuccess()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var world = await DeskWorld.CreateAsync(_fixture, startingNumber: null);
+
+        // The singleton row can only vanish with the triggers off (a botched restore); nothing in the schema allows it.
+        await using (var connection = await ReciboTestSupport.OpenAsync(world.Database.Context))
+        await using (var transaction = await connection.BeginTransactionAsync())
+        {
+            await ReciboTestSupport.ExecAsync(connection, transaction, "SET LOCAL session_replication_role = replica");
+            Assert.Equal(1, await ReciboTestSupport.ExecAsync(connection, transaction, "DELETE FROM recibo_numbering"));
+            await transaction.CommitAsync();
+        }
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => new ReciboNumbering(world.NewContext()).SetStartingNumberAsync(31100));
+
+        Assert.Contains("recibo_numbering", failure.Message);
+    }
 }
