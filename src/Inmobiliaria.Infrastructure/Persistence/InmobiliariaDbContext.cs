@@ -4,18 +4,21 @@ using Inmobiliaria.Domain.Indices;
 using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Domain.Parties;
 using Inmobiliaria.Domain.Units;
+using Inmobiliaria.Infrastructure.Persistence.Configurations;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace Inmobiliaria.Infrastructure.Persistence;
 
 /// <summary>
-/// EF Core mapping onto the fifteen target Postgres tables: the six from lease-contract, the
+/// EF Core mapping onto the twenty target Postgres tables: the six from lease-contract, the
 /// six added by rent-adjustments (economic-index and rent-adjustment capabilities),
 /// <c>app_users</c> added by users-and-roles — the FK target every other table points at when
-/// it needs to name a person (design Decision 8) — and <c>contract_accounts</c> plus
+/// it needs to name a person (design Decision 8) — <c>contract_accounts</c> plus
 /// <c>account_movements</c> added by cuenta-corriente, the append-only ledger of what each
-/// contract owes. Repository ports/adapters are not part of any of these changes — see
+/// contract owes, and the five added by cobranza-y-recibos: <c>collections</c>, <c>recibos</c>,
+/// <c>recibo_lines</c>, <c>recibo_annulments</c> and the single-row <c>recibo_numbering</c>.
+/// Repository ports/adapters are not part of any of these changes — see
 /// design.md Decision 2 and the scope guard in the technical approach.
 /// </summary>
 public sealed class InmobiliariaDbContext : DbContext
@@ -49,6 +52,14 @@ public sealed class InmobiliariaDbContext : DbContext
     /// </summary>
     public DbSet<AccountMovement> AccountMovements => Set<AccountMovement>();
 
+    // The five cobranza-y-recibos tables are property-bag entities named after their table: no domain
+    // type is bindable to them (see CollectionConfiguration for why), so the sets are keyed by name.
+    public DbSet<Dictionary<string, object>> Collections => Set<Dictionary<string, object>>(CollectionConfiguration.EntityName);
+    public DbSet<Dictionary<string, object>> Recibos => Set<Dictionary<string, object>>(ReciboConfiguration.EntityName);
+    public DbSet<Dictionary<string, object>> ReciboLines => Set<Dictionary<string, object>>(ReciboLineConfiguration.EntityName);
+    public DbSet<Dictionary<string, object>> ReciboAnnulments => Set<Dictionary<string, object>>(ReciboAnnulmentConfiguration.EntityName);
+    public DbSet<Dictionary<string, object>> ReciboNumbering => Set<Dictionary<string, object>>(ReciboNumberingConfiguration.EntityName);
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         // Applied here, not only at the call site that builds the options, so the
@@ -60,6 +71,14 @@ public sealed class InmobiliariaDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(InmobiliariaDbContext).Assembly);
+
+        // Property-bag entities cannot go through ApplyConfigurationsFromAssembly, which builds a regular
+        // entity of the configuration's type argument. Collections first: the recibo tables name it.
+        CollectionConfiguration.Apply(modelBuilder);
+        ReciboConfiguration.Apply(modelBuilder);
+        ReciboLineConfiguration.Apply(modelBuilder);
+        ReciboAnnulmentConfiguration.Apply(modelBuilder);
+        ReciboNumberingConfiguration.Apply(modelBuilder);
 
         ApplyApplicationSuppliedKeys(modelBuilder);
     }
