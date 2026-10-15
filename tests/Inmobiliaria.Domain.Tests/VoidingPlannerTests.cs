@@ -338,4 +338,22 @@ public class VoidingPlannerTests
         Assert.Throws<ArgumentException>(() => Void(paid, pair: [paid.Pair.Locatario]));
         Assert.Throws<ArgumentException>(() => Void(paid, pair: [paid.Pair.Locatario, paid.Pair.Locatario]));
     }
+
+    [Fact]
+    public void EveryVoidingRefusal_HasOperatorText()
+    {
+        foreach (var refusal in Enum.GetValues<VoidingRefusal>())
+        {
+            Assert.False(string.IsNullOrWhiteSpace(refusal.OperatorText()), refusal.ToString());
+        }
+    }
+
+    [Fact]
+    public void APlan_CarriesTheRoleItWasMadeFor_RefusedOrNot()
+    {
+        var paid = LatePayment();
+
+        Assert.Equal(UserRole.Admin, Void(paid, role: UserRole.Admin).ActingRole);
+        Assert.Equal(UserRole.Empleado, Void(paid, reason: " ", role: UserRole.Empleado).ActingRole);
+    }
 }

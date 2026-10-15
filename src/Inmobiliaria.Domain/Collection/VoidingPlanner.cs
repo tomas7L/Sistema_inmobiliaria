@@ -16,6 +16,9 @@ public enum VoidingRefusal
 
     /// <summary>Day 31 on: nobody may void.</summary>
     WindowClosed,
+
+    /// <summary>The voiding's fresh plan differs from the preview the operator confirmed (design D21, applied to voiding).</summary>
+    PreviewStale,
 }
 
 /// <summary>The operator-facing text of each voiding refusal. Spanish, because the operator reads it.</summary>
@@ -31,6 +34,8 @@ public static class VoidingRefusalText
             $"Pasados {CollectionRules.VoidingFreeWindowDays} días, sólo un Administrador puede anular el cobro.",
         VoidingRefusal.WindowClosed =>
             $"Pasados {CollectionRules.VoidingAdminWindowDays} días, el cobro ya no puede anularse.",
+        VoidingRefusal.PreviewStale =>
+            "La cuenta cambió desde la vista previa. Genere una nueva vista previa.",
         _ => throw new ArgumentOutOfRangeException(nameof(refusal), refusal, "A refusal without operator text."),
     };
 }
@@ -41,12 +46,14 @@ public static class VoidingRefusalText
 /// <param name="Annulments">One per recibo of the pair: annulling either annuls both (spec Decision 19).</param>
 /// <param name="Corrections">The reversals to append, each naming the movement it reverses, in full.</param>
 /// <param name="ResultingAmountOwed">What the account would owe on the voiding day once the corrections are in.</param>
+/// <param name="ActingRole">The role the plan was made for. Carried so that the desk can plan again, inside its transaction, for the same role.</param>
 public sealed record VoidingPreview(
     DateOnly Period,
     IReadOnlyList<ReciboAnnulment> Annulments,
     IReadOnlyList<AccountMovement> Corrections,
     decimal ResultingAmountOwed,
-    VoidingRefusal? Refusal)
+    VoidingRefusal? Refusal,
+    UserRole ActingRole)
 {
     public bool CanCommit => Refusal is null;
 }
@@ -103,7 +110,7 @@ public static class VoidingPlanner
         ArgumentOutOfRangeException.ThrowIfNegative(age, nameof(recordedOn));
 
         VoidingPreview Refused(VoidingRefusal refusal) =>
-            new(collection.Period, [], [], account.AmountOwed(today, terms), refusal);
+            new(collection.Period, [], [], account.AmountOwed(today, terms), refusal, actingRole);
 
         if (string.IsNullOrWhiteSpace(reason))
         {
@@ -144,7 +151,7 @@ public static class VoidingPlanner
         var annulments = pair.Select(r => new ReciboAnnulment(r.Number, reason)).ToArray();
 
         return new VoidingPreview(
-            collection.Period, annulments, corrections, AmountOwedAfter(account, corrections, today, terms), null);
+            collection.Period, annulments, corrections, AmountOwedAfter(account, corrections, today, terms), null, actingRole);
     }
 
     /// <summary>The amount owed on <paramref name="asOf"/> once the corrections are in, on a copy: the account is left untouched.</summary>
