@@ -80,6 +80,9 @@ public sealed class CollectionDesk : ICollectionDesk
             await using var transaction = await _context.Database.BeginTransactionAsync(ct);
             _context.ChangeTracker.Clear();
 
+            // The account's advisory lock first, before the read that the plan rests on: see AccountRowLock.
+            await AccountRowLock.TakeAsync(_context, request.AccountId, ct);
+
             var loaded = await LoadAsync(request.AccountId, track: true, ct);
             var fresh = BuildPreview(loaded, request, _clock.Today);
 

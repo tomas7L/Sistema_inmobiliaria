@@ -113,6 +113,7 @@ internal sealed class CommandHook : DbCommandInterceptor
 {
     public static readonly Regex InsertRecibos = new(@"INSERT INTO ""?recibos""?\s", RegexOptions.Compiled);
     public static readonly Regex InsertCollections = new(@"INSERT INTO ""?collections""?\s", RegexOptions.Compiled);
+    public static readonly Regex LockAccount = new(@"pg_advisory_xact_lock", RegexOptions.Compiled);
     public static readonly Regex InsertMovements = new(@"INSERT INTO ""?account_movements""?\s", RegexOptions.Compiled);
 
     private readonly Action<string> _visit;
@@ -195,6 +196,26 @@ internal sealed record LedgerCounts(
     long Movements, long Collections, long Recibos, long Lines, long Annulments, int? NextNumber);
 
 /// <summary>
+/// The database a <see cref="DeskWorld"/> works on: a superuser context, and whatever must be released
+/// with it. Either an isolated database of its own (dropped on dispose), or a database somebody else
+/// prepared and owns, reached by connection string (only the context is released).
+/// </summary>
+internal sealed class DeskDatabase : IAsyncDisposable
+{
+    private readonly IAsyncDisposable? _owner;
+
+    public DeskDatabase(InmobiliariaDbContext context, IAsyncDisposable? owner = null)
+    {
+        Context = context;
+        _owner = owner;
+    }
+
+    public InmobiliariaDbContext Context { get; }
+
+    public ValueTask DisposeAsync() => _owner?.DisposeAsync() ?? Context.DisposeAsync();
+}
+
+/// <summary>
 /// A freshly migrated database with an agency in it: one contract (tenant, lessor, unit, rent, rate)
 /// and its empty account per call to <see cref="SeedAccountAsync"/>, and the recibo counter started.
 /// Isolated because the counter, and "no recibo exists yet", belong to the whole database. Hands out
@@ -208,12 +229,12 @@ internal sealed class DeskWorld : IAsyncDisposable
 
     private readonly List<InmobiliariaDbContext> _contexts = [];
 
-    private DeskWorld(IsolatedDatabase database)
+    private DeskWorld(DeskDatabase database)
     {
         Database = database;
     }
 
-    public IsolatedDatabase Database { get; }
+    public DeskDatabase Database { get; }
 
     /// <summary>The agency's day, from the clock the production desk uses.</summary>
     public static DateOnly Today => new AgencyClock().Today;
@@ -223,9 +244,25 @@ internal sealed class DeskWorld : IAsyncDisposable
 
     public static DateOnly FirstOfMonth(DateOnly date) => new(date.Year, date.Month, 1);
 
+    /// <summary>
+    /// A world over a database that already exists and is already migrated, reached by
+    /// <paramref name="connectionString"/> as given (pooling untouched). The caller owns the data: it
+    /// resets the tables and the recibo counter itself, as this creates and drops nothing.
+    /// </summary>
+    public static DeskWorld Over(string connectionString)
+    {
+        var options = new DbContextOptionsBuilder<InmobiliariaDbContext>()
+            .UseNpgsql(connectionString)
+            .Options;
+
+        return new DeskWorld(new DeskDatabase(new InmobiliariaDbContext(options)));
+    }
+
+#if !PV1
     public static async Task<DeskWorld> CreateAsync(PostgresFixture fixture, int? startingNumber = StartingNumber)
     {
-        var world = new DeskWorld(await IsolatedDatabase.CreateAsync(fixture));
+        var isolated = await IsolatedDatabase.CreateAsync(fixture);
+        var world = new DeskWorld(new DeskDatabase(isolated.Context, isolated));
 
         if (startingNumber is { } number)
         {
@@ -236,12 +273,25 @@ internal sealed class DeskWorld : IAsyncDisposable
 
         return world;
     }
+#endif
 
     /// <summary>A superuser context on its own connection, with the given interceptors. Disposed with the world.</summary>
-    public InmobiliariaDbContext NewContext(params IInterceptor[] interceptors)
+    public InmobiliariaDbContext NewContext(params IInterceptor[] interceptors) => NewContext(false, interceptors);
+
+    /// <summary>
+    /// As above; <paramref name="pooled"/> turns Npgsql pooling ON, which is what production runs with and
+    /// which changes session timing enough to expose lock-order races the unpooled suite hides.
+    /// </summary>
+    public InmobiliariaDbContext NewContext(bool pooled, params IInterceptor[] interceptors)
     {
+        var connection = Database.Context.Database.GetConnectionString()!;
+        if (pooled)
+        {
+            connection = new Npgsql.NpgsqlConnectionStringBuilder(connection) { Pooling = true }.ConnectionString;
+        }
+
         var options = new DbContextOptionsBuilder<InmobiliariaDbContext>()
-            .UseNpgsql(Database.Context.Database.GetConnectionString()!)
+            .UseNpgsql(connection)
             .AddInterceptors(interceptors)
             .Options;
 

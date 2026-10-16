@@ -13,6 +13,9 @@ public sealed class AccountMaterialiser : IAccountMaterialiser
     /// <summary>Postgres's unique-violation SQLSTATE.</summary>
     private const string UniqueViolation = "23505";
 
+    /// <summary>Postgres's deadlock-detected SQLSTATE: the other session won; same outcome as a lost race.</summary>
+    private const string DeadlockDetected = "40P01";
+
     private readonly InmobiliariaDbContext _context;
 
     public AccountMaterialiser(InmobiliariaDbContext context)
@@ -23,6 +26,27 @@ public sealed class AccountMaterialiser : IAccountMaterialiser
     public async Task<int> MaterialiseDueAccrualsThroughAsync(
         Guid accountId, DateOnly through, CancellationToken ct = default)
     {
+        // The account's lock comes first, as it does in CollectionDesk.CommitAsync, so the two writers
+        // of this account's movements queue instead of interleaving their unique-index entries. EF orders
+        // same-table INSERTs by key (random Guids), so two batches of different shape take
+        // ux_account_movements_period_charge and ux_account_movements_instalment_period in opposite orders
+        // and deadlock (40P01) under load. A transaction the caller already opened is joined, not nested.
+        if (_context.Database.CurrentTransaction is not null)
+        {
+            return await MaterialiseCoreAsync(accountId, through, ct);
+        }
+
+        await using var transaction = await _context.Database.BeginTransactionAsync(ct);
+        var written = await MaterialiseCoreAsync(accountId, through, ct);
+        await transaction.CommitAsync(ct);
+
+        return written;
+    }
+
+    private async Task<int> MaterialiseCoreAsync(Guid accountId, DateOnly through, CancellationToken ct)
+    {
+        await AccountRowLock.TakeAsync(_context, accountId, ct);
+
         var account = await _context.ContractAccounts
             .Include(a => a.Movements)
             .SingleOrDefaultAsync(a => a.Id == accountId, ct);
@@ -83,7 +107,7 @@ public sealed class AccountMaterialiser : IAccountMaterialiser
             await _context.SaveChangesAsync(ct);
             return written;
         }
-        catch (DbUpdateException ex) when (IsUniqueViolation(ex))
+        catch (DbUpdateException ex) when (IsLostRace(ex))
         {
             // A competing writer materialised the same period between our read and our write —
             // the race design Decision 1 settles with a constraint rather than a lock.
@@ -102,6 +126,24 @@ public sealed class AccountMaterialiser : IAccountMaterialiser
         }
     }
 
-    private static bool IsUniqueViolation(DbUpdateException exception) =>
-        exception.InnerException is PostgresException { SqlState: UniqueViolation };
+    private static bool IsLostRace(DbUpdateException exception) =>
+        exception.InnerException is PostgresException { SqlState: UniqueViolation or DeadlockDetected };
+}
+
+/// <summary>
+/// Serialises the writers of one account's movements. Both the lazy accrual and the collection desk take
+/// it before reading or writing, so their INSERTs never interleave. A transaction-scoped advisory lock,
+/// not <c>SELECT ... FOR UPDATE</c>: the application role has no UPDATE privilege on contract_accounts
+/// (42501), and the lock needs none. It is released with the transaction, so callers must hold one.
+/// </summary>
+internal static class AccountRowLock
+{
+    public static async Task TakeAsync(InmobiliariaDbContext context, Guid accountId, CancellationToken ct)
+    {
+        var key = accountId.ToString();
+
+        _ = await context.Database
+            .SqlQuery<int>($"SELECT 1 AS \"Value\" FROM (SELECT pg_advisory_xact_lock(hashtextextended({key}, 0))) AS locked")
+            .ToListAsync(ct);
+    }
 }
