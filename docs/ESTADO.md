@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-10-10, cierre de sesión_
+_Última actualización: 2026-10-14, cierre de sesión_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -8,78 +8,66 @@ _Última actualización: 2026-10-10, cierre de sesión_
 
 ## En qué estamos
 
-**Entre changes. No hay ninguno en curso** — `openspec/changes/` sólo contiene `archive/`.
+**Change activo: `cobranza-y-recibos` (slice A), implementación en curso: PR 1 a 4 mergeados, más un PR de arreglos.**
+Tasks: `openspec/changes/cobranza-y-recibos/tasks.md`. Las Phases 1 a 4 están tildadas, y H.1 y H.2 están hechas.
 
-`cuenta-corriente` quedó cerrado y archivado, y su especificación ya es documentación viva en
-`openspec/specs/contract-account/spec.md`. Lo último que se hizo después fue un arreglo suelto, ya
-mergeado: la convención `ApplyApplicationSuppliedKeys` en
-`src/Inmobiliaria.Infrastructure/Persistence/InmobiliariaDbContext.cs`.
-
-Nueve capacidades vivas, 72 requisitos. **241 tests, 0 fallas, 0 omitidos.** Cuatro migraciones
-aplicadas en producción.
-
-**La UI casi no existe:** `src/Inmobiliaria.Desktop` tiene sólo `LoginWindow`,
-`ChangePasswordWindow` y `MainWindow`. Ninguna pantalla de ninguna capacidad. El motor está
-avanzado; lo que Nicolás tocaría, no.
+- Mergeados a `develop`: #57 (PR 1), #58 (PR 2), #59 (PR 3), #60 (PR 4) y #61 (arreglos de dominio previos al PR 5).
+- La **migración A** (`20261014204601_AddFeePlanCutoverAndLedgerConstraints`) está **aplicada en Supabase**
+  y verificada en el editor SQL (H.2).
+- `ramatomy` tiene el mismo contenido que `develop`; sólo le faltan los commits de merge.
+- No queda nada sin commitear.
 
 ## Próximos pasos
 
-1. **Arrancar `cobranza-y-recibos`**, por exploración y propuesta — no por código. Agrega el
-   movimiento de **pago** que `cuenta-corriente` dejó afuera a propósito, y es dueño de: recibos y
-   su numeración, tasa municipal, seguros, "Otros Conceptos", la liquidación al dueño y los
-   honorarios de administración.
-2. **`notificaciones`** después. Ya tiene su listado de mora esperándolo (`IMoraWorklistQuery`).
-   Bloqueado por dos decisiones abiertas en `openspec/config.yaml`: `scheduler-mechanism` (una app
-   de escritorio cerrada no manda nada) y la librería de PDF, sin elegir.
-3. El **plan de pagos** es su propio change, posterior a los dos.
-4. La **pasada de UI**, grande y casi entera por delante.
+1. **PR 5 (migración B: tablas de cobros y recibos)**: Phase 5 de `tasks.md`. La tarea 5.1 es la
+   segunda inspección: confirmar que #61 llegó y que `CollectionPlanner`, `VoidingPlanner`,
+   `CollectionRecord`, `ReciboAnnulment` y `Recibo` existen como dice `tasks.md`.
+2. Después del merge del PR 5, Tomás hace H.3 (el chequeo de zona horaria) y H.4 (aplicar la migración B).
+3. PR 6 (`CollectionDesk`). Después, H.5 (PV1 contra el pooler real).
 
 ## Pendientes / bloqueos
 
-- **Sin commitear:** `docs/ESTADO.md` (este archivo) y `.atl/skill-registry.md` (lo dejó
-  modificado `gentle-ai sync`). **Faltan 2 commits de `develop` a `main`** — ahí va el `CLAUDE.md`
-  que explica cómo se trabaja el proyecto, que es lo que necesita Mateo si saca una rama de ahí.
+- **Orden de la carga de datos (nuevo):** cada contrato viejo se carga con su **plan de honorarios** y
+  su **`cutover_date`** **antes** de cualquier movimiento y antes de que alguien abra la lista de
+  morosos. Las dos cosas quedan bloqueadas en cuanto la cuenta tiene un movimiento (ver la nota de
+  `tasks.md` en 2.3). Si el plan falta, las cuotas no se generan nunca.
+- **Antes de la carga de datos:** un mes viejo cargado como deuda inicial no genera recargo solo
+  (Decision 31). Cada mes se carga con su cifra real, mora incluida.
+- **Riesgo aceptado (nota de la tarea 2.9 en `tasks.md`):** los triggers que bloquean el plan y la
+  fecha de corte no toman lock. Hay que revisarlo si alguna pantalla llega a cambiar el plan de un
+  contrato vivo.
+- **Para el contador o un abogado, no para Nicolás:**
+  - si el recibo puede ser no fiscal (Decision 10, **débil**);
+  - el orden de imputación del art. 900 del CCyCN (Decision 3, **débil**).
+- **Para Nicolás, no bloqueantes:** Q3 (design §10), Open Question 4 y Open Question 7, y si se cobra
+  la parte ocupada de un contrato que arranca a mitad de mes.
 - **H.2 de `cuenta-corriente`, decisión de Tomás:** cómo se reparte entre contratos la deuda que la
-  planilla tiene por inquilino, para quien tenga más de uno. Decisión de carga de datos.
-- **H.3, opcional:** Supabase Cron como disparador extra de la materialización. Nunca una
-  dependencia.
-- **Pregunta abierta para Nicolás, no bloqueante:** si un contrato arranca a mitad de mes, ¿se
-  cobra la parte ocupada? Tomás cree que sí, y que en la práctica se elige el 1° como inicio. El
-  código no cambia en ninguno de los dos casos.
-- **Defecto conocido, no arreglado:** `src/Inmobiliaria.Domain/Leasing/RentAdjustment.cs:76` dice
-  ser *"el único sitio de truncado de todo el pipeline"*, y `AdjustmentProposal.cs:64` también
-  trunca. Inofensivo; el comentario es falso.
-- **`gentle-ai 4.0` eliminó los comandos `sdd-*` del CLI.** Las skills `sdd-*` siguen, pero
-  `~/.claude/skills/_shared/sdd-orchestrator-workflow.md` quedó en su versión del 26-09 y todavía
-  manda a correr `gentle-ai sdd-status`, que ya no existe. **Leer los artefactos directamente.**
-- **Defecto de gentle-ai, reproducible:** su `upgrade` no puede actualizarse a sí mismo; arma
-  `.../gentle-ai/v3/cmd/gentle-ai@v4.0.0` (ruta v3 con versión v4) y Go lo rechaza. Se resuelve con
-  `go install github.com/gentleman-programming/gentle-ai/v4/cmd/gentle-ai@v4.0.0`.
-  **Sin reportar todavía** — Tomás tiene que decidir si se reporta.
-- **Ocho agentes de revisión** (`jd-*`, `review-*` en `~/.claude/agents/`) no se actualizaron:
-  gentle-ai los preservó porque sus bytes estaban modificados y avisa que hay que mergearlos a
-  mano. Sin uso hoy.
-- **La rama `ramateo` de Mateo está en "Initial commit"**, 87 commits atrás y sin nada propio sin
-  mergear. Tiene que traerse `develop` antes de trabajar.
+  planilla tiene por inquilino.
+- **Defecto conocido, no arreglado:** el comentario de
+  `src/Inmobiliaria.Domain/Leasing/RentAdjustment.cs:76` dice que es el único lugar que trunca, y es
+  falso: `AdjustmentProposal.cs:64` también trunca.
+- **gentle-ai:** cuando hay archivos nuevos sin trackear, `review status` se traba en
+  `intended_untracked_selection_required`. Se destraba con `--untracked-scope=select`,
+  `--expected-untracked-inventory=<digest>` y un `--intended-untracked=<ruta>` por archivo (el
+  procedimiento está en Engram).
+- **La rama `ramateo`** está muy atrás de `develop` y tiene un stash viejo de GitHub Desktop.
 
 ## Precondiciones del próximo paso
 
 | | |
 |---|---|
-| **Docker** | **No** — exploración y propuesta son documentos |
-| **Supabase** | **No** — nada toca la base todavía |
-
-La migración de `cuenta-corriente` ya está aplicada y verificada en producción.
+| **Docker** | **Sí para el PR 5** (Testcontainers `postgres:17.6` aplicando las migraciones A y B). Sin Docker, los tests quedan omitidos, que no es lo mismo que pasados |
+| **Supabase** | No para escribir el PR 5. Sí despausada después del merge, para H.3 y H.4 (los aplica Tomás) |
 
 ## Para retomar
 
 ```bash
 # La segunda inspección: que el último merge haya llegado entero
 git fetch --all && git status --porcelain
-git rev-list --count origin/main..origin/develop
+git rev-list --left-right --count HEAD...origin/develop   # "0 N": sólo commits de merge
+git diff --stat HEAD origin/develop                       # vacío = mismo contenido
 
-# La suite completa. Con Docker APAGADO los tests de Testcontainers quedan OMITIDOS,
-# que NO es lo mismo que pasados.
+# La suite completa, con Docker PRENDIDO
 dotnet build Inmobiliaria.sln --configuration Release
 dotnet test Inmobiliaria.sln --configuration Release
 
@@ -87,24 +75,22 @@ dotnet test Inmobiliaria.sln --configuration Release
 dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure
 ```
 
-Esperado con Docker prendido: **241 pasados, 0 fallas, 0 omitidos** (141 dominio + 100
-infraestructura), build sin advertencias, modelo en sintonía.
+Esperado: **506 pasados (Domain 363, Infrastructure 143), 0 fallas, 0 omitidos**, build sin
+advertencias y el modelo en sintonía con la última migración.
 
-**Leer la salida por el contador de errores o el código de salida, nunca por un patrón:**
-`error CS` no encuentra `error xUnit2029`, y en esta máquina dotnet responde en español.
+**Leer la salida por el contador de errores o el código de salida, nunca por un patrón.** En esta
+máquina dotnet responde en español ("Superado", "Con error", "Omitido").
 
 ### Archivos clave para abrir primero
 
 | Para qué | Dónde |
 |---|---|
 | Cómo trabajamos | `CLAUDE.md` (raíz) |
-| Lo que el dueño respondió, textual | `openspec/domain/respuestas-del-dueno.md` |
-| La cuenta corriente, ya viva | `openspec/specs/contract-account/spec.md` |
-| El change recién cerrado | `openspec/changes/archive/2026-10-10-cuenta-corriente/archive-report.md` |
-| Decisiones abiertas del proyecto | `openspec/config.yaml`, bloque `open_decisions` |
+| Qué implementar, en orden | `openspec/changes/cobranza-y-recibos/tasks.md` (Phase 5 = PR 5; leer también "Issues found") |
+| Cómo, y por qué | `openspec/changes/cobranza-y-recibos/design.md` (§5 para las tablas, los triggers y los grants) |
+| Qué debe cumplir | `openspec/changes/cobranza-y-recibos/spec.md` |
+| Patrón de migración con triggers | `src/Inmobiliaria.Infrastructure/Persistence/Migrations/20261014204601_AddFeePlanCutoverAndLedgerConstraints.cs` |
 
 ### Herramientas
 
-gentle-ai **4.0.0**, engram **3.3.2**, Go 1.26.5, Docker 29.8.2 con `postgres:17.6` local.
-Respaldo completo de la memoria en `~/.engram/backup-20261010-2030/` (`.db`, `-wal` y `-shm` — el
-WAL tenía 3,7 MB sin volcar, así que copiar sólo el `.db` habría guardado una foto vieja).
+gentle-ai **4.0.0**, engram **3.3.2**, Docker 29.8.2 con `postgres:17.6` local.

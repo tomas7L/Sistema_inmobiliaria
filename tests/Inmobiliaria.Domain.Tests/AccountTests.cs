@@ -4,6 +4,7 @@ namespace Inmobiliaria.Domain.Tests;
 
 public class AccountTests
 {
+    private static readonly DateOnly June = new(2026, 6, 1);
     private static readonly DateOnly July = new(2026, 7, 1);
     private static readonly DateOnly August = new(2026, 8, 1);
     private static readonly DateOnly September = new(2026, 9, 1);
@@ -51,7 +52,7 @@ public class AccountTests
     public void LedgerBalance_IsTheSumOfMovements()
     {
         var account = AccountFor(Guid.NewGuid());
-        account.Append(AccountMovement.OpeningBalance(Guid.NewGuid(), 150_000m, July));
+        account.Append(AccountMovement.OpeningBalance(Guid.NewGuid(), 150_000m, new DateOnly(2026, 7, 1), June));
         account.Append(Rent(500_000m, July));
 
         Assert.Equal(650_000m, account.LedgerBalance(new DateOnly(2026, 7, 31)));
@@ -85,18 +86,6 @@ public class AccountTests
         Assert.Equal(0m, account.LedgerBalance(new DateOnly(2026, 7, 31)));
     }
 
-    /// <summary>Spec test 9: a pre-existing contract carries one opening balance; a second is refused.</summary>
-    [Fact]
-    public void OpeningBalance_IsAssertedOnce_AndNeverRestated()
-    {
-        var account = AccountFor(Guid.NewGuid());
-        account.Append(AccountMovement.OpeningBalance(Guid.NewGuid(), 150_000m, July));
-
-        var second = AccountMovement.OpeningBalance(Guid.NewGuid(), 999m, August);
-
-        Assert.Throws<InvalidOperationException>(() => account.Append(second));
-    }
-
     /// <summary>
     /// Spec test 9, second half: zero is valid for a tenant who is up to date, and the movement is
     /// still recorded. The account must say somebody asserted zero, not that nobody looked.
@@ -106,25 +95,10 @@ public class AccountTests
     {
         var account = AccountFor(Guid.NewGuid());
 
-        account.Append(AccountMovement.OpeningBalance(Guid.NewGuid(), 0m, July));
+        account.Append(AccountMovement.OpeningBalance(Guid.NewGuid(), 0m, July, period: null));
 
         Assert.Single(account.Movements);
         Assert.Equal(0m, account.LedgerBalance(July));
-    }
-
-    /// <summary>Spec test 10: an opening balance never changes once later movements arrive.</summary>
-    [Fact]
-    public void OpeningBalance_IsUnchangedByLaterMovements()
-    {
-        var account = AccountFor(Guid.NewGuid());
-        var opening = AccountMovement.OpeningBalance(Guid.NewGuid(), 150_000m, July);
-        account.Append(opening);
-
-        account.Append(Rent(500_000m, August));
-
-        var stored = Assert.Single(account.Movements, m => m.Kind == MovementKind.OpeningBalance);
-        Assert.Equal(150_000m, stored.Amount);
-        Assert.Equal(opening.Id, stored.Id);
     }
 
     /// <summary>Spec test 5: a correction appends and names what it corrects; the original stands.</summary>

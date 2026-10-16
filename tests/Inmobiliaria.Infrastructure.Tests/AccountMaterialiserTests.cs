@@ -276,6 +276,71 @@ public sealed class AccountMaterialiserTests
     }
 
     /// <summary>
+    /// A lost race inside a transaction the caller opened must not poison it. The unique violation
+    /// aborts the transaction (25P02 on every later command) unless the write sits behind a
+    /// savepoint. A competing session holds the period uncommitted, so the materialiser's INSERT
+    /// blocks on the unique index, then fails with 23505 once the competitor commits.
+    /// </summary>
+    [SkippableFact]
+    public async Task AfterALostRaceInTheCallersTransaction_TheTransactionStaysUsable()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var seed = _fixture.CreateDbContext();
+        var (_, account) = await SeedAsync(seed);
+
+        await using var caller = _fixture.CreateDbContext();
+
+        // EF 9+ wraps SaveChanges in an automatic savepoint when a transaction is already open, which
+        // would hide the abort. The materialiser must not depend on that default, so it is switched off.
+        caller.Database.AutoSavepointsEnabled = false;
+        await using var transaction = await caller.Database.BeginTransactionAsync();
+
+        await using var competitor = new NpgsqlConnection(caller.Database.GetConnectionString());
+        await competitor.OpenAsync();
+        await using var competing = await competitor.BeginTransactionAsync();
+        await using (var insert = new NpgsqlCommand(
+            """
+            INSERT INTO account_movements (id, account_id, kind, amount, occurred_on, period)
+            VALUES (@id, @account, 'RentAccrual', 500000, DATE '2026-01-10', DATE '2026-01-01')
+            """, competitor, competing))
+        {
+            insert.Parameters.AddWithValue("id", Guid.NewGuid());
+            insert.Parameters.AddWithValue("account", account.Id);
+            await insert.ExecuteNonQueryAsync();
+        }
+
+        var materialising = Task.Run(() => new AccountMaterialiser(caller)
+            .MaterialiseDueAccrualsThroughAsync(account.Id, new DateOnly(2026, 1, 31)));
+
+        // Wait until the materialiser's INSERT is parked behind the competitor's uncommitted row.
+        var deadline = DateTime.UtcNow.AddSeconds(15);
+        while (true)
+        {
+            await using var probe = new NpgsqlCommand(
+                "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() " +
+                "AND wait_event_type = 'Lock' AND wait_event = 'transactionid'", competitor);
+            probe.Transaction = competing;
+            if ((long)(await probe.ExecuteScalarAsync())! > 0)
+            {
+                break;
+            }
+
+            Assert.True(DateTime.UtcNow < deadline, "The materialiser never reached the unique index.");
+            await Task.Delay(50);
+        }
+
+        await competing.CommitAsync();
+
+        Assert.Equal(0, await materialising);
+
+        // The caller's transaction is still alive: a query runs and the commit succeeds.
+        var rows = await caller.Database.SqlQuery<int>($"SELECT 1 AS \"Value\"").ToListAsync();
+        Assert.Single(rows);
+        await transaction.CommitAsync();
+    }
+
+    /// <summary>
     /// Spec test 28 at the integration level: no rent accrues after the contract ended. The
     /// schedule stops producing periods, so the materialiser writes none — which is what lets a
     /// settled account carry no closed flag.

@@ -287,6 +287,10 @@ public sealed class MoraWorklistQueryTests
     ///
     /// Asserted over the model, so adding such a kind fails here rather than quietly inflating
     /// every balance in the system.
+    ///
+    /// Payment and RecargoCharged are ledger kinds, not receipt-only concepts: both are written
+    /// to the ledger in the same transaction as the recibo (cobranza-y-recibos spec Decision 5),
+    /// as a credit and a debit that move the balance, so they belong in these figures.
     /// </summary>
     [Fact]
     public void NoReceiptOnlyConcept_CanEnterTheseFigures()
@@ -294,7 +298,7 @@ public sealed class MoraWorklistQueryTests
         var kinds = Enum.GetNames<MovementKind>();
 
         Assert.Equal(
-            ["ContractualFeeInstalment", "Correction", "OpeningBalance", "RecargoFrozen", "RentAccrual"],
+            ["ContractualFeeInstalment", "Correction", "OpeningBalance", "Payment", "RecargoCharged", "RecargoFrozen", "RentAccrual"],
             kinds.Order());
 
         foreach (var forbidden in new[] { "Tasa", "Municipal", "Seguro", "Insurance", "Otros", "Other" })

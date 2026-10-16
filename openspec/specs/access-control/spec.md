@@ -98,6 +98,52 @@ Any migration that creates a new table MUST grant, in that same migration, the b
 - WHEN that migration completes and either role connects
 - THEN each role MUST be able to perform exactly the operations this specification says it may — no table MUST be silently unreachable to a role that needs it
 
+### Requirement: The Collection Tables Are Granted Deliberately, and the Counter Is a Named Departure
+Under "Every New Table Ships With Its GRANTs in the Same Migration", the migration that creates the
+collection (payment event), recibo, recibo-line, annulment and numbering-counter tables MUST grant, in
+the same migration, to both `inmobiliaria_admin` and `inmobiliaria_empleado` exactly:
+
+- collections, recibos, recibo lines, annulment records: `SELECT` and `INSERT`, and nothing else.
+  Neither role MUST hold `UPDATE` or `DELETE` on them (Decision 40).
+- the numbering counter: `SELECT`, and `UPDATE` of the column that advances the counter, and not
+  `INSERT` or `DELETE`. This is a **deliberate departure** from the insert-only pattern the other
+  collection tables follow. The counter is the one row that must change, and both roles take
+  payments. Its single row exists from the migration.
+- the privilege to set the **starting number** is held by `inmobiliaria_admin` only
+  (Decision 39). `inmobiliaria_empleado` MUST NOT be able to set it. This restriction is enforced by
+  the database (a separate column-level grant or function), not by the UI.
+- the annulment records are insertable by both roles, yet the time and role limits on voiding
+  (Decision 45) MUST still be enforced by the database on that insert, because a grant cannot express
+  them.
+- the existing movements table keeps its insert-only grants; the new movement kinds need no new privilege.
+
+**A named limit.** Under a `GRANT` on the counter's advancing column the database cannot distinguish an
+increment made inside an issuance from any other `UPDATE` of that column. The protection against a tampered counter is
+therefore not the grant but the unique constraint on the recibo number: a counter set back would
+cause the next issuance to be refused, not to issue a duplicate. This is stated so no reader assumes
+database enforcement that does not exist.
+
+#### Scenario: Both roles can read and write exactly what they should
+
+- GIVEN the migration has run
+- WHEN each application role connects
+- THEN each MUST be able to read the new tables, insert collections, recibos, lines and annulments, and advance the counter
+- AND neither MUST be able to update or delete a collection, a recibo, a line or an annulment, or to insert into or delete from the counter
+- AND only `inmobiliaria_admin` MUST be able to set the counter's starting number
+
+#### Scenario: A counter set back cannot produce a duplicate
+
+- GIVEN issued recibos up to 24270
+- WHEN a role sets the counter back to 24200 with a direct `UPDATE` and a payment is then committed
+- THEN the commit MUST be refused by the unique constraint
+- AND no recibo with a duplicate number MUST exist
+
+#### Scenario: The migration leaves no table unreachable
+
+- GIVEN the migration has run
+- WHEN either role queries any new table
+- THEN it MUST not fail with a permission error for an operation this requirement grants
+
 ## Tests
 
 Derived from the requirements above, not generic CRUD coverage. Each names the requirement it proves. Integration tests require a real Postgres (`postgres:17.6` via Testcontainers) connecting as each application role in turn; permission and trigger behavior cannot be validated against a fake.

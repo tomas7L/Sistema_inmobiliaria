@@ -97,15 +97,15 @@ public class AmountOwedTests
     }
 
     /// <summary>
-    /// An opening balance carries no period, so no surcharge is projected on it. There is no due
-    /// date to count from, and inventing one would invent a debt: the figure the agency types at
-    /// go-live is what their spreadsheet already says is owed, mora included.
+    /// No surcharge is projected on an opening balance, even when it names a period (spec Decision
+    /// 31): counting mora from that month's due date would invent a debt. The figure the agency
+    /// types at go-live is what their spreadsheet already says is owed, mora included.
     /// </summary>
     [Fact]
     public void AnOpeningBalance_AccruesNoRecargo()
     {
         var account = NewAccount();
-        account.Append(AccountMovement.OpeningBalance(Guid.NewGuid(), 150_000m, July));
+        account.Append(AccountMovement.OpeningBalance(Guid.NewGuid(), 150_000m, July, July));
 
         var asOf = new DateOnly(2026, 12, 31);
 
