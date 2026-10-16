@@ -23,6 +23,29 @@ public sealed class AccountMaterialiser : IAccountMaterialiser
     public async Task<int> MaterialiseDueAccrualsThroughAsync(
         Guid accountId, DateOnly through, CancellationToken ct = default)
     {
+        // The account's lock comes first, as it does in CollectionDesk.CommitAsync, so the two writers
+        // of this account's movements queue instead of interleaving their unique-index entries. EF orders
+        // same-table INSERTs by key (random Guids), so two batches of different shape take
+        // ux_account_movements_period_charge and ux_account_movements_instalment_period in opposite orders
+        // and deadlock (40P01) under load. With the lock in place that cause is gone, so a 40P01 is NOT
+        // treated as a lost race: it would hide a regression and silently skip due accruals. It surfaces.
+        // A transaction the caller already opened is joined, not nested.
+        if (_context.Database.CurrentTransaction is not null)
+        {
+            return await MaterialiseCoreAsync(accountId, through, ct);
+        }
+
+        await using var transaction = await _context.Database.BeginTransactionAsync(ct);
+        var written = await MaterialiseCoreAsync(accountId, through, ct);
+        await transaction.CommitAsync(ct);
+
+        return written;
+    }
+
+    private async Task<int> MaterialiseCoreAsync(Guid accountId, DateOnly through, CancellationToken ct)
+    {
+        await AccountRowLock.TakeAsync(_context, accountId, ct);
+
         var account = await _context.ContractAccounts
             .Include(a => a.Movements)
             .SingleOrDefaultAsync(a => a.Id == accountId, ct);
@@ -78,13 +101,25 @@ public sealed class AccountMaterialiser : IAccountMaterialiser
             return 0;
         }
 
+        // The write sits behind an explicit savepoint: a unique violation aborts the enclosing
+        // transaction (25P02 on every later command), and the caller's transaction, or our own that is
+        // about to commit, must stay usable after a lost race. EF's automatic savepoints do the same
+        // by default, but this must not depend on that setting.
+        var transaction = _context.Database.CurrentTransaction
+            ?? throw new InvalidOperationException("Materialising requires an open transaction.");
+        const string savepoint = "materialise_accruals";
+        await transaction.CreateSavepointAsync(savepoint, ct);
+
         try
         {
             await _context.SaveChangesAsync(ct);
+            await transaction.ReleaseSavepointAsync(savepoint, ct);
             return written;
         }
-        catch (DbUpdateException ex) when (IsUniqueViolation(ex))
+        catch (DbUpdateException ex) when (IsLostRace(ex))
         {
+            await transaction.RollbackToSavepointAsync(savepoint, ct);
+
             // A competing writer materialised the same period between our read and our write —
             // the race design Decision 1 settles with a constraint rather than a lock.
             //
@@ -102,6 +137,24 @@ public sealed class AccountMaterialiser : IAccountMaterialiser
         }
     }
 
-    private static bool IsUniqueViolation(DbUpdateException exception) =>
+    private static bool IsLostRace(DbUpdateException exception) =>
         exception.InnerException is PostgresException { SqlState: UniqueViolation };
+}
+
+/// <summary>
+/// Serialises the writers of one account's movements. Both the lazy accrual and the collection desk take
+/// it before reading or writing, so their INSERTs never interleave. A transaction-scoped advisory lock,
+/// not <c>SELECT ... FOR UPDATE</c>: the application role has no UPDATE privilege on contract_accounts
+/// (42501), and the lock needs none. It is released with the transaction, so callers must hold one.
+/// </summary>
+internal static class AccountRowLock
+{
+    public static async Task TakeAsync(InmobiliariaDbContext context, Guid accountId, CancellationToken ct)
+    {
+        var key = accountId.ToString();
+
+        _ = await context.Database
+            .SqlQuery<int>($"SELECT 1 AS \"Value\" FROM (SELECT pg_advisory_xact_lock(hashtextextended({key}, 0))) AS locked")
+            .ToListAsync(ct);
+    }
 }

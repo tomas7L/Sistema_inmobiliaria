@@ -13,29 +13,23 @@ namespace Inmobiliaria.Infrastructure.Tests;
 ///
 /// The rent already due is written before the race (as a read of the account would write it), so the
 /// sessions collide on the thing the test is about and not on the accruals they would all insert.
+///
+/// The bodies live in <see cref="CollectionDeskConcurrencyScenarios"/>, which takes the world it runs on,
+/// so the same assertions run against Testcontainers here and against a real pooler in the PV1 project
+/// (tests/Inmobiliaria.Pv1.Tests, which compiles this file with PV1 defined, without the test class).
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class CollectionDeskConcurrencyTests
+internal static class CollectionDeskConcurrencyScenarios
 {
-    private readonly PostgresFixture _fixture;
-
-    public CollectionDeskConcurrencyTests(PostgresFixture fixture)
+    public static async Task TwoSessions_PayingTheSamePeriod_OneSucceeds_TheOtherIsRefusedAndWritesNothing(
+        Func<Task<DeskWorld>> createWorld)
     {
-        _fixture = fixture;
-    }
-
-    [SkippableFact]
-    public async Task TwoSessions_PayingTheSamePeriod_OneSucceeds_TheOtherIsRefusedAndWritesNothing()
-    {
-        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
-
-        await using var world = await DeskWorld.CreateAsync(_fixture);
+        await using var world = await createWorld();
         var accountId = await world.SeedAccountAsync();
         await world.MaterialiseAsync(accountId, DeskWorld.Today);
 
         var barrier = new SessionBarrier(2);
         var desks = Enumerable.Range(0, 2)
-            .Select(_ => world.NewDesk(context: world.NewContext(CommandHook.WaitAtFirst(CommandHook.InsertCollections, barrier))))
+            .Select(_ => world.NewDesk(context: world.NewContext(CommandHook.WaitAtFirst(CommandHook.LockAccount, barrier))))
             .ToArray();
 
         var confirmed = await Task.WhenAll(desks.Select(d => DeskWorld.ConfirmedPreviewAsync(d, accountId, DeskWorld.OldestPeriod)));
@@ -44,7 +38,9 @@ public sealed class CollectionDeskConcurrencyTests
         var winner = Assert.Single(results, r => r.Succeeded);
         var loser = Assert.Single(results, r => !r.Succeeded);
 
-        Assert.Equal(CollectionRefusal.ConcurrentChange, loser.Refusal);
+        // The account lock queues the sessions: the loser reads the winner's committed collection, so its
+        // shown preview is stale. ConcurrentChange remains the answer for a constraint-level loss.
+        Assert.Contains(loser.Refusal, new CollectionRefusal?[] { CollectionRefusal.ConcurrentChange, CollectionRefusal.PreviewStale });
         Assert.Equal(DeskWorld.StartingNumber, winner.LocatarioNumber);
 
         // One payment's worth of rows, and the counter moved once.
@@ -54,14 +50,12 @@ public sealed class CollectionDeskConcurrencyTests
         Assert.Equal(DeskWorld.StartingNumber + 2, (await world.CountsAsync()).NextNumber);
     }
 
-    [SkippableFact]
-    public async Task SeveralSessions_Issuing_AtOnce_FormOneUnbrokenRun_WithEachPairAdjacent()
+    public static async Task SeveralSessions_Issuing_AtOnce_FormOneUnbrokenRun_WithEachPairAdjacent(
+        Func<Task<DeskWorld>> createWorld)
     {
-        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
-
         const int Sessions = 5;
 
-        await using var world = await DeskWorld.CreateAsync(_fixture);
+        await using var world = await createWorld();
         var barrier = new SessionBarrier(Sessions);
         var tasks = new List<Task<CollectionResult>>();
 
@@ -105,11 +99,9 @@ public sealed class CollectionDeskConcurrencyTests
         Assert.Equal(DeskWorld.StartingNumber + (2 * Sessions), (await world.CountsAsync()).NextNumber);
     }
 
-    [SkippableFact]
-    public async Task AnEarlyPayment_RacingTheLazyAccrual_LeavesOneAccrual_AndTheLoserWritesNothing()
+    public static async Task AnEarlyPayment_RacingTheLazyAccrual_LeavesOneAccrual_AndTheLoserWritesNothing(
+        Func<Task<DeskWorld>> createWorld, bool pooled = false, int rounds = 6)
     {
-        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
-
         // A period begun but not yet due needs a due day that has not arrived: the last day of the month
         // (due day 31 clamps), on a day before it.
         var today = DeskWorld.Today;
@@ -117,13 +109,13 @@ public sealed class CollectionDeskConcurrencyTests
         var clockDay = today == lastDay ? today.AddDays(-1) : today;
         var period = DeskWorld.FirstOfMonth(clockDay);
 
-        await using var world = await DeskWorld.CreateAsync(_fixture);
+        await using var world = await createWorld();
 
         // Repeated, because which side wins the race is not in the test's hands; each outcome has to hold.
         // Alternate rounds carry an instalment plan and the others none, so that the unique index on the
         // rent charge is the only thing standing between the sessions in the rounds without one: with a
         // plan, the instalment's own index would refuse the loser's batch even if the rent's did not.
-        for (var round = 0; round < 6; round++)
+        for (var round = 0; round < rounds; round++)
         {
             ContractualFeePlan? plan = round % 2 == 0 ? new ContractualFeePlan(10_000m, 3) : null;
             var expectedInstalments = plan is null ? 0L : 1L;
@@ -132,8 +124,8 @@ public sealed class CollectionDeskConcurrencyTests
 
             var barrier = new SessionBarrier(2);
             var payingDesk = world.NewDesk(
-                new FixedClock(clockDay), world.NewContext(CommandHook.WaitAtFirst(CommandHook.InsertMovements, barrier)));
-            var accruingContext = world.NewContext(CommandHook.WaitAtFirst(CommandHook.InsertMovements, barrier));
+                new FixedClock(clockDay), world.NewContext(pooled, CommandHook.WaitAtFirst(CommandHook.LockAccount, barrier)));
+            var accruingContext = world.NewContext(pooled, CommandHook.WaitAtFirst(CommandHook.LockAccount, barrier));
 
             var (preview, request) = await DeskWorld.ConfirmedPreviewAsync(payingDesk, accountId, period);
             Assert.True(preview.PeriodWasEarly, "The period should be begun and not yet due.");
@@ -167,7 +159,9 @@ public sealed class CollectionDeskConcurrencyTests
             }
             else
             {
-                Assert.Equal(CollectionRefusal.ConcurrentChange, payment.Refusal);
+                // The account's row lock queues the sessions, so a payer that lost finds the accrual already
+                // committed: its shown preview is stale. ConcurrentChange remains for a constraint-level loss.
+                Assert.Contains(payment.Refusal, new CollectionRefusal?[] { CollectionRefusal.ConcurrentChange, CollectionRefusal.PreviewStale });
                 Assert.Equal(plan is null ? 1 : 2, written);
                 Assert.Equal(0L, payments);
                 Assert.Equal(0L, collections);
@@ -192,3 +186,56 @@ public sealed class CollectionDeskConcurrencyTests
         return issued;
     }
 }
+
+#if !PV1
+[Collection(PostgresCollection.Name)]
+public sealed class CollectionDeskConcurrencyTests
+{
+    private readonly PostgresFixture _fixture;
+
+    public CollectionDeskConcurrencyTests(PostgresFixture fixture)
+    {
+        _fixture = fixture;
+    }
+
+    [SkippableFact]
+    public async Task TwoSessions_PayingTheSamePeriod_OneSucceeds_TheOtherIsRefusedAndWritesNothing()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await CollectionDeskConcurrencyScenarios
+            .TwoSessions_PayingTheSamePeriod_OneSucceeds_TheOtherIsRefusedAndWritesNothing(
+                () => DeskWorld.CreateAsync(_fixture));
+    }
+
+    [SkippableFact]
+    public async Task SeveralSessions_Issuing_AtOnce_FormOneUnbrokenRun_WithEachPairAdjacent()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await CollectionDeskConcurrencyScenarios
+            .SeveralSessions_Issuing_AtOnce_FormOneUnbrokenRun_WithEachPairAdjacent(
+                () => DeskWorld.CreateAsync(_fixture));
+    }
+
+    [SkippableFact]
+    public async Task AnEarlyPayment_RacingTheLazyAccrual_LeavesOneAccrual_AndTheLoserWritesNothing()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await CollectionDeskConcurrencyScenarios
+            .AnEarlyPayment_RacingTheLazyAccrual_LeavesOneAccrual_AndTheLoserWritesNothing(
+                () => DeskWorld.CreateAsync(_fixture));
+    }
+
+    [SkippableFact]
+    public async Task AnEarlyPayment_RacingTheLazyAccrual_WithPoolingOn_NeverDeadlocks()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await CollectionDeskConcurrencyScenarios
+            .AnEarlyPayment_RacingTheLazyAccrual_LeavesOneAccrual_AndTheLoserWritesNothing(
+                () => DeskWorld.CreateAsync(_fixture), pooled: true, rounds: 20);
+    }
+}
+#endif
