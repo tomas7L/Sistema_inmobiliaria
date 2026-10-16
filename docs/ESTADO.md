@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-10-16, cierre de sesión_
+_Última actualización: 2026-10-16 (tarde), cierre de sesión_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -11,31 +11,31 @@ _Última actualización: 2026-10-16, cierre de sesión_
 **Change activo: `ui-de-cobranza`**, fase **propuesta escrita, esperando que Tomás la lea**.
 Preflight SDD de la sesión: Interactive · Both (openspec + Engram) · Ask me.
 
-- Exploración: `openspec/changes/ui-de-cobranza/exploration.md` (sus 3 preguntas, respondidas).
+- Exploración: `openspec/changes/ui-de-cobranza/exploration.md`.
 - Propuesta: `openspec/changes/ui-de-cobranza/proposal.md` — la nota de arriba dice qué leer y qué saltear.
 - Todavía no hay `tasks.md` para este change.
 
 ## Próximos pasos
 
 1. **Tomás lee la propuesta** y la aprueba o pide cambios.
-2. Con la aprobación: `/gentle-sdd-continue ui-de-cobranza` → spec y design.
-3. Antes de tasks/apply, Tomás elige la estrategia de cadena (`stacked-to-main` o
+2. Con la aprobación: Tomás commitea `openspec/changes/ui-de-cobranza/` y abre el PR `ramatomy` → `develop`
+   (hito: propuesta cerrada).
+3. `/gentle-sdd-continue ui-de-cobranza` → spec y design.
+4. Antes de tasks/apply, Tomás elige la estrategia de cadena (`stacked-to-main` o
    `feature-branch-chain`): §6 Open Items de la propuesta.
 
 ## Pendientes / bloqueos
 
-- **Sin commitear (los commitea Tomás):**
-  - `openspec/changes/ui-de-cobranza/exploration.md`, `openspec/changes/ui-de-cobranza/proposal.md` (nuevos)
-  - `docs/ESTADO.md`
-  - casillas tildadas con evidencia en los `tasks.md` archivados de `contract-and-parties`,
-    `rent-adjustments`, `users-and-roles` y `cobranza-y-recibos`
-  - Además, `ramatomy` tiene 1 commit sin mergear a `develop`: `06e6eb2`.
-- **Contadora:** tiene las Decisions 3 y 10 de `openspec/changes/archive/2026-10-15-cobranza-y-recibos/spec.md`. Falta su respuesta.
+- **Sin commitear, a propósito (Tomás no los leyó):** `openspec/changes/ui-de-cobranza/exploration.md`,
+  `openspec/changes/ui-de-cobranza/proposal.md`. `docs/ESTADO.md` sí se commitea en cada cierre.
+- **`ramatomy` pusheada, sin PR:** 3 commits de docs sobre `develop` (`06e6eb2`, `650f423`, `6f67e5f`).
+  El PR se abre por hito, no por cierre.
 - **Para Nicolás, cuando se pueda:** H.2 de `openspec/changes/archive/2026-09-21-rent-adjustments/tasks.md`
-  (índice que sale tarde) y el papel del recibo (§6 de la propuesta).
+  (índice que sale tarde) y el papel del recibo (§6 Open Item 2 de la propuesta).
 - **Change siguiente ya decidido:** carga inicial desde el Excel de Nicolás (incluye H.2 de
   `cuenta-corriente`). El Excel tiene datos personales: **nunca al repo**.
 - **Follow-ups técnicos:** `openspec/changes/archive/2026-10-15-cobranza-y-recibos/archive-report.md`, "Follow-ups Carried Over".
+  Más uno nuevo en Engram: facturación futura necesitaría condición IVA + CUIL del propietario.
 - **Defecto conocido, no arreglado:** comentario de `src/Inmobiliaria.Domain/Leasing/RentAdjustment.cs:76`
   (dice que es el único que trunca; `AdjustmentProposal.cs:64` también trunca).
 - **La rama `ramateo`** sigue muy atrás de `develop`, con un stash viejo.
@@ -63,7 +63,7 @@ dotnet test Inmobiliaria.sln --configuration Release
 dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure
 ```
 
-Esperado: **598 pasados, 0 fallas, 0 omitidos** (corrido el 2026-10-16 sobre `06e6eb2`), build sin
+Esperado: **598 pasados, 0 fallas, 0 omitidos** (corrido el 2026-10-16 sobre `06e6eb2`; lo posterior es sólo docs), build sin
 advertencias y el modelo en sintonía con `20261015204506_AddCollectionsAndRecibos`.
 
 **Leer la salida por el contador de errores o el código de salida, nunca por un patrón.** En esta
