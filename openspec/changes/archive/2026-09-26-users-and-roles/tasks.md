@@ -198,8 +198,10 @@ inside PR 2b, not a separate PR — they gate PR 4, not PR 2b's own merge.
 
 ## Human Follow-Ups (non-code, not assigned to any agent)
 
-- [ ] H.1 User applies the new migration to the live Supabase project with their own credentials — no agent connects to Supabase (same as tasks 3.9–3.13's constraint)
-- [ ] H.2 User runs the exact query in task 3.13 against the live Supabase project and reports the `log_statement` outcome before Phase 5 (PR 4) starts
+- [x] H.1 User applies the new migration to the live Supabase project with their own credentials — no agent connects to Supabase (same as tasks 3.9–3.13's constraint)
+  - Verified 2026-10-16: AddUsersAndRoles was applied by 2026-10-10 (`migrations list`, cuenta-corriente H.1).
+- [x] H.2 User runs the exact query in task 3.13 against the live Supabase project and reports the `log_statement` outcome before Phase 5 (PR 4) starts
+  - Done 2026-09-25 by the owner: `log_statement = ddl` (Engram obs 46).
 - [x] H.3 **RESOLVED.** Task 3.12's proof failed, as suspected: `ADMIN OPTION` is scoped per grant edge and is never inherited. The decision taken is **neither** of the two options this line anticipated — a third one the experiment itself forced. `app_create_login_role` issues a plain `GRANT <group> TO <new_role>` with no `WITH ADMIN OPTION`, so an Admin created from inside the application could never provision anyone, which is the one thing that defines the role. In-application creation is therefore **Empleado-only**, and every additional Admin is a documented human step in `docs/runbooks/bootstrap-first-admin.md`. Confirmed by the project owner and recorded in `spec.md` Decision 6 and in the requirement "Admin Provisions and Deactivates Users From Inside the Application", which also records the second limit found alongside it: an Admin can reset only the password of a role they created.
 - [ ] H.4 The CHECK constraint `(status='Ended') = (actual_end_date IS NOT NULL AND end_reason IS NOT NULL)` is a carried follow-up for the collection change, per design Decision 5 — not this change
 

@@ -108,9 +108,11 @@ owner questions (H.2, H.3 below) — the chain strategy itself is already fixed 
 
 ## Human Follow-Ups (non-code, not assigned to any agent)
 
-- [ ] H.1 **User applies the new migration to the live Supabase project** with their own connection string, the same way the previous change handled it — no agent connects to Supabase
+- [x] H.1 **User applies the new migration to the live Supabase project** with their own connection string, the same way the previous change handled it — no agent connects to Supabase
+  - Verified 2026-10-16: AddRentAdjustments was applied by 2026-10-10 (`migrations list`, cuenta-corriente H.1).
 - [ ] H.2 **Owner confirms the stale-value assumption**: does the operator enter the most recent published value when an index is late, or wait? Currently an unconfirmed TEAM DECISION assumption
-- [ ] H.3 **Owner confirms truncate vs. round** for the whole-peso rule. Currently inferred from one honorarios line (47,860 vs. exact 47,860.80); the team decided to truncate, one peso either way changes nothing material
+- [x] H.3 **Owner confirms truncate vs. round** for the whole-peso rule. Currently inferred from one honorarios line (47,860 vs. exact 47,860.80); the team decided to truncate, one peso either way changes nothing material
+  - Confirmed by the owner: truncation stands (`openspec/domain/respuestas-del-dueno.md`).
 - [ ] H.4 Re-flag `credential-exposure` at the users-and-roles change — this change ships the first canon-changing action, unresolved here by design
 - [ ] H.5 Re-flag `scheduler-mechanism` at the notifications change — nothing in this change schedules or sends anything
 
