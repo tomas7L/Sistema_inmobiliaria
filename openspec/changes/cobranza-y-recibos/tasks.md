@@ -358,6 +358,12 @@ PR 6 results (assistant, Docker up): **N = 33** (Infrastructure only: `Collectio
   - **Fix:** both take a transaction-scoped advisory lock on the account id first (`AccountRowLock`; `SELECT ... FOR UPDATE` was tried and refused with 42501, the app role has no UPDATE on `contract_accounts`); the materialiser now runs in a transaction (joins the caller's if any) and treats `40P01` like `23505` as a lost race. A losing payer now sees `PreviewStale` (accrual already committed) or `ConcurrentChange`; Tests 70 and the two-payers test accept either (barrier moved to the lock).
   - **Evidence:** new `AnEarlyPayment_RacingTheLazyAccrual_WithPoolingOn_NeverDeadlocks` (20 rounds, pooled sessions): RED 3/3 with `40P01` before the fix; GREEN 10/10 runs after it (Test 70 and the pooled variant).
 
+- [x] 6.16 **Review follow-ups on the deadlock fix** (no model change, no migration)
+  - **40P01 no longer swallowed:** `AccountMaterialiser.IsLostRace` matches only `23505`. With the advisory lock the deadlock's cause is gone; treating it as a lost race would hide a regression and skip due accruals silently, so it now surfaces.
+  - **Savepoint around the racing write:** a caught `23505` aborts the enclosing transaction (`25P02` afterwards). The `SaveChanges` is now behind an explicit savepoint, rolled back on a lost race, so the caller's transaction (or our own, about to commit) stays usable. New test `AfterALostRaceInTheCallersTransaction_TheTransactionStaysUsable` (competitor holds the period uncommitted, then commits). Note: EF 9+ auto-savepoints already masked this (the test passed before the fix); RED was observed only with `AutoSavepointsEnabled = false`, which the test sets so the materialiser does not depend on that default.
+  - **PV1 runner:** `Pv1ConnectionString` maps libpq `verify-ca` / `verify-full` (hyphen stripped, case-insensitive) and rejects unknown `sslmode` values with a clear error.
+  - **Accepted, noted:** the `ConcurrentChange` end-to-end path is now proved only by the error-mapping table test; the lock makes the race it used to exercise unreachable in a test.
+
 ## Test coverage check (Tests 1 to 76, each in exactly one task)
 
 | Tests | Task |

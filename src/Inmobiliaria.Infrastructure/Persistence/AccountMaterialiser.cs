@@ -13,9 +13,6 @@ public sealed class AccountMaterialiser : IAccountMaterialiser
     /// <summary>Postgres's unique-violation SQLSTATE.</summary>
     private const string UniqueViolation = "23505";
 
-    /// <summary>Postgres's deadlock-detected SQLSTATE: the other session won; same outcome as a lost race.</summary>
-    private const string DeadlockDetected = "40P01";
-
     private readonly InmobiliariaDbContext _context;
 
     public AccountMaterialiser(InmobiliariaDbContext context)
@@ -30,7 +27,9 @@ public sealed class AccountMaterialiser : IAccountMaterialiser
         // of this account's movements queue instead of interleaving their unique-index entries. EF orders
         // same-table INSERTs by key (random Guids), so two batches of different shape take
         // ux_account_movements_period_charge and ux_account_movements_instalment_period in opposite orders
-        // and deadlock (40P01) under load. A transaction the caller already opened is joined, not nested.
+        // and deadlock (40P01) under load. With the lock in place that cause is gone, so a 40P01 is NOT
+        // treated as a lost race: it would hide a regression and silently skip due accruals. It surfaces.
+        // A transaction the caller already opened is joined, not nested.
         if (_context.Database.CurrentTransaction is not null)
         {
             return await MaterialiseCoreAsync(accountId, through, ct);
@@ -102,13 +101,25 @@ public sealed class AccountMaterialiser : IAccountMaterialiser
             return 0;
         }
 
+        // The write sits behind an explicit savepoint: a unique violation aborts the enclosing
+        // transaction (25P02 on every later command), and the caller's transaction, or our own that is
+        // about to commit, must stay usable after a lost race. EF's automatic savepoints do the same
+        // by default, but this must not depend on that setting.
+        var transaction = _context.Database.CurrentTransaction
+            ?? throw new InvalidOperationException("Materialising requires an open transaction.");
+        const string savepoint = "materialise_accruals";
+        await transaction.CreateSavepointAsync(savepoint, ct);
+
         try
         {
             await _context.SaveChangesAsync(ct);
+            await transaction.ReleaseSavepointAsync(savepoint, ct);
             return written;
         }
         catch (DbUpdateException ex) when (IsLostRace(ex))
         {
+            await transaction.RollbackToSavepointAsync(savepoint, ct);
+
             // A competing writer materialised the same period between our read and our write —
             // the race design Decision 1 settles with a constraint rather than a lock.
             //
@@ -127,7 +138,7 @@ public sealed class AccountMaterialiser : IAccountMaterialiser
     }
 
     private static bool IsLostRace(DbUpdateException exception) =>
-        exception.InnerException is PostgresException { SqlState: UniqueViolation or DeadlockDetected };
+        exception.InnerException is PostgresException { SqlState: UniqueViolation };
 }
 
 /// <summary>

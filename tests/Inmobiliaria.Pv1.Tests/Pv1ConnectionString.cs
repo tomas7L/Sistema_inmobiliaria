@@ -57,11 +57,26 @@ internal static class Pv1ConnectionString
             var parts = pair.Split('=', 2);
             if (parts[0].Equals("sslmode", StringComparison.OrdinalIgnoreCase) && parts.Length == 2)
             {
-                builder.SslMode = Enum.Parse<SslMode>(Uri.UnescapeDataString(parts[1]), ignoreCase: true);
+                builder.SslMode = ParseSslMode(Uri.UnescapeDataString(parts[1]));
             }
         }
 
         return Checked(builder);
+    }
+
+    /// <summary>
+    /// libpq spells the modes with hyphens (<c>verify-ca</c>, <c>verify-full</c>); Npgsql's enum does not.
+    /// </summary>
+    private static SslMode ParseSslMode(string value)
+    {
+        if (Enum.TryParse<SslMode>(value.Replace("-", string.Empty), ignoreCase: true, out var mode) &&
+            Enum.IsDefined(mode))
+        {
+            return mode;
+        }
+
+        throw new ArgumentException(
+            $"Unknown sslmode '{value}'. Expected disable, allow, prefer, require, verify-ca or verify-full.");
     }
 
     /// <summary>Host, port and database only: safe to print.</summary>
