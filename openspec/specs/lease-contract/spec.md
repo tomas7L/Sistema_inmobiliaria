@@ -278,8 +278,7 @@ capability stores the value only; it does not compute fees.
 > 2. **Honorarios contractuales** — a fixed **AMOUNT** for handling the contract, paid by the
 >    **tenant**, **once**, in **1 to 6 fixed instalments** that never adjust. Paying in full is
 >    simply one instalment, not a separate case. It is printed on the tenant's part of the monthly
->    receipt, never the owner's. Confirmed 2026-09-23 and **not modelled anywhere yet**; it belongs
->    to the collection change.
+>    receipt, never the owner's. Confirmed 2026-09-23. **Modelled** by the requirement "A Contract Carries a Honorarios Contractuales Plan"; the administration rate above is now read by `receipt` to compute the propietario recibo's line.
 >
 > The contrast that matters: the owner's is a **rate** that rides the rent upward as it adjusts;
 > the tenant's is an **amount** fixed at signing that never moves. Storing either one the other
@@ -350,6 +349,68 @@ record carries.
 - AND no existing contract row MUST be otherwise altered
 
 ---
+
+### Requirement: A Contract Carries a Honorarios Contractuales Plan
+`Contract` MUST be able to store a honorarios contractuales plan: a **fixed amount** and an
+**instalment count from 1 to 6**. Amount and count MUST be stored together or both absent. Paying in
+full is simply a count of 1, not a separate case. The amount is a fixed sum, **never a percentage**,
+and MUST NOT change when the rent adjusts. A contract with no plan MUST be storable (most have none).
+
+The amount MUST be a positive whole peso and the count MUST be a whole number from 1 to 6. A plan MUST
+NOT be changed after any of its instalments has been written to the account (Decision 32).
+
+> **Not to be confused with the administration percentage.** The existing requirement "Honorarios
+> Percentage Is Stored, Nullable" is the owner's monthly percentage. This one is the tenant's one-off
+> fee. Every future mention MUST say which.
+
+#### Scenario: A plan is stored
+
+- GIVEN a contract being created with a plan of 3 instalments of 30,000
+- WHEN it is saved
+- THEN the stored amount MUST be 30,000 and the count 3
+
+#### Scenario: A contract with no plan is valid
+
+- GIVEN a contract created without a plan
+- WHEN it is saved
+- THEN it MUST be accepted
+
+#### Scenario: A count outside 1 to 6 is refused
+
+- GIVEN a plan with a count of 0, or of 7
+- WHEN it is supplied
+- THEN it MUST be refused
+
+#### Scenario: An amount that is not positive is refused
+
+- GIVEN a plan with an amount of 0 or a negative number
+- WHEN it is supplied
+- THEN it MUST be refused
+
+#### Scenario: An amount without a count is refused
+
+- GIVEN a plan with an amount and no count, or a count and no amount
+- WHEN it is supplied
+- THEN it MUST be refused
+
+#### Scenario: The plan does not follow the rent
+
+- GIVEN a contract with a plan of 30,000 whose rent is adjusted by 12%
+- WHEN the plan is read
+- THEN the amount MUST still be 30,000
+
+#### Scenario: Existing contracts keep working
+
+- GIVEN contracts that existed before this change
+- WHEN the migration adding the plan runs
+- THEN every one of them MUST carry no plan
+- AND no existing contract row MUST be otherwise altered
+
+#### Scenario: A plan cannot be changed once an instalment is written
+
+- GIVEN a contract with an instalment already written
+- WHEN a change of its plan is attempted
+- THEN it MUST be refused
 
 ## Tests
 
