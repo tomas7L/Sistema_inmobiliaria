@@ -91,21 +91,33 @@ always the **amount owed**; the ledger balance is what reconciles against the mo
 
 ### Requirement: An Opening Balance Exists Only for a Contract That Predates the System
 
-A contract that already existed when the system went live MUST have exactly one movement of kind
-`OpeningBalance`, entered by a person and never computed. Its amount MAY be zero, for a tenant who is
-up to date. The kind MUST be distinguishable from every other kind, so no reader mistakes a typed
-figure for a derived one.
+(Previously: "exactly one movement of kind `OpeningBalance`" per pre-existing account, with no
+period, so the debt could never be settled by any payment. Reason: the opening debt MUST be payable,
+one month at a time (Settled, Tomás 2026-10-13). Migration: living Tests 9 and 10 are replaced by
+Tests 52 to 56 below.)
 
-A contract **created in the system** MUST NOT have one. Its account begins empty, and its first
-movement is its first rent accrual. There is nothing to carry over, because the system watched the
-contract from its first day.
+A contract that already existed when the system went live MUST have its debt entered as `OpeningBalance`
+movements, entered by a person and never computed: **one per owed month**, each carrying **that
+month's period** and **that month's real amount**. A month is an ordinary period from then on: it can
+be named by a payment, it is eligible for the oldest-unpaid default, and it is paid in full or not at
+all. A single opening figure settled whole, and an even split of a total, MUST NOT be accepted as the
+way to load a debt, because an adjustment, a partial payment or a month's recargo makes months
+unequal and a single figure could not be paid one month at a time.
 
-An account MUST NOT be refused for having no opening balance. An earlier draft of this requirement
-demanded one of every account; that would have made it impossible to register a tenant who signs
-tomorrow — the ordinary case, and the one the system will spend most of its life doing.
+A tenant who is up to date MUST be loaded as exactly one `OpeningBalance` of **zero** with no period,
+so the account states that somebody asserted zero rather than that nobody looked (Decision 30). A
+`OpeningBalance` with a non-zero amount and no period MUST be refused. Within one account there MUST be
+at most one `OpeningBalance` per period and at most one period-less zero. A period carrying an
+`OpeningBalance` MUST NOT also receive a `RentAccrual`.
 
-The agency keeps the go-live figures in a spreadsheet today, so loading them is transcription, not
-reconstruction.
+The kind MUST stay distinguishable from every other kind, so no reader mistakes a typed figure for a
+derived one. A period held by an `OpeningBalance` projects **no** recargo (it has no accrual from
+which to measure; the typed figure is what the agency's spreadsheet says is owed, mora included,
+Decision 31). Which months each tenant owes is a data-loading question (default, Decision 18), not a
+modelling one.
+
+A contract **created in the system** MUST NOT have any. Its account begins empty and its first
+movement is its first rent accrual. An account MUST NOT be refused for having no opening balance.
 
 #### Scenario: A contract signed after go-live opens with an empty account
 
@@ -114,31 +126,62 @@ reconstruction.
 - THEN it MUST be accepted with no movements at all
 - AND its balance MUST be zero
 
-#### Scenario: A contract that predates the system carries its figure
+#### Scenario: A pre-existing debt is loaded month by month
 
-- GIVEN a contract that existed before go-live, owing 150,000
+- GIVEN a contract that existed before go-live, owing 150,000 for May, 160,000 for June and 170,000 for July
 - WHEN its account is opened
-- THEN exactly one `OpeningBalance` movement of 150,000 MUST be recorded
+- THEN three `OpeningBalance` movements MUST be recorded, one per month, each with its period and amount
+- AND the ledger balance MUST be 480,000
+
+#### Scenario: One month of an old debt can be paid
+
+- GIVEN the account above
+- WHEN a payment names June
+- THEN June MUST be settled for 160,000
+- AND May and July MUST remain unpaid
+
+#### Scenario: Old debt is paid oldest first by default
+
+- GIVEN the same account
+- WHEN a payment names no period
+- THEN May MUST be the period settled
 
 #### Scenario: Zero is a valid opening balance for a pre-existing contract
 
 - GIVEN a pre-existing contract whose tenant is up to date
-- WHEN its account is opened with a balance of zero
-- THEN it MUST be accepted
-- AND the movement MUST still be recorded, so the account states that somebody asserted zero rather
-  than that nobody looked
+- WHEN its account is opened
+- THEN exactly one `OpeningBalance` of zero with no period MUST be recorded
 
-#### Scenario: At most one opening balance ever
+#### Scenario: A non-zero opening balance without a period is refused
 
-- GIVEN an account that already carries an opening balance
-- WHEN a second `OpeningBalance` movement is attempted
+- GIVEN a pre-existing contract
+- WHEN an `OpeningBalance` of 150,000 with no period is attempted
 - THEN it MUST be refused
+
+#### Scenario: At most one opening balance per period
+
+- GIVEN an account that already carries an `OpeningBalance` for June
+- WHEN a second `OpeningBalance` for June is attempted
+- THEN it MUST be refused
+
+#### Scenario: A month loaded as opening balance receives no rent accrual
+
+- GIVEN an account carrying an `OpeningBalance` for July
+- WHEN a rent accrual for July is attempted
+- THEN it MUST be refused
+
+#### Scenario: An opening-balance month projects no recargo
+
+- GIVEN a month loaded as `OpeningBalance` and long overdue
+- WHEN the amount owed is read
+- THEN no recargo MUST be projected for it
+- AND a payment of that month MUST write no `RecargoCharged`
 
 #### Scenario: An opening balance is never silently recomputed
 
-- GIVEN an account with a typed opening balance
+- GIVEN an account with typed opening balances
 - WHEN any later movement is added
-- THEN the opening balance MUST remain exactly as it was entered
+- THEN each opening balance MUST remain exactly as it was entered
 
 ### Requirement: A Period Accrues at the Canon in Force, and Never Re-Prices
 
@@ -176,26 +219,58 @@ period, and MUST NOT allocate a fraction of a payment across several periods.
 - THEN it MUST be refused
 - AND no movement MUST be recorded
 
-### Requirement: A Payment Settles the Oldest Unpaid Period
+### Requirement: A Payment Settles the Period the Tenant Names, or the Oldest Unpaid One
 
-When a payment settles a period, that period MUST be the oldest unpaid one on the account. The
-operator MUST NOT be asked to choose, and MUST NOT be able to override the choice.
+(Previously: "A Payment Settles the Oldest Unpaid Period": the operator is never asked and cannot
+override. Reason: CCyCN arts. 900–902 give the debtor the right to impute at payment, and the
+agency's practice "el primero que adeuda" (§16) is the default that applies when the tenant does not
+choose. Migration: the living Tests 14 and 15 are replaced by Tests 3 to 5 below; no other reference
+changes.)
 
-The payment movement itself is created by the collection change; this capability owns the rule that
-decides which period it settles.
+When a payment settles a period, that period MUST be the one the tenant named, provided it is payable:
+no live payment settles it, and it is owed or in a month that has begun but not yet fallen due. When the tenant names none, it MUST be the
+**oldest unpaid** period on the account or, when nothing is owed, the month in course. The
+system MUST NOT refuse a named period merely because an older one is unpaid, and MUST NOT contain any
+clause that forbids a choice or an override.
 
-#### Scenario: Three months behind, one month paid
+The oldest-unpaid default remains the account's own answer (`OldestUnpaidPeriod`), so every caller
+gets the same default. The default makes the tenant pay the most expensive month first, because the
+oldest period carries the most days of recargo. That is correct and is now only the default.
+
+> **Open edge, weak.** Art. 900 forbids imputing to capital while interest is owed without the
+> creditor's consent. Whether a named newer period may be paid while an older period's recargo is
+> unpaid is for the agency's lawyer or contador. This requirement does not enforce it and does not
+> forbid it.
+
+The payment movement itself is created by `collection`; this capability owns the default rule and the
+definition of "owed" (the period's movements do not net to zero).
+
+#### Scenario: Three months behind, none named, the oldest is paid
 
 - GIVEN an account with July, August and September all unpaid
-- WHEN one period is paid
+- WHEN one period is paid and none is named
 - THEN July MUST be the period settled
 - AND August and September MUST remain unpaid, each still counting recargo from its own due date
 
-#### Scenario: The operator is never asked
+#### Scenario: Three months behind, September named
+
+- GIVEN the same account
+- WHEN one period is paid and the tenant names September
+- THEN September MUST be the period settled
+- AND July and August MUST remain unpaid, each still counting recargo from its own due date
+
+#### Scenario: The operator may choose
 
 - GIVEN the same account
 - WHEN the payment is recorded
-- THEN no choice of period MUST be presented, and no override MUST exist
+- THEN the operator MUST be able to name a period
+- AND no clause MUST forbid the choice
+
+#### Scenario: The remaining periods keep their own clocks
+
+- GIVEN the same account and a payment that settles September
+- WHEN the amount owed is read afterwards
+- THEN July and August MUST still project recargo from their own due dates
 
 ### Requirement: Recargo Is Derived, Never Accrued as Daily Movements
 
@@ -393,7 +468,139 @@ will be charged would be wrong, and the screen must not let them assume it.
 
 ---
 
+### Requirement: Payment and RecargoCharged Are Ledger Movements
+The ledger MUST admit two further movement kinds:
+
+- **`Payment`**: carries the period it settles, a negative amount, and is created only by collection.
+- **`RecargoCharged`**: carries the same period and a positive amount, and is the stored form of the
+  recargo at the instant it is charged. It is the moment the original cuenta-corriente decision named
+  when it said recargo "becomes a stored movement when it is charged on a receipt".
+
+Both are subject to "The Ledger Is Append-Only; a Correction Is a New Movement". The forward
+reference "the payment movement itself is created by the collection change" stops being a forward
+reference. The `RecargoCharged` and its `Payment` are always written in one transaction (see
+`collection`); a ledger holding one without the other for a period is a defect.
+
+#### Scenario: The new kinds are accepted and are append-only
+
+- GIVEN an account
+- WHEN a `Payment` and a `RecargoCharged` are recorded for a period
+- THEN both MUST be accepted
+- AND an update or delete of either, including by raw SQL, MUST be refused
+
+#### Scenario: A reversal is a correction naming the original
+
+- GIVEN a recorded `Payment`
+- WHEN it is reversed
+- THEN a `Correction` of opposite sign naming the `Payment` MUST be appended
+- AND the `Payment` MUST remain unchanged
+
+### Requirement: A Honorarios Contractuales Instalment Is Payable With Its Rent Period
+A `ContractualFeeInstalment` movement MUST carry a period: instalment *k* (1 to the plan's count)
+attaches to the *k*-th rent period from the contract's start. It is therefore settled by the same
+payment, on the same recibo, under the same period rule as that period's rent, and it joins the
+period's amount for recargo purposes. It MUST NOT be settled apart from the rent (default, Decision
+17: whether the agency ever lets one be paid off-schedule is Open Question 4).
+
+For a contract that predates the system, instalments for periods due on or before the cutover date MUST NOT be raised
+(Decisions 32 and 41): they belong to the opening balance. The instalment for each period MUST be raised once, together with
+that period's rent accrual, and never twice.
+
+An instalment is the tenant's concept only: it appears in the account balance (which covers rent,
+instalments and recargo) and on the locatario recibo, never on the propietario recibo.
+
+#### Scenario: Instalment k rides with the k-th rent period
+
+- GIVEN a contract with a plan of 3 instalments of 30,000, starting in January
+- WHEN the January, February and March periods accrue
+- THEN instalments 1, 2 and 3 MUST be raised for those periods respectively
+- AND no instalment MUST be raised for April
+
+#### Scenario: The instalment is paid with the rent
+
+- GIVEN a period carrying a rent of 500,000 and an instalment of 30,000
+- WHEN the period is paid
+- THEN the payment MUST settle 530,000 plus recargo
+- AND the period MUST net to zero
+
+#### Scenario: An instalment cannot be paid alone
+
+- GIVEN a period with a rent and an instalment
+- WHEN a payment for the instalment alone is attempted
+- THEN it MUST be refused as a partial amount
+
+#### Scenario: Earlier instalments of a pre-existing contract are not raised
+
+- GIVEN a contract that predates go-live with 6 instalments, the first two periods due on or before
+  its cutover date
+- WHEN accruals run after the cutover
+- THEN instalments 1 and 2 MUST NOT be raised
+- AND instalments 3 to 6 MUST be raised with their periods
+
+#### Scenario: An instalment is never raised twice
+
+- GIVEN an instalment already raised for a period
+- WHEN it is raised again
+- THEN it MUST be refused
+
+### Requirement: A Pre-Existing Contract Accrues Nothing Due On or Before Its Cutover Date
+The **cutover date** is stored on the contract. A contract loaded as one that predates the system
+carries it from the moment it is loaded; a contract created in the system carries none. It MUST NOT be
+derived from the account's movements: a pre-existing contract read before its opening balances are
+typed would then have no cutover, and because reading an account (and the mora worklist, which reads
+every account) materialises accruals onto an append-only ledger, its whole history would be written
+permanently. The cutover date MUST NOT change once the account holds any movement (Decision 41).
+
+For a contract that predates the system, the system MUST NOT raise a `RentAccrual` or a
+`ContractualFeeInstalment` for any period whose due date falls on or before the cutover date: those
+months are carried by the opening balance, month by month, or are not owed. This MUST hold however an
+accrual is triggered (reading the account, the mora worklist, or a payment), including before any
+opening balance has been entered. A period due after the cutover date accrues
+as for any contract. A contract created in the system has no cutover date and is unaffected.
+
+Instalment numbering MUST NOT shift: instalment *k* still belongs to the *k*-th rent period from the
+contract's start, so the instalments skipped by this rule are not renumbered onto later periods
+(Decisions 32 and 41).
+
+#### Scenario: A loaded pre-existing contract accrues no history
+
+- GIVEN a contract signed years before go-live, whose cutover date is 5 October
+- WHEN its account is read, which triggers accrual
+- THEN no `RentAccrual` MUST be written for any period due on or before 5 October
+- AND the account's balance MUST equal its opening balances
+
+#### Scenario: A period due after the cutover date accrues normally
+
+- GIVEN the same account and a period due on 10 October
+- WHEN the account is read on 11 October
+- THEN a `RentAccrual` MUST be written for that period
+
+#### Scenario: No instalment is raised for a period before the cutover
+
+- GIVEN the same contract carrying a plan of 6 instalments whose first periods are due before 5 October
+- WHEN accruals run
+- THEN no instalment MUST be raised for those periods
+- AND each later instalment MUST attach to its own *k*-th period
+
+#### Scenario: A contract created in the system is unaffected
+
+- GIVEN a contract created in the system
+- WHEN its first period falls due
+- THEN its `RentAccrual` MUST be written
+
+#### Scenario: A pre-existing contract read before its opening balances are typed accrues nothing
+
+- GIVEN a contract loaded as predating the system with a cutover date of 5 October, and no opening
+  balance entered yet
+- WHEN the mora worklist reads every account on 6 October
+- THEN no `RentAccrual` and no instalment MUST be written for any period due on or before 5 October
+
 ## Tests
+
+> Tests 9, 10, 14 and 15 predate `cobranza-y-recibos`, which modified the requirements they
+> exercise (the opening balance, and which period a payment settles). The current behaviour and its
+> tests are in `openspec/changes/archive/2026-10-15-cobranza-y-recibos/spec.md`; where the two
+> disagree, that change wins.
 
 1. **One account per contract.** A tenant holding two contracts has two accounts, each with its own
 
