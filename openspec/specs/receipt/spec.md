@@ -311,9 +311,11 @@ annulled with its number, reason, user and time.
 ### Requirement: The Recibo Is Labelled Non-Fiscal
 
 Every recibo MUST carry a fixed legend stating that it is not a fiscal invoice. Electronic invoicing
-is outside this system (§10). The stance that the recibo needs no fiscal numbering is **weak**
-(Decision 10) and is to be confirmed with the agency's contador before go-live; it MUST NOT be
-presented as legal fact.
+is outside this system (§10). The agency's contador confirmed (2026-10-16) that the recibo is only
+proof of collection with no fiscal standing, and that the invoice is always the mandatory document
+(Decision 10). Who issues that invoice depends on the owner's VAT status and is outside this
+system: an owner not registered for VAT may be invoiced through the agency acting as intermediary,
+naming the owner and their DNI/CUIL; a VAT-registered or VAT-exempt owner invoices directly.
 
 #### Scenario: The legend is present on both kinds
 

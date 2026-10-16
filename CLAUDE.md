@@ -17,8 +17,8 @@ remembered.
 ### The rhythm, and who touches git
 
 The assistant writes files and leaves them **uncommitted**. Tomás reads, objects or approves, the
-assistant corrects — and then **Tomás commits, pushes and opens the PR**. Mateo reviews, Tomás
-merges, Tomás says so.
+assistant corrects — and then **Tomás commits, pushes and opens the PR**. Tomás merges and says
+so. Mateo does not review; the gentle-ai review is the only independent check.
 
 **The assistant never commits, never pushes and never opens a PR.** It hands over the file list and
 a commit message, and stops.
