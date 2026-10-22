@@ -26,8 +26,10 @@ Chain strategy: pending
 
 ## Prerequisites (Non-Code — before PR 3 apply)
 
-- [ ] P.1 Create the dedicated Supabase organization and provision a project inside it (not shared with the padel system). *(proposal: supabase-org, resolved)*
-- [ ] P.2 Record the Postgres major version that project reports; needed to pin the Testcontainers image (task 3.3). Do not guess.
+- [x] P.1 Create the dedicated Supabase organization and provision a project inside it (not shared with the padel system). *(proposal: supabase-org, resolved)*
+  - Verified 2026-10-16: own Supabase organization recorded in `openspec/config.yaml` (`supabase-org`).
+- [x] P.2 Record the Postgres major version that project reports; needed to pin the Testcontainers image (task 3.3). Do not guess.
+  - Verified 2026-10-16: PostgreSQL 17.6 recorded in `openspec/config.yaml`; Testcontainers pinned to `postgres:17.6`.
 
 ## Slice 1 (PR 1) — Solution Scaffolding, Domain Layer, CI Split — est. 400–520 lines
 
@@ -88,8 +90,10 @@ Chain strategy: pending
 - [x] 3.11 `SchemaConstraintTests.cs` — `DuplicateDni_RejectedByUniqueIndex`, `DuplicateCuil_RejectedByUniqueIndex`. *(party-registry: Natural Key Uniqueness)*
 - [x] 3.12 `.github/workflows/ci.yml`: no `core` job edit was needed beyond adding the new test project to `Inmobiliaria.Core.slnf` — the existing `dotnet test Inmobiliaria.Core.slnf` step already picks it up (Docker present on ubuntu-latest → Testcontainers tests execute for real there).
 - [x] 3.13 Updated `openspec/config.yaml`: `testing.status: available`, `apply.test_command`/`verify.test_command`/`verify.build_command` filled, `ef_testing_decision` records the Testcontainers-vs-Supabase-schema decision.
-- [ ] 3.14 **NOT DONE — explicitly out of scope for this agent.** The user's instructions for this PR forbid running `dotnet ef database update` or connecting to Supabase in this session ("do not touch the live database"). This manual smoke check (apply the migration to the real Supabase project, one insert/read via Npgsql) is a required **human follow-up after this PR merges**, using the developer's own connection string, which this agent must never see or request.
-- [ ] 3.15 **MANUAL, non-code, admin-only, AFTER `core` has run at least once on a PR:** add `core` as a required status check in the GitHub ruleset. Until this is done, a red `core` job is advisory only and does not block merge.
+- [x] 3.14 **NOT DONE — explicitly out of scope for this agent.** The user's instructions for this PR forbid running `dotnet ef database update` or connecting to Supabase in this session ("do not touch the live database"). This manual smoke check (apply the migration to the real Supabase project, one insert/read via Npgsql) is a required **human follow-up after this PR merges**, using the developer's own connection string, which this agent must never see or request.
+  - Verified 2026-10-16: on 2026-10-10 `dotnet ef migrations list` against Supabase showed InitialSchema applied (cuenta-corriente H.1).
+- [x] 3.15 **MANUAL, non-code, admin-only, AFTER `core` has run at least once on a PR:** add `core` as a required status check in the GitHub ruleset. Until this is done, a red `core` job is advisory only and does not block merge.
+  - Done, verified 2026-10-16 with `gh api .../rules/branches/{main,develop}`: ruleset `Bloquear_Ramas_Principales` requires `build` + `core` on both. Its target said `Main` (capital M) and left `main` unprotected until Tomás fixed it the same day.
 - [x] 3.16 Repo-wide check: the only occurrences of "garante" (case-insensitive) are the deliberate ones that document/prove its exclusion — `PartyRole.cs`'s doc comment, `spec.md`'s RFC-2119 requirement that it must not appear, historical `proposal.md`/`exploration.md` narrative predating this slice, and `SchemaConstraintTests.InvalidRoleCheckConstraint_Rejected`, which asserts the DB CHECK rejects `'Garante'` as a role value. No enum member, column value, or identifier named/derived from it exists anywhere.
 - [x] 3.17 Verified: `build` job id/`name:` still literally `build` (`.github/workflows/ci.yml` lines 16-17) after the Slice 1 and Slice 3 CI touches.
 

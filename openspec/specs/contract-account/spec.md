@@ -237,10 +237,12 @@ The oldest-unpaid default remains the account's own answer (`OldestUnpaidPeriod`
 gets the same default. The default makes the tenant pay the most expensive month first, because the
 oldest period carries the most days of recargo. That is correct and is now only the default.
 
-> **Open edge, weak.** Art. 900 forbids imputing to capital while interest is owed without the
-> creditor's consent. Whether a named newer period may be paid while an older period's recargo is
-> unpaid is for the agency's lawyer or contador. This requirement does not enforce it and does not
-> forbid it.
+> **Resolved edge.** Art. 900 forbids imputing to capital while interest is owed without the
+> creditor's consent. The agency's contador confirmed (2026-10-16) that when the tenant exercises
+> the right to impute a payment to a specific period, and pays that period in full, the system has
+> no legal obligation to collect older periods' recargo or interest first, and the owner cannot
+> refuse the payment because older periods are unpaid. This requirement therefore does not enforce
+> recargo-first.
 
 The payment movement itself is created by `collection`; this capability owns the default rule and the
 definition of "owed" (the period's movements do not net to zero).
