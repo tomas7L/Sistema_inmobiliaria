@@ -1,23 +1,19 @@
-﻿using System.Text;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
+﻿using System.Windows;
+using Inmobiliaria.Presentation.Shell;
 
 namespace Inmobiliaria.Desktop;
 
 /// <summary>
-/// Interaction logic for MainWindow.xaml
+/// The main window: who is working and the screens that role is offered, bound to
+/// <see cref="ShellViewModel"/>. No logic lives here; the screens arrive with their slices.
 /// </summary>
 public partial class MainWindow : Window
 {
-    public MainWindow()
+    public MainWindow(ShellViewModel viewModel)
     {
+        ArgumentNullException.ThrowIfNull(viewModel);
         InitializeComponent();
+
+        DataContext = viewModel;
     }
 }

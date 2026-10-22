@@ -1,7 +1,10 @@
 using System.IO;
 using System.Text.Json;
 using System.Windows;
+using Inmobiliaria.Domain.Access;
 using Inmobiliaria.Infrastructure.Access;
+using Inmobiliaria.Presentation.Common;
+using Inmobiliaria.Presentation.Shell;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
@@ -16,6 +19,7 @@ namespace Inmobiliaria.Desktop;
 public partial class App : Application
 {
     private ServiceProvider? _serviceProvider;
+    private ServiceProvider? _sessionProvider;
     private ISessionDbContextFactory? _activeSessionFactory;
 
     // async void is deliberate here, not an oversight: WPF's own lifecycle methods
@@ -27,6 +31,10 @@ public partial class App : Application
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // The last-resort backstop for an exception no screen operation caught (design D24): the same
+        // fixed message OperationRunner shows, never the exception's text, and the window stays open.
+        DispatcherUnhandledException += OnDispatcherUnhandledException;
 
         var endpoint = LoadConnectionEndpoint();
 
@@ -43,6 +51,10 @@ public partial class App : Application
 
     protected override async void OnExit(ExitEventArgs e)
     {
+        // The session container goes before the factory it was built from.
+        _sessionProvider?.Dispose();
+        _sessionProvider = null;
+
         if (_activeSessionFactory is not null)
         {
             await _activeSessionFactory.DisposeAsync();
@@ -101,7 +113,17 @@ public partial class App : Application
             // Reached only past both gates (design Decision 10's diagram).
             _activeSessionFactory = success.Factory;
 
-            var mainWindow = new MainWindow();
+            // The second container, built only now that both gates are past (spec Requirement 1): it holds
+            // the per-call ports and no database context (design D3).
+            var recargo = LoadRecargoSettings();
+            var sessionServices = new ServiceCollection();
+            sessionServices.AddSessionServices(success.Factory, success.Session, recargo);
+            _sessionProvider = sessionServices.BuildServiceProvider();
+
+            var settingsProblems = recargo.Problem is null ? Array.Empty<string>() : [recargo.Problem];
+            var shellViewModel = new ShellViewModel(_sessionProvider.GetRequiredService<IUserSession>(), settingsProblems);
+
+            var mainWindow = new MainWindow(shellViewModel);
             MainWindow = mainWindow;
             // ShutdownMode is OnExplicitShutdown (App.xaml) precisely so that closing
             // LoginWindow or ChangePasswordWindow mid-bootstrap never ends the process before
@@ -111,6 +133,23 @@ public partial class App : Application
             mainWindow.Show();
             return;
         }
+    }
+
+    private static void OnDispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
+    {
+        MessageBox.Show(ErrorMessages.Generic, "Sistema Inmobiliaria", MessageBoxButton.OK, MessageBoxImage.Error);
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// The <c>Recargo</c> section of the same file: terms or one problem naming the key, never a default
+    /// (design section 10). A problem does not stop the application; it closes the desk and voiding.
+    /// </summary>
+    private static RecargoSettings LoadRecargoSettings()
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+        using var document = JsonDocument.Parse(File.ReadAllText(path));
+        return RecargoSettings.Read(document.RootElement);
     }
 
     /// <summary>

@@ -6,7 +6,41 @@
         xmlns:local="clr-namespace:Inmobiliaria.Desktop"
         mc:Ignorable="d"
         Title="Sistema Inmobiliaria" Height="450" Width="800">
-    <Grid>
-        <TextBlock Text="Sistema Inmobiliaria" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="24" />
-    </Grid>
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Padding="12,8" Background="#FFEFEFEF">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
+                <TextBlock Text=" - " />
+                <TextBlock Text="{Binding RoleText}" />
+            </StackPanel>
+        </Border>
+
+        <ItemsControl DockPanel.Dock="Top"
+                      ItemsSource="{Binding SettingsProblems}"
+                      Margin="12,8,12,0">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <TextBlock Text="{Binding}" TextWrapping="Wrap" Foreground="#FFB00020" />
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <ListBox ItemsSource="{Binding Navigation}"
+                 DisplayMemberPath="Title"
+                 Width="220"
+                 DockPanel.Dock="Left"
+                 Margin="12">
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem">
+                    <Setter Property="IsEnabled" Value="{Binding IsAvailable}" />
+                    <Setter Property="ToolTip" Value="{Binding UnavailableReason}" />
+                </Style>
+            </ListBox.ItemContainerStyle>
+        </ListBox>
+
+        <TextBlock Text="Sistema Inmobiliaria"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
+                   FontSize="24" />
+    </DockPanel>
 </Window>

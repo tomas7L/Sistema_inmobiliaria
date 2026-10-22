@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Inmobiliaria.Domain\Inmobiliaria.Domain.csproj" />
     <ProjectReference Include="..\Inmobiliaria.Infrastructure\Inmobiliaria.Infrastructure.csproj" />
+    <ProjectReference Include="..\Inmobiliaria.Presentation\Inmobiliaria.Presentation.csproj" />
   </ItemGroup>
 
 </Project>
