@@ -20,8 +20,12 @@ The assistant writes files and leaves them **uncommitted**. Tomás reads, object
 assistant corrects — and then **Tomás commits, pushes and opens the PR**. Tomás merges and says
 so. Mateo does not review; the gentle-ai review is the only independent check.
 
-**The assistant never commits, never pushes and never opens a PR.** It hands over the file list and
-a commit message, and stops.
+**The assistant never commits, never pushes and never opens a PR.** It hands over the file list,
+the commit and, **every time**, a PR title and description ready to paste, and stops. Tomás commits
+with **GitHub Desktop**: the commit goes as two separate code blocks, **Summary** (one Conventional
+Commit line) and **Description** (the body), never as a git CLI command, because `-m` blocks have
+landed mangled. The PR description is plain English, says what changed and what was decided, and
+carries no AI attribution.
 
 ### What Tomás reads
 
