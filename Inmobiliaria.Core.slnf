@@ -4,8 +4,10 @@
     "projects": [
       "src\\Inmobiliaria.Domain\\Inmobiliaria.Domain.csproj",
       "src\\Inmobiliaria.Infrastructure\\Inmobiliaria.Infrastructure.csproj",
+      "src\\Inmobiliaria.Presentation\\Inmobiliaria.Presentation.csproj",
       "tests\\Inmobiliaria.Domain.Tests\\Inmobiliaria.Domain.Tests.csproj",
-      "tests\\Inmobiliaria.Infrastructure.Tests\\Inmobiliaria.Infrastructure.Tests.csproj"
+      "tests\\Inmobiliaria.Infrastructure.Tests\\Inmobiliaria.Infrastructure.Tests.csproj",
+      "tests\\Inmobiliaria.Presentation.Tests\\Inmobiliaria.Presentation.Tests.csproj"
     ]
   }
 }
