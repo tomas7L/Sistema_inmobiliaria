@@ -59,10 +59,46 @@
                                          Value="{x:Static shell:NavigationTarget.CashDesk}">
                                 <Setter Property="Visibility" Value="Collapsed" />
                             </DataTrigger>
+                            <DataTrigger Binding="{Binding SelectedItem.Target, ElementName=NavigationList}"
+                                         Value="{x:Static shell:NavigationTarget.RecentCollections}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding SelectedItem.Target, ElementName=NavigationList}"
+                                         Value="{x:Static shell:NavigationTarget.Voiding}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
                         </Style.Triggers>
                     </Style>
                 </TextBlock.Style>
             </TextBlock>
+
+            <views:RecentCollectionsView x:Name="RecentCollectionsViewScreen">
+                <views:RecentCollectionsView.Style>
+                    <Style TargetType="views:RecentCollectionsView">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding SelectedItem.Target, ElementName=NavigationList}"
+                                         Value="{x:Static shell:NavigationTarget.RecentCollections}">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </views:RecentCollectionsView.Style>
+            </views:RecentCollectionsView>
+
+            <views:VoidingView x:Name="VoidingViewScreen">
+                <views:VoidingView.Style>
+                    <Style TargetType="views:VoidingView">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding SelectedItem.Target, ElementName=NavigationList}"
+                                         Value="{x:Static shell:NavigationTarget.Voiding}">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </views:VoidingView.Style>
+            </views:VoidingView>
 
             <views:CashDeskView x:Name="CashDeskScreen">
                 <views:CashDeskView.Style>

@@ -18,6 +18,7 @@ public sealed class ReciboViewModel
         Payment = payment;
         Copies = [new ReciboCopyView(payment.Locatario), new ReciboCopyView(payment.Propietario)];
 
+        // The reader hands every time over already in the agency's zone (ReciboReader.InAgencyZone).
         if (payment.Annulment is { } annulment)
         {
             var at = annulment.AnnulledAt;

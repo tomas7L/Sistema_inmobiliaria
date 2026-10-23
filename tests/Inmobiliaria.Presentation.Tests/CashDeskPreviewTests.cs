@@ -306,4 +306,29 @@ public class CashDeskPreviewTests
         Assert.Null(desk.Runner.ErrorMessage);
         Assert.Equal("2", desk.LocatarioLines.Single(l => l.Label == "Seguro").AmountText);
     }
+
+    /// <summary>
+    /// Task 5.0a (d), S3b review R4-adjustment-check-uncancellable-blocks-picker: a slow adjustment check does
+    /// not hold the picker; choosing another account cancels it, and nothing of the first account lands.
+    /// </summary>
+    [Fact]
+    public async Task ASlowAdjustmentCheck_DoesNotHoldThePicker()
+    {
+        var kit = new CashDeskTestKit();
+        var desk = kit.Build();
+        var first = new AccountRow(Account());
+        var second = new AccountRow(Account());
+        kit.Adjustments.Gate = new TaskCompletionSource();
+
+        var choosingFirst = desk.Picker.ChooseCommand.ExecuteAsync(first);
+        Assert.True(desk.Picker.ChooseCommand.CanExecute(second));
+        kit.Adjustments.Gate = null;
+        await desk.Picker.ChooseCommand.ExecuteAsync(second);
+        await choosingFirst;
+
+        Assert.Same(second.Listing, desk.Account);
+        Assert.Empty(desk.Warnings);
+        Assert.All(kit.PreviewRequests, r => Assert.Equal(second.Listing.AccountId, r.AccountId));
+        Assert.Null(desk.Runner.ErrorMessage);
+    }
 }

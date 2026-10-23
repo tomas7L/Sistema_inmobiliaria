@@ -44,6 +44,8 @@ public sealed partial class CashDeskViewModel : ObservableObject
     private CollectionRequest? _previewRequest;
     private CancellationTokenSource? _previewCancellation;
     private int _previewVersion;
+    private CancellationTokenSource? _selectionCancellation;
+    private int _selectionVersion;
     private bool _resettingInputs;
     private bool _committing;
     private bool _inputsChangedDuringCommit;
@@ -139,6 +141,17 @@ public sealed partial class CashDeskViewModel : ObservableObject
     [ObservableProperty]
     private string? _issuedText;
 
+    /// <summary>
+    /// Set when a commit failed: the payment may or may not have been recorded. Kept apart from the runner's
+    /// message, which the next operation clears, and cleared only when another account is chosen.
+    /// </summary>
+    [ObservableProperty]
+    private string? _commitNotice;
+
+    /// <summary>Set when a payment was issued but its recibos could not be read back.</summary>
+    [ObservableProperty]
+    private string? _issuedNotice;
+
     [ObservableProperty]
     private ReciboViewModel? _recibo;
 
@@ -179,9 +192,14 @@ public sealed partial class CashDeskViewModel : ObservableObject
         }
 
         // Whatever the previous account still has in flight is for the previous account: it can never land
-        // here, not even while the adjustments below are being read (S3b review).
+        // here, not even while the adjustments below are being read (S3b review). The same goes for an
+        // earlier choice still waiting on its adjustment check: this one supersedes it.
         ++_previewVersion;
         _previewCancellation?.Cancel();
+        var selection = ++_selectionVersion;
+        _selectionCancellation?.Cancel();
+        _selectionCancellation = new CancellationTokenSource();
+        var selectionToken = _selectionCancellation.Token;
 
         _resettingInputs = true;
         NamedPeriod = null;
@@ -201,11 +219,18 @@ public sealed partial class CashDeskViewModel : ObservableObject
         Differences = [];
         StaleMessage = null;
         IssuedText = null;
+        IssuedNotice = null;
+        CommitNotice = null;
         Recibo = null;
         State = DeskState.NoAccount;
 
         // Once per selection, not per preview (D9).
-        var due = await Runner.RunAsync(() => _adjustments.GetDueAsync(_clock.Today));
+        var due = await Runner.RunAsync(() => _adjustments.GetDueAsync(_clock.Today, selectionToken));
+        if (selection != _selectionVersion)
+        {
+            return;
+        }
+
         // A failed check is said, not hidden: the runner's message would be cleared by the preview below.
         _adjustmentWarnings = due.Completed
             ? AdjustmentWarning.For(due.Value!, listing.ContractId)
@@ -244,7 +269,8 @@ public sealed partial class CashDeskViewModel : ObservableObject
 
     private void OnInputChanged()
     {
-        if (_resettingInputs || Account is null)
+        // Once issued, the payment on screen is done; the next one starts by choosing the account (S3b review).
+        if (_resettingInputs || Account is null || State == DeskState.Issued)
         {
             return;
         }
@@ -432,7 +458,8 @@ public sealed partial class CashDeskViewModel : ObservableObject
 
             if (!outcome.Completed)
             {
-                // The runner already says it may or may not have been recorded; the inputs stay as typed.
+                // It may or may not have been recorded; the inputs stay as typed.
+                CommitNotice = ErrorMessages.CommitFailed;
                 State = DeskState.Failed;
                 return;
             }
@@ -459,7 +486,14 @@ public sealed partial class CashDeskViewModel : ObservableObject
             _committing = false;
             RefreshCommands();
 
-            if (_inputsChangedDuringCommit && State != DeskState.Issued)
+            if (_inputsChangedDuringCommit && State == DeskState.Failed)
+            {
+                // The preview on screen answers inputs that have since changed: nothing to confirm from it,
+                // and no preview now that would move the desk out of Failed (S3b review).
+                _previewRequest = null;
+                RefreshCommands();
+            }
+            else if (_inputsChangedDuringCommit && State != DeskState.Issued)
             {
                 PreviewInFlight = RefreshPreviewAsync();
             }
@@ -473,9 +507,23 @@ public sealed partial class CashDeskViewModel : ObservableObject
         IssuedText = $"Recibo locatario N° {result.LocatarioNumber} · Recibo propietario N° {result.PropietarioNumber}";
         State = DeskState.Issued;
 
-        // Nothing prints (spec Requirement 12); the recibos are read back as issued and shown.
-        var read = await Runner.RunAsync(() => _reader.GetByCollectionAsync(result.CollectionId!.Value));
-        if (read is { Completed: true, Value: { } payment })
+        // Nothing prints (spec Requirement 12); the recibos are read back as issued and shown. Not through the
+        // runner: its generic "try again" would invite a second payment for one that is recorded.
+        IssuedPayment? payment = null;
+        try
+        {
+            payment = await _reader.GetByCollectionAsync(result.CollectionId!.Value);
+        }
+        catch (Exception)
+        {
+            // Deliberately discarded, as in OperationRunner: the text never reaches the screen.
+        }
+
+        if (payment is null)
+        {
+            IssuedNotice = DeskTexts.RecibosNotShown(result.LocatarioNumber!.Value, result.PropietarioNumber!.Value);
+        }
+        else
         {
             Recibo = new ReciboViewModel(payment);
         }

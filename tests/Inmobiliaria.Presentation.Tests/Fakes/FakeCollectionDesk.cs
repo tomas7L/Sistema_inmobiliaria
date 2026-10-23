@@ -25,10 +25,24 @@ internal sealed class FakeCollectionDesk : ICollectionDesk
         return (OnCommit ?? throw new InvalidOperationException("CommitAsync was not scripted."))(preview, request);
     }
 
-    public Task<VoidingPreview> PreviewVoidAsync(
-        Guid reciboId, string reason, UserRole actingRole, CancellationToken ct = default) =>
-        throw new InvalidOperationException("PreviewVoidAsync was not scripted.");
+    public Func<Guid, string, UserRole, Task<VoidingPreview>>? OnPreviewVoid { get; set; }
 
-    public Task<VoidingResult> VoidAsync(VoidingPreview preview, CancellationToken ct = default) =>
-        throw new InvalidOperationException("VoidAsync was not scripted.");
+    public Func<VoidingPreview, Task<VoidingResult>>? OnVoid { get; set; }
+
+    public List<(Guid ReciboId, string Reason, UserRole Role)> VoidPreviews { get; } = [];
+
+    public int VoidCalls { get; private set; }
+
+    public Task<VoidingPreview> PreviewVoidAsync(
+        Guid reciboId, string reason, UserRole actingRole, CancellationToken ct = default)
+    {
+        VoidPreviews.Add((reciboId, reason, actingRole));
+        return (OnPreviewVoid ?? throw new InvalidOperationException("PreviewVoidAsync was not scripted."))(reciboId, reason, actingRole);
+    }
+
+    public Task<VoidingResult> VoidAsync(VoidingPreview preview, CancellationToken ct = default)
+    {
+        VoidCalls++;
+        return (OnVoid ?? throw new InvalidOperationException("VoidAsync was not scripted."))(preview);
+    }
 }
