@@ -39,6 +39,9 @@ public static class SessionServices
         services.AddSingleton<IDueAdjustmentQuery>(_ => new PerCallDueAdjustmentQuery(factory));
         services.AddSingleton<IGoLiveSetup>(provider =>
             new PerCallGoLiveSetup(factory, provider.GetRequiredService<IAgencyClock>()));
+        services.AddSingleton<IAccountDirectory>(provider =>
+            new PerCallAccountDirectory(factory, provider.GetRequiredService<IAgencyClock>()));
+        services.AddSingleton<IReciboReader>(_ => new PerCallReciboReader(factory));
 
         if (recargo.Terms is { } terms)
         {
