@@ -33,7 +33,7 @@ internal sealed class FakeDueAdjustmentQuery : IDueAdjustmentQuery
         Calls.Add(asOf);
         if (Gate is { } gate)
         {
-            await gate.Task;
+            await gate.Task.WaitAsync(ct);
         }
 
         return Due.ToList();
@@ -47,6 +47,9 @@ internal sealed class FakeReciboReader : IReciboReader
 
     public List<Guid> CollectionReads { get; } = [];
 
+    /// <summary>When true, a read by collection throws, as a lost connection would.</summary>
+    public bool Throws { get; set; }
+
     public Task<IssuedPayment?> FindByNumberAsync(long reciboNumber, CancellationToken ct = default) =>
         Task.FromResult(Payments.Values.FirstOrDefault(p =>
             p.Locatario.Recibo.Number == reciboNumber || p.Propietario.Recibo.Number == reciboNumber));
@@ -54,11 +57,20 @@ internal sealed class FakeReciboReader : IReciboReader
     public Task<IssuedPayment?> GetByCollectionAsync(Guid collectionId, CancellationToken ct = default)
     {
         CollectionReads.Add(collectionId);
-        return Task.FromResult(Payments.GetValueOrDefault(collectionId));
+        return Throws
+            ? throw new InvalidOperationException("connection lost")
+            : Task.FromResult(Payments.GetValueOrDefault(collectionId));
     }
 
-    public Task<IReadOnlyList<RecentCollection>> RecentAsync(int limit, CancellationToken ct = default) =>
-        throw new InvalidOperationException("RecentAsync was not scripted.");
+    public List<RecentCollection> Recent { get; set; } = [];
+
+    public List<int> RecentLimits { get; } = [];
+
+    public Task<IReadOnlyList<RecentCollection>> RecentAsync(int limit, CancellationToken ct = default)
+    {
+        RecentLimits.Add(limit);
+        return Task.FromResult<IReadOnlyList<RecentCollection>>(Recent.Take(limit).ToList());
+    }
 }
 
 /// <summary>A clock the test sets, so "today" is never the machine's.</summary>

@@ -1,7 +1,9 @@
 ﻿using System.Windows;
 using Inmobiliaria.Presentation.CashDesk;
 using Inmobiliaria.Presentation.GoLive;
+using Inmobiliaria.Presentation.Recibos;
 using Inmobiliaria.Presentation.Shell;
+using Inmobiliaria.Presentation.Voiding;
 
 namespace Inmobiliaria.Desktop;
 
@@ -12,13 +14,31 @@ namespace Inmobiliaria.Desktop;
 /// </summary>
 public partial class MainWindow : Window
 {
-    public MainWindow(ShellViewModel viewModel, CashDeskViewModel? cashDesk, GoLiveViewModel? goLive)
+    public MainWindow(
+        ShellViewModel viewModel,
+        CashDeskViewModel? cashDesk,
+        RecentCollectionsViewModel recentCollections,
+        VoidingViewModel? voiding,
+        GoLiveViewModel? goLive)
     {
         ArgumentNullException.ThrowIfNull(viewModel);
+        ArgumentNullException.ThrowIfNull(recentCollections);
         InitializeComponent();
 
         DataContext = viewModel;
         CashDeskScreen.DataContext = cashDesk;
+        RecentCollectionsViewScreen.DataContext = recentCollections;
+        VoidingViewScreen.DataContext = voiding;
         GoLiveScreen.DataContext = goLive;
+    }
+
+    /// <summary>Selects a screen's navigation entry, when it is offered and available.</summary>
+    public void ShowScreen(NavigationTarget target)
+    {
+        var entry = ((ShellViewModel)DataContext).Navigation.FirstOrDefault(e => e.Target == target && e.IsAvailable);
+        if (entry is not null)
+        {
+            NavigationList.SelectedItem = entry;
+        }
     }
 }

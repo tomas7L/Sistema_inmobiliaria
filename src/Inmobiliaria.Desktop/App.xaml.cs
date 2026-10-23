@@ -10,6 +10,8 @@ using Inmobiliaria.Infrastructure.Access;
 using Inmobiliaria.Presentation.CashDesk;
 using Inmobiliaria.Presentation.Common;
 using Inmobiliaria.Presentation.GoLive;
+using Inmobiliaria.Presentation.Recibos;
+using Inmobiliaria.Presentation.Voiding;
 using Inmobiliaria.Presentation.Shell;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -148,7 +150,23 @@ public partial class App : Application
                     _sessionProvider.GetRequiredService<IAgencyClock>())
                 : null;
 
-            var mainWindow = new MainWindow(shellViewModel, cashDeskViewModel, goLiveViewModel);
+            // Voiding is planned with the same recargo terms as the desk, so it exists only with the desk (D16).
+            var reader = _sessionProvider.GetRequiredService<IReciboReader>();
+            var voidingViewModel = _sessionProvider.GetService<ICollectionDesk>() is { } voidingDesk
+                ? new VoidingViewModel(voidingDesk, reader, _sessionProvider.GetRequiredService<IAgencyClock>(), session.Role)
+                : null;
+
+            MainWindow? mainWindow = null;
+            var recentViewModel = new RecentCollectionsViewModel(reader, async collectionId =>
+            {
+                if (voidingViewModel is not null)
+                {
+                    mainWindow?.ShowScreen(NavigationTarget.Voiding);
+                    await voidingViewModel.OpenAsync(collectionId);
+                }
+            });
+
+            mainWindow = new MainWindow(shellViewModel, cashDeskViewModel, recentViewModel, voidingViewModel, goLiveViewModel);
             MainWindow = mainWindow;
             // ShutdownMode is OnExplicitShutdown (App.xaml) precisely so that closing
             // LoginWindow or ChangePasswordWindow mid-bootstrap never ends the process before

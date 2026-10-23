@@ -119,6 +119,7 @@
                 <TextBlock Text="{Binding InputProblem}" TextWrapping="Wrap" Foreground="#FFB00020" />
                 <TextBlock Text="{Binding RefusalMessage}" TextWrapping="Wrap" Foreground="#FFB00020" />
                 <TextBlock Text="{Binding Runner.ErrorMessage}" TextWrapping="Wrap" Foreground="#FFB00020" />
+                <TextBlock Text="{Binding CommitNotice}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="#FFB00020" />
 
                 <Button Content="Continuar al resumen" HorizontalAlignment="Left" Padding="12,4" Margin="0,8,0,0"
                         Command="{Binding ContinueCommand}" />
@@ -159,6 +160,7 @@
                 </StackPanel>
 
                 <TextBlock Text="{Binding IssuedText}" FontSize="14" FontWeight="SemiBold" Foreground="#FF2E7D32" Margin="0,8,0,0" />
+                <TextBlock Text="{Binding IssuedNotice}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="#FF8A4B00" />
                 <views:ReciboView DataContext="{Binding Recibo}" Tag="{Binding}" Style="{StaticResource WhenSet}" />
             </StackPanel>
         </ScrollViewer>

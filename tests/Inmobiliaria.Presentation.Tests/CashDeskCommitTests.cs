@@ -353,4 +353,83 @@ public class CashDeskCommitTests
         Assert.Null(desk.Preview);
         Assert.False(desk.ContinueCommand.CanExecute(null));
     }
+
+    /// <summary>
+    /// Task 5.0a (a), S3b review R4-failed-commit-message-wiped-by-deferred-preview: an input edited during a
+    /// commit that then fails starts no preview; the desk stays Failed, says the payment may have been
+    /// recorded, and offers nothing to confirm until the operator acts again.
+    /// </summary>
+    [Fact]
+    public async Task AnInputEditedDuringAFailedCommit_KeepsTheMayHaveBeenRecordedNotice()
+    {
+        var kit = new CashDeskTestKit();
+        var gate = new TaskCompletionSource<CollectionResult>();
+        kit.Desk.OnCommit = (_, _) => gate.Task;
+        var desk = await SummaryAsync(kit);
+        var previews = kit.PreviewRequests.Count;
+
+        var committing = desk.CommitCommand.ExecuteAsync(null);
+        desk.SeguroText = "100";
+        gate.SetException(new TimeoutException("Host=db;Password=secret"));
+        await committing;
+        await desk.PreviewInFlight;
+
+        Assert.Equal(previews, kit.PreviewRequests.Count);
+        Assert.Equal(DeskState.Failed, desk.State);
+        Assert.Equal(ErrorMessages.CommitFailed, desk.CommitNotice);
+        Assert.False(desk.ContinueCommand.CanExecute(null));
+
+        // The next edit previews again; the notice stays until another account is chosen.
+        desk.SeguroText = "200";
+        await desk.PreviewInFlight;
+        Assert.Equal(ErrorMessages.CommitFailed, desk.CommitNotice);
+        await desk.ChooseAccountAsync(Account());
+        Assert.Null(desk.CommitNotice);
+    }
+
+    /// <summary>
+    /// Task 5.0a (b), S3b review R3-input-edit-after-issued-leaves-issued-state: once issued, an edit does not
+    /// bring a preview or Continue back under the issued banner.
+    /// </summary>
+    [Fact]
+    public async Task AnInputEditedAfterTheIssue_ChangesNothing()
+    {
+        var kit = new CashDeskTestKit();
+        var collectionId = Guid.NewGuid();
+        kit.Reader.Payments[collectionId] = Issued(collectionId, 31001);
+        kit.Desk.OnCommit = (_, _) => Task.FromResult(CollectionResult.Committed(collectionId, 31001));
+        var desk = await SummaryAsync(kit);
+        await desk.CommitCommand.ExecuteAsync(null);
+        var previews = kit.PreviewRequests.Count;
+
+        desk.SeguroText = "100";
+        await desk.PreviewInFlight;
+
+        Assert.Equal(previews, kit.PreviewRequests.Count);
+        Assert.Equal(DeskState.Issued, desk.State);
+        Assert.False(desk.ContinueCommand.CanExecute(null));
+    }
+
+    /// <summary>
+    /// Task 5.0a (c), S3b review R4-issued-recibo-read-failure-unexplained: when the recibos cannot be read
+    /// back, the desk says the payment was recorded and where to find them, never only the generic error.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RecibosThatCannotBeShown_AfterAnIssue_AreExplained(bool throws)
+    {
+        var kit = new CashDeskTestKit();
+        var collectionId = Guid.NewGuid();
+        kit.Reader.Throws = throws;
+        kit.Desk.OnCommit = (_, _) => Task.FromResult(CollectionResult.Committed(collectionId, 31001));
+        var desk = await SummaryAsync(kit);
+
+        await desk.CommitCommand.ExecuteAsync(null);
+
+        Assert.Equal(DeskState.Issued, desk.State);
+        Assert.Null(desk.Recibo);
+        Assert.Equal(DeskTexts.RecibosNotShown(31001, 31002), desk.IssuedNotice);
+        Assert.Null(desk.Runner.ErrorMessage);
+    }
 }

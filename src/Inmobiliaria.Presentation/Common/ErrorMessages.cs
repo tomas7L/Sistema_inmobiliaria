@@ -20,4 +20,10 @@ public static class ErrorMessages
         Generic +
         " Atención: puede que el cobro se haya registrado o no. " +
         $"Antes de volver a intentarlo, verifique en \"{NavigationTitles.RecentCollections}\" si quedó registrado.";
+
+    /// <summary>Shown when a voiding raised: as with a commit, it may or may not have been applied.</summary>
+    public static readonly string VoidFailed =
+        Generic +
+        " Atención: puede que la anulación se haya registrado o no. " +
+        "Antes de volver a intentarlo, busque el recibo otra vez y verifique si figura anulado.";
 }

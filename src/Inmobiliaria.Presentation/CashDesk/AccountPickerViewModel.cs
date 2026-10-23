@@ -34,7 +34,10 @@ public sealed partial class AccountPickerViewModel : ObservableObject
         _onChosen = onChosen;
         _canChoose = canChoose ?? (() => true);
         SearchCommand = new AsyncRelayCommand(SearchAsync, CanSearch);
-        ChooseCommand = new AsyncRelayCommand<AccountRow>(ChooseAsync, row => row is not null && _canChoose());
+        // Concurrent on purpose: a choice still waiting on a slow database must not hold the next one; the
+        // owner cancels the earlier choice (S3b review).
+        ChooseCommand = new AsyncRelayCommand<AccountRow>(
+            ChooseAsync, row => row is not null && _canChoose(), AsyncRelayCommandOptions.AllowConcurrentExecutions);
         Runner.PropertyChanged += OnRunnerChanged;
     }
 

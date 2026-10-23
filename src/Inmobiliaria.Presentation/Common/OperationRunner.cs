@@ -8,8 +8,11 @@ public enum OperationKind
     /// <summary>A read or a preview: a failure wrote nothing.</summary>
     Read,
 
-    /// <summary>A commit or a voiding: a failure may still have written it.</summary>
+    /// <summary>A payment's commit: a failure may still have written it.</summary>
     Commit,
+
+    /// <summary>A voiding: a failure may still have written it, and the operator is told so in its own words.</summary>
+    Void,
 }
 
 /// <summary>
@@ -64,7 +67,12 @@ public sealed partial class OperationRunner : ObservableObject
         {
             // Deliberately discarded: the exception's text can carry a connection string or a database
             // error and must never reach the screen (spec Requirement 4).
-            var message = kind == OperationKind.Commit ? ErrorMessages.CommitFailed : ErrorMessages.Generic;
+            var message = kind switch
+            {
+                OperationKind.Commit => ErrorMessages.CommitFailed,
+                OperationKind.Void => ErrorMessages.VoidFailed,
+                _ => ErrorMessages.Generic,
+            };
             ErrorMessage = message;
             return new OperationOutcome<T>(default, Completed: false, ErrorMessage: message);
         }

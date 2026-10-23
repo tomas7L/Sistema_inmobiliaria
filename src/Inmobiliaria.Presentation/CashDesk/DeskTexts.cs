@@ -1,4 +1,5 @@
 using Inmobiliaria.Domain.Collection;
+using Inmobiliaria.Presentation.Shell;
 
 namespace Inmobiliaria.Presentation.CashDesk;
 
@@ -23,6 +24,11 @@ public static class DeskTexts
     /// <summary>The pending-adjustment check could not run; the payment is not blocked, but the operator is told.</summary>
     public const string AdjustmentCheckFailed =
         "No se pudo verificar si el contrato tiene un ajuste de alquiler pendiente. Revíselo antes de cobrar.";
+
+    /// <summary>The payment was recorded but its recibos could not be read back: say both, and where to look.</summary>
+    public static string RecibosNotShown(long locatarioNumber, long propietarioNumber) =>
+        $"El cobro quedó registrado (recibos N° {locatarioNumber} y {propietarioNumber}), pero no se pudieron " +
+        $"mostrar los recibos. Búsquelos en \"{NavigationTitles.RecentCollections}\". No vuelva a cobrar.";
 
     public static string Warning(CollectionWarning warning) => warning switch
     {
