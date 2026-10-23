@@ -7,6 +7,11 @@
              d:DesignHeight="300" d:DesignWidth="600">
     <StackPanel>
         <TextBlock Text="{Binding AnnulmentText}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="#FFB00020" />
+        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+            <Button Content="Imprimir los dos recibos" Padding="10,2" Command="{Binding PrintBothCommand}" />
+            <TextBlock Text="{Binding PrintMessage}" Margin="8,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" />
+        </StackPanel>
+        <TextBlock Text="{Binding Runner.ErrorMessage}" TextWrapping="Wrap" Foreground="#FFB00020" />
 
         <ItemsControl ItemsSource="{Binding Copies}">
             <ItemsControl.ItemsPanel>
@@ -43,6 +48,9 @@
                                 <TextBlock Text="Total" FontWeight="SemiBold" />
                             </DockPanel>
                             <TextBlock Text="{Binding Legend}" FontStyle="Italic" Margin="0,6,0,0" />
+                            <Button Content="Imprimir este recibo" HorizontalAlignment="Left" Padding="8,2" Margin="0,6,0,0"
+                                    Command="{Binding DataContext.PrintCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    CommandParameter="{Binding}" />
                         </StackPanel>
                     </Border>
                 </DataTemplate>

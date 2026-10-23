@@ -173,7 +173,10 @@ public class CashDeskCommitTests
         await desk.CommitCommand.ExecuteAsync(null);
 
         Assert.Equal(DeskState.Failed, desk.State);
-        Assert.Equal(ErrorMessages.CommitFailed, desk.Runner.ErrorMessage);
+        Assert.Equal(ErrorMessages.CommitFailed, desk.CommitNotice);
+
+        // Task 6.0a (f), S4a review R3-commit-failed-text-shown-twice: the text is shown once.
+        Assert.Null(desk.Runner.ErrorMessage);
         Assert.Same(account, desk.Account);
         Assert.Equal(("598.260", "4.000", new DateTime(2026, 1, 14)), (desk.HandedAmountText, desk.SeguroText, desk.ReceivedOnInput));
         Assert.False(desk.Runner.IsBusy);

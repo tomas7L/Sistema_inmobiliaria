@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Inmobiliaria.Domain.Collection;
 using Inmobiliaria.Presentation.Common;
+using Inmobiliaria.Presentation.Printing;
 
 namespace Inmobiliaria.Presentation.Recibos;
 
@@ -20,24 +21,35 @@ public sealed partial class RecentCollectionsViewModel : ObservableObject
 
     private readonly IReciboReader _reader;
     private readonly Func<Guid, Task> _onVoid;
+    private readonly ReciboPrinting? _printing;
 
-    public RecentCollectionsViewModel(IReciboReader reader, Func<Guid, Task> onVoid)
+    /// <param name="reader">The recibo reader.</param>
+    /// <param name="onVoid">Hands a collection to the voiding screen.</param>
+    /// <param name="canVoid">False when there is no voiding screen (invalid recargo terms, D16).</param>
+    /// <param name="printing">What the recibo display prints with, or null for no Print.</param>
+    public RecentCollectionsViewModel(
+        IReciboReader reader, Func<Guid, Task> onVoid, bool canVoid = true, ReciboPrinting? printing = null)
     {
         ArgumentNullException.ThrowIfNull(reader);
         ArgumentNullException.ThrowIfNull(onVoid);
 
         _reader = reader;
         _onVoid = onVoid;
+        CanVoid = canVoid;
+        _printing = printing;
         LoadCommand = new AsyncRelayCommand(LoadAsync, () => !Runner.IsBusy);
         FindCommand = new AsyncRelayCommand(FindAsync, () => !Runner.IsBusy);
         OpenCommand = new AsyncRelayCommand<RecentEntry>(OpenAsync, entry => entry is not null && !Runner.IsBusy);
         VoidCommand = new AsyncRelayCommand<RecentEntry>(
             entry => entry is null ? Task.CompletedTask : _onVoid(entry.CollectionId),
-            entry => entry is { IsAnnulled: false });
+            entry => CanVoid && entry is { IsAnnulled: false });
         Runner.PropertyChanged += OnRunnerChanged;
     }
 
     public OperationRunner Runner { get; } = new();
+
+    /// <summary>Whether a voiding screen exists to hand entries to.</summary>
+    public bool CanVoid { get; }
 
     public ObservableCollection<RecentEntry> Entries { get; } = [];
 
@@ -90,7 +102,7 @@ public sealed partial class RecentCollectionsViewModel : ObservableObject
             return;
         }
 
-        Recibo = outcome.Value is { } payment ? new ReciboViewModel(payment) : null;
+        Recibo = outcome.Value is { } payment ? new ReciboViewModel(payment, _printing) : null;
         FindMessage = outcome.Value is null ? ReciboSearch.NotFound(number) : null;
     }
 
@@ -105,7 +117,7 @@ public sealed partial class RecentCollectionsViewModel : ObservableObject
         var outcome = await Runner.RunAsync(() => _reader.GetByCollectionAsync(entry.CollectionId));
         if (outcome.Completed)
         {
-            Recibo = outcome.Value is { } payment ? new ReciboViewModel(payment) : null;
+            Recibo = outcome.Value is { } payment ? new ReciboViewModel(payment, _printing) : null;
         }
     }
 

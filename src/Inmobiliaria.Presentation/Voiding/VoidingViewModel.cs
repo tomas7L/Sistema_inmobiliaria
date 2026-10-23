@@ -5,6 +5,7 @@ using Inmobiliaria.Domain.Access;
 using Inmobiliaria.Domain.Accounts;
 using Inmobiliaria.Domain.Collection;
 using Inmobiliaria.Presentation.Common;
+using Inmobiliaria.Presentation.Printing;
 using Inmobiliaria.Presentation.Recibos;
 
 namespace Inmobiliaria.Presentation.Voiding;
@@ -21,9 +22,15 @@ public sealed partial class VoidingViewModel : ObservableObject
     private readonly IReciboReader _reader;
     private readonly IAgencyClock _clock;
     private readonly UserRole _role;
+    private readonly ReciboPrinting? _printing;
     private bool _voiding;
 
-    public VoidingViewModel(ICollectionDesk desk, IReciboReader reader, IAgencyClock clock, UserRole role)
+    // Bumped whenever another pair is looked up or opened: a preview still in flight for the previous pair is
+    // then dropped, so it can never be confirmed under the new one (S4a review).
+    private int _pairVersion;
+
+    public VoidingViewModel(
+        ICollectionDesk desk, IReciboReader reader, IAgencyClock clock, UserRole role, ReciboPrinting? printing = null)
     {
         ArgumentNullException.ThrowIfNull(desk);
         ArgumentNullException.ThrowIfNull(reader);
@@ -33,6 +40,7 @@ public sealed partial class VoidingViewModel : ObservableObject
         _reader = reader;
         _clock = clock;
         _role = role;
+        _printing = printing;
         FindCommand = new AsyncRelayCommand(FindAsync, () => !Runner.IsBusy && !_voiding);
         PreviewCommand = new AsyncRelayCommand(PreviewAsync, CanPreview);
         ConfirmCommand = new AsyncRelayCommand(ConfirmAsync, CanConfirm);
@@ -87,6 +95,9 @@ public sealed partial class VoidingViewModel : ObservableObject
     /// <summary>Opens the pair of a collection chosen in the recent list.</summary>
     public async Task OpenAsync(Guid collectionId)
     {
+        ++_pairVersion;
+        DoneMessage = null;
+        FindMessage = null;
         var outcome = await Runner.RunAsync(() => _reader.GetByCollectionAsync(collectionId));
         if (outcome.Completed)
         {
@@ -112,6 +123,7 @@ public sealed partial class VoidingViewModel : ObservableObject
 
     private async Task FindAsync()
     {
+        ++_pairVersion;
         FindMessage = null;
         DoneMessage = null;
         if (!ReciboSearch.TryParse(NumberText, out var number))
@@ -136,7 +148,8 @@ public sealed partial class VoidingViewModel : ObservableObject
 
     private void Show(IssuedPayment? payment)
     {
-        Recibo = payment is null ? null : new ReciboViewModel(payment);
+        ++_pairVersion;
+        Recibo = payment is null ? null : new ReciboViewModel(payment, _printing);
         Gate = payment is null ? null : VoidingGate.For(payment.RecordedOn, _clock.Today, _role, payment.IsAnnulled);
         VoidPreview = null;
         RefusalMessage = null;
@@ -170,8 +183,9 @@ public sealed partial class VoidingViewModel : ObservableObject
     {
         var reciboId = Recibo!.Payment.Locatario.ReciboId;
         var reason = ReasonText.Trim();
+        var version = _pairVersion;
         var outcome = await Runner.RunAsync(() => _desk.PreviewVoidAsync(reciboId, reason, _role));
-        if (!outcome.Completed)
+        if (!outcome.Completed || version != _pairVersion)
         {
             return;
         }
@@ -211,20 +225,29 @@ public sealed partial class VoidingViewModel : ObservableObject
             VoidPreview = null;
             if (!outcome.Completed)
             {
-                // It may or may not have been applied; the runner says so, and nothing is offered again.
+                // It may or may not have been applied; the runner says so, and the pair is withdrawn so that
+                // nothing is offered until it is looked up again (S4a review).
+                Show(null);
                 return;
             }
 
             switch (outcome.Value!.Refusal)
             {
                 case null:
-                    var reread = await Runner.RunAsync(() => _reader.GetByCollectionAsync(collectionId));
-                    if (reread.Completed)
+                    // Read back outside the runner, as the desk does: its generic "try again" would invite a
+                    // second voiding of a pair already annulled (S4a review).
+                    IssuedPayment? reread = null;
+                    try
                     {
-                        Show(reread.Value);
+                        reread = await _reader.GetByCollectionAsync(collectionId);
+                    }
+                    catch (Exception)
+                    {
+                        // Deliberately discarded, as in OperationRunner: the text never reaches the screen.
                     }
 
-                    DoneMessage = "Cobro anulado.";
+                    Show(reread);
+                    DoneMessage = reread is null ? VoidingTexts.DoneButNotShown : VoidingTexts.Done;
                     break;
 
                 case VoidingRefusal.PreviewStale:

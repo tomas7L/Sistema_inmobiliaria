@@ -9,7 +9,9 @@ using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Infrastructure.Access;
 using Inmobiliaria.Presentation.CashDesk;
 using Inmobiliaria.Presentation.Common;
+using Inmobiliaria.Desktop.Printing;
 using Inmobiliaria.Presentation.GoLive;
+using Inmobiliaria.Presentation.Printing;
 using Inmobiliaria.Presentation.Recibos;
 using Inmobiliaria.Presentation.Voiding;
 using Inmobiliaria.Presentation.Shell;
@@ -139,6 +141,10 @@ public partial class App : Application
                 ? new GoLiveViewModel(_sessionProvider.GetRequiredService<IGoLiveSetup>())
                 : null;
 
+            // Every recibo display prints through the same seam, with the letterhead read once (Decision 37).
+            var reader = _sessionProvider.GetRequiredService<IReciboReader>();
+            var printing = BuildPrinting(reader);
+
             // The desk is registered only with valid recargo terms (design D16); without it the shell's entry
             // is disabled with the setting named, and no desk is built.
             var cashDeskViewModel = _sessionProvider.GetService<ICollectionDesk>() is { } collectionDesk
@@ -146,14 +152,14 @@ public partial class App : Application
                     collectionDesk,
                     _sessionProvider.GetRequiredService<IAccountDirectory>(),
                     _sessionProvider.GetRequiredService<IDueAdjustmentQuery>(),
-                    _sessionProvider.GetRequiredService<IReciboReader>(),
-                    _sessionProvider.GetRequiredService<IAgencyClock>())
+                    reader,
+                    _sessionProvider.GetRequiredService<IAgencyClock>(),
+                    printing)
                 : null;
 
             // Voiding is planned with the same recargo terms as the desk, so it exists only with the desk (D16).
-            var reader = _sessionProvider.GetRequiredService<IReciboReader>();
             var voidingViewModel = _sessionProvider.GetService<ICollectionDesk>() is { } voidingDesk
-                ? new VoidingViewModel(voidingDesk, reader, _sessionProvider.GetRequiredService<IAgencyClock>(), session.Role)
+                ? new VoidingViewModel(voidingDesk, reader, _sessionProvider.GetRequiredService<IAgencyClock>(), session.Role, printing)
                 : null;
 
             MainWindow? mainWindow = null;
@@ -164,7 +170,7 @@ public partial class App : Application
                     mainWindow?.ShowScreen(NavigationTarget.Voiding);
                     await voidingViewModel.OpenAsync(collectionId);
                 }
-            });
+            }, canVoid: voidingViewModel is not null, printing: printing);
 
             mainWindow = new MainWindow(shellViewModel, cashDeskViewModel, recentViewModel, voidingViewModel, goLiveViewModel);
             MainWindow = mainWindow;
@@ -191,6 +197,34 @@ public partial class App : Application
         {
             Shutdown();
         }
+    }
+
+    /// <summary>
+    /// The <c>Agency</c> section and the logo it names (Decision 37): read once, so a missing item or a logo
+    /// file that does not exist stops every print before the dialog, naming it. Nothing is invented.
+    /// </summary>
+    private static ReciboPrinting BuildPrinting(IReciboReader reader)
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+        using var document = JsonDocument.Parse(File.ReadAllText(path));
+
+        var values = new Dictionary<string, string?>();
+        if (document.RootElement.TryGetProperty(AgencyDetails.Section, out var agency) && agency.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var item in agency.EnumerateObject())
+            {
+                values[item.Name] = item.Value.ValueKind == JsonValueKind.String ? item.Value.GetString() : null;
+            }
+        }
+
+        var read = AgencyDetails.Read(values);
+        var logo = read.Details is { } details ? Path.Combine(AppContext.BaseDirectory, details.LogoFile) : string.Empty;
+        if (read.Details is not null && !File.Exists(logo))
+        {
+            read = new AgencyDetailsRead(null, [$"{AgencyDetails.Section}:LogoFile (no existe el archivo {logo})"]);
+        }
+
+        return new ReciboPrinting(reader, new FlowDocumentReciboPrinter(read.Details is null ? "missing" : logo), read);
     }
 
     /// <summary>

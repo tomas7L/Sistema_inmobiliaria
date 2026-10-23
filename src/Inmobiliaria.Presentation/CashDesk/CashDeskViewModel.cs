@@ -5,6 +5,7 @@ using Inmobiliaria.Domain.Accounts;
 using Inmobiliaria.Domain.Collection;
 using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Presentation.Common;
+using Inmobiliaria.Presentation.Printing;
 using Inmobiliaria.Presentation.Recibos;
 
 namespace Inmobiliaria.Presentation.CashDesk;
@@ -39,6 +40,7 @@ public sealed partial class CashDeskViewModel : ObservableObject
     private readonly IDueAdjustmentQuery _adjustments;
     private readonly IReciboReader _reader;
     private readonly IAgencyClock _clock;
+    private readonly ReciboPrinting? _printing;
 
     private IReadOnlyList<string> _adjustmentWarnings = [];
     private CollectionRequest? _previewRequest;
@@ -55,7 +57,8 @@ public sealed partial class CashDeskViewModel : ObservableObject
         IAccountDirectory directory,
         IDueAdjustmentQuery adjustments,
         IReciboReader reader,
-        IAgencyClock clock)
+        IAgencyClock clock,
+        ReciboPrinting? printing = null)
     {
         ArgumentNullException.ThrowIfNull(desk);
         ArgumentNullException.ThrowIfNull(directory);
@@ -67,6 +70,7 @@ public sealed partial class CashDeskViewModel : ObservableObject
         _adjustments = adjustments;
         _reader = reader;
         _clock = clock;
+        _printing = printing;
 
         Picker = new AccountPickerViewModel(directory, ChooseAccountAsync, () => !_committing);
         ContinueCommand = new AsyncRelayCommand(ContinueAsync, CanContinue);
@@ -458,8 +462,10 @@ public sealed partial class CashDeskViewModel : ObservableObject
 
             if (!outcome.Completed)
             {
-                // It may or may not have been recorded; the inputs stay as typed.
+                // It may or may not have been recorded; the inputs stay as typed. The desk's own notice carries the
+                // text, so it is shown once and survives the next operation (S4a review).
                 CommitNotice = ErrorMessages.CommitFailed;
+                Runner.ErrorMessage = null;
                 State = DeskState.Failed;
                 return;
             }
@@ -525,7 +531,7 @@ public sealed partial class CashDeskViewModel : ObservableObject
         }
         else
         {
-            Recibo = new ReciboViewModel(payment);
+            Recibo = new ReciboViewModel(payment, _printing);
         }
     }
 
