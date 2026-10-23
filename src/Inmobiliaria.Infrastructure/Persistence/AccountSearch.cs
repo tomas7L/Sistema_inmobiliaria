@@ -41,10 +41,15 @@ public static class AccountSearch
     /// <summary>
     /// The candidates any of whose fields contains <paramref name="text"/>, sorted by the folded
     /// <paramref name="sortKey"/> (ordinal, so the order does not depend on the machine's culture), at most
-    /// <see cref="MaxResults"/>.
+    /// <see cref="MaxResults"/>. <paramref name="tieBreak"/>, when given, orders candidates whose sort keys
+    /// fold equal, so two tenants with the same name always come back in the same order.
     /// </summary>
     public static IReadOnlyList<T> Select<T>(
-        IEnumerable<T> candidates, string text, Func<T, IEnumerable<string>> fields, Func<T, string> sortKey)
+        IEnumerable<T> candidates,
+        string text,
+        Func<T, IEnumerable<string>> fields,
+        Func<T, string> sortKey,
+        Func<T, string>? tieBreak = null)
     {
         ArgumentNullException.ThrowIfNull(candidates);
         ArgumentNullException.ThrowIfNull(fields);
@@ -60,6 +65,7 @@ public static class AccountSearch
         return candidates
             .Where(c => fields(c).Any(field => Fold(field).Contains(query, StringComparison.Ordinal)))
             .OrderBy(c => Fold(sortKey(c)), StringComparer.Ordinal)
+            .ThenBy(c => tieBreak?.Invoke(c) ?? string.Empty, StringComparer.Ordinal)
             .Take(MaxResults)
             .ToList();
     }

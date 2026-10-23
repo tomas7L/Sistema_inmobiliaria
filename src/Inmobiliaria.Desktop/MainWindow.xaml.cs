@@ -1,4 +1,5 @@
 ﻿using System.Windows;
+using Inmobiliaria.Presentation.CashDesk;
 using Inmobiliaria.Presentation.GoLive;
 using Inmobiliaria.Presentation.Shell;
 
@@ -11,12 +12,13 @@ namespace Inmobiliaria.Desktop;
 /// </summary>
 public partial class MainWindow : Window
 {
-    public MainWindow(ShellViewModel viewModel, GoLiveViewModel? goLive)
+    public MainWindow(ShellViewModel viewModel, CashDeskViewModel? cashDesk, GoLiveViewModel? goLive)
     {
         ArgumentNullException.ThrowIfNull(viewModel);
         InitializeComponent();
 
         DataContext = viewModel;
+        CashDeskScreen.DataContext = cashDesk;
         GoLiveScreen.DataContext = goLive;
     }
 }

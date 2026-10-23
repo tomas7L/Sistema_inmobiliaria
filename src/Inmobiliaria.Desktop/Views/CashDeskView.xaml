@@ -1,0 +1,166 @@
+<UserControl x:Class="Inmobiliaria.Desktop.Views.CashDeskView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:views="clr-namespace:Inmobiliaria.Desktop.Views"
+             xmlns:desk="clr-namespace:Inmobiliaria.Presentation.CashDesk;assembly=Inmobiliaria.Presentation"
+             mc:Ignorable="d"
+             d:DesignHeight="600" d:DesignWidth="1000">
+    <UserControl.Resources>
+        <!-- Shown only when the bound value is not null; the view decides nothing else. -->
+        <Style x:Key="WhenSet" TargetType="FrameworkElement">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="{x:Null}">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <DataTemplate x:Key="Lines">
+            <ItemsControl ItemsSource="{Binding}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Right" Text="{Binding AmountText}" />
+                            <TextBlock Text="{Binding Label}" />
+                        </DockPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid Margin="12">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="320" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <views:AccountPickerView Grid.Column="0" DataContext="{Binding Picker}" Margin="0,0,12,0" />
+
+        <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <TextBlock Text="{Binding Account.Tenants}" FontSize="16" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding Account.Units}" />
+
+                <TextBlock Text="{Binding ReadinessBlock}" Tag="{Binding ReadinessBlock}" Style="{StaticResource WhenSet}"
+                           TextWrapping="Wrap" Foreground="#FFB00020" Margin="0,8,0,0" />
+
+                <GroupBox Header="Datos del cobro" Margin="0,8,0,0" Padding="8">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="200" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Text="Período (opcional)" Margin="0,2,8,2" />
+                        <DatePicker Grid.Row="0" Grid.Column="1" SelectedDate="{Binding NamedPeriod}" />
+                        <TextBlock Grid.Row="1" Text="Fecha de cobro (vacío = hoy)" Margin="0,2,8,2" />
+                        <DatePicker Grid.Row="1" Grid.Column="1" SelectedDate="{Binding ReceivedOnInput}" />
+                        <TextBlock Grid.Row="2" Text="Tasa municipal" Margin="0,2,8,2" />
+                        <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding TasaMunicipalText, UpdateSourceTrigger=LostFocus}" />
+                        <TextBlock Grid.Row="3" Text="Seguro" Margin="0,2,8,2" />
+                        <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding SeguroText, UpdateSourceTrigger=LostFocus}" />
+                        <TextBlock Grid.Row="4" Text="Otros conceptos" Margin="0,2,8,2" />
+                        <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding OtrosConceptosText, UpdateSourceTrigger=LostFocus}" />
+                    </Grid>
+                </GroupBox>
+
+                <GroupBox Header="Lo que se debe" Margin="0,8,0,0" Padding="8">
+                    <StackPanel>
+                        <TextBlock Text="{Binding PeriodText, StringFormat='Período: {0}'}" />
+                        <TextBlock Text="{Binding ReceivedOnText, StringFormat='Fecha de cobro: {0}'}" />
+                        <TextBlock Text="{Binding PreviousAmountOwedText, StringFormat='Saldo anterior: {0}'}" />
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{x:Static desk:DeskTexts.LedgerFigureLabel}" FontWeight="SemiBold" />
+                            <TextBlock Text=": " FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding LedgerFigureText}" FontWeight="SemiBold" />
+                        </StackPanel>
+                        <TextBlock Text="{Binding ResultingAmountOwedText, StringFormat='Saldo resultante: {0}'}" />
+
+                        <UniformGrid Columns="2" Margin="0,8,0,0">
+                            <StackPanel Margin="0,0,8,0">
+                                <TextBlock Text="Recibo locatario" FontWeight="SemiBold" />
+                                <ContentPresenter Content="{Binding LocatarioLines}" ContentTemplate="{StaticResource Lines}" />
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{x:Static desk:DeskTexts.LocatarioTotalLabel}" />
+                                    <TextBlock Text=": " />
+                                    <TextBlock Text="{Binding LocatarioTotalText}" />
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="Recibo propietario" FontWeight="SemiBold" />
+                                <ContentPresenter Content="{Binding PropietarioLines}" ContentTemplate="{StaticResource Lines}" />
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{x:Static desk:DeskTexts.PropietarioTotalLabel}" />
+                                    <TextBlock Text=": " />
+                                    <TextBlock Text="{Binding PropietarioTotalText}" />
+                                </StackPanel>
+                            </StackPanel>
+                        </UniformGrid>
+
+                        <ItemsControl ItemsSource="{Binding Warnings}" Margin="0,8,0,0">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}" TextWrapping="Wrap" Foreground="#FF8A4B00" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </GroupBox>
+
+                <TextBlock Text="{x:Static desk:DeskTexts.HandedAmountLabel}" TextWrapping="Wrap" Margin="0,8,0,2" />
+                <TextBox Width="200" HorizontalAlignment="Left"
+                         Text="{Binding HandedAmountText, UpdateSourceTrigger=LostFocus}" />
+
+                <TextBlock Text="{Binding InputProblem}" TextWrapping="Wrap" Foreground="#FFB00020" />
+                <TextBlock Text="{Binding RefusalMessage}" TextWrapping="Wrap" Foreground="#FFB00020" />
+                <TextBlock Text="{Binding Runner.ErrorMessage}" TextWrapping="Wrap" Foreground="#FFB00020" />
+
+                <Button Content="Continuar al resumen" HorizontalAlignment="Left" Padding="12,4" Margin="0,8,0,0"
+                        Command="{Binding ContinueCommand}" />
+
+                <!-- The summary: the exact preview the commit will send. -->
+                <Border Tag="{Binding Summary}" Style="{StaticResource WhenSet}"
+                        BorderBrush="#FF1565C0" BorderThickness="2" Padding="8" Margin="0,8,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Resumen: revise antes de confirmar" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding PeriodText, StringFormat='Período: {0}'}" />
+                        <TextBlock Text="{Binding ReceivedOnText, StringFormat='Fecha de cobro: {0}'}" />
+                        <TextBlock Text="{Binding HandedAmountText, StringFormat='Importe entregado: {0}'}" />
+                        <TextBlock Text="{Binding LedgerFigureText, StringFormat='Saldo del período: {0}'}" />
+                        <TextBlock Text="{Binding LocatarioTotalText, StringFormat='Total del recibo locatario: {0}'}" />
+                        <TextBlock Text="{Binding PropietarioTotalText, StringFormat='Total del recibo propietario: {0}'}" />
+                        <TextBlock Text="{Binding ResultingAmountOwedText, StringFormat='Saldo resultante: {0}'}" />
+                        <Button Content="Confirmar cobro" HorizontalAlignment="Left" Padding="12,4" Margin="0,8,0,0"
+                                Command="{Binding CommitCommand}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- A stale or concurrent refusal: what changed since the confirmed summary. -->
+                <StackPanel Tag="{Binding StaleMessage}" Style="{StaticResource WhenSet}" Margin="0,8,0,0">
+                    <TextBlock Text="{Binding StaleMessage}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="#FF8A4B00" />
+                    <ItemsControl ItemsSource="{Binding Differences}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock>
+                                    <Run Text="{Binding What, Mode=OneWay}" />
+                                    <Run Text=": " />
+                                    <Run Text="{Binding Before, Mode=OneWay}" />
+                                    <Run Text=" → " />
+                                    <Run Text="{Binding After, Mode=OneWay}" />
+                                </TextBlock>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+                <TextBlock Text="{Binding IssuedText}" FontSize="14" FontWeight="SemiBold" Foreground="#FF2E7D32" Margin="0,8,0,0" />
+                <views:ReciboView DataContext="{Binding Recibo}" Tag="{Binding}" Style="{StaticResource WhenSet}" />
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

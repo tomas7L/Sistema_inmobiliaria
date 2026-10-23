@@ -87,6 +87,7 @@ public sealed class AccountDirectory : IAccountDirectory
             listings,
             text,
             l => [l.Tenants, l.Lessors, l.Units, l.ContractShortId],
-            l => l.Tenants);
+            l => l.Tenants,
+            l => l.AccountId.ToString("N"));
     }
 }

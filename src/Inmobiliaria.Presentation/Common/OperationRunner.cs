@@ -29,9 +29,14 @@ public sealed record OperationOutcome<T>(T? Value, bool Completed, string? Error
 /// </summary>
 public sealed partial class OperationRunner : ObservableObject
 {
-    /// <summary>True while an operation runs; every state-changing command's <c>CanExecute</c> reads it.</summary>
+    /// <summary>
+    /// True while any operation runs; every state-changing command's <c>CanExecute</c> reads it. Runs can
+    /// overlap (a superseded preview still finishing), so it counts them rather than flipping per run.
+    /// </summary>
     [ObservableProperty]
     private bool _isBusy;
+
+    private int _running;
 
     /// <summary>The message of the last failed run, or null. Cleared when the next run starts.</summary>
     [ObservableProperty]
@@ -42,15 +47,17 @@ public sealed partial class OperationRunner : ObservableObject
         ArgumentNullException.ThrowIfNull(operation);
 
         ErrorMessage = null;
+        _running++;
         IsBusy = true;
         try
         {
             var value = await operation();
             return new OperationOutcome<T>(value, Completed: true, ErrorMessage: null);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (kind == OperationKind.Read)
         {
-            // A superseded or abandoned operation: not a failure, and nothing to tell the operator.
+            // A superseded or abandoned read: not a failure, and nothing to tell the operator. A cancelled
+            // commit falls through: it may still have reached the database (S1 review).
             return new OperationOutcome<T>(default, Completed: false, ErrorMessage: null);
         }
         catch (Exception)
@@ -63,7 +70,8 @@ public sealed partial class OperationRunner : ObservableObject
         }
         finally
         {
-            IsBusy = false;
+            _running--;
+            IsBusy = _running > 0;
         }
     }
 }

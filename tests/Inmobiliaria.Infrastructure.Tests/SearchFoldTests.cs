@@ -56,4 +56,18 @@ public class SearchFoldTests
         Assert.Equal("inquilino 00", found[0]);
         Assert.Equal("inquilino 49", found[^1]);
     }
+
+    /// <summary>S3a review R3-search-tie-order-nondeterministic: equal sort keys come back in the tie-break's order.</summary>
+    [Fact]
+    public void EqualSortKeys_AreOrderedByTheTieBreak()
+    {
+        var found = AccountSearch.Select(
+            [("Perez, Maria", "b"), ("PÉREZ, MARÍA", "a"), ("Perez, Maria", "c")],
+            "perez",
+            c => [c.Item1],
+            c => c.Item1,
+            c => c.Item2);
+
+        Assert.Equal(["a", "b", "c"], found.Select(c => c.Item2));
+    }
 }
