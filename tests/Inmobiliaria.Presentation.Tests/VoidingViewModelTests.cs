@@ -262,6 +262,29 @@ public class VoidingViewModelTests
     }
 
     /// <summary>
+    /// S4b review R3-void-reread-notfound-untested: when the read-back after a voiding finds nothing, the screen
+    /// withdraws the pair and says the voiding was recorded, as it does when the read throws.
+    /// </summary>
+    [Fact]
+    public async Task APairThatIsNotFoundOnReadBack_AfterAVoiding_IsWithdrawn_AndTheVoidingIsSaidDone()
+    {
+        var kit = new Kit();
+        kit.Desk.OnVoid = _ =>
+        {
+            kit.Reader.Payments.Remove(kit.CollectionId);
+            return Task.FromResult(VoidingResult.Done());
+        };
+        var voiding = await PreviewedAsync(kit);
+
+        await voiding.ConfirmCommand.ExecuteAsync(null);
+
+        Assert.Null(voiding.Recibo);
+        Assert.Null(voiding.Gate);
+        Assert.Equal(VoidingTexts.DoneButNotShown, voiding.DoneMessage);
+        Assert.False(voiding.PreviewCommand.CanExecute(null));
+    }
+
+    /// <summary>
     /// Task 6.0a (b), S4a review R4-open-during-inflight-preview-mismatched-target: a preview of pair A still in
     /// flight when pair B is opened never becomes confirmable under B.
     /// </summary>
