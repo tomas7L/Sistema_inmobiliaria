@@ -55,10 +55,28 @@
                                          Value="{x:Static shell:NavigationTarget.GoLive}">
                                 <Setter Property="Visibility" Value="Collapsed" />
                             </DataTrigger>
+                            <DataTrigger Binding="{Binding SelectedItem.Target, ElementName=NavigationList}"
+                                         Value="{x:Static shell:NavigationTarget.CashDesk}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
                         </Style.Triggers>
                     </Style>
                 </TextBlock.Style>
             </TextBlock>
+
+            <views:CashDeskView x:Name="CashDeskScreen">
+                <views:CashDeskView.Style>
+                    <Style TargetType="views:CashDeskView">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding SelectedItem.Target, ElementName=NavigationList}"
+                                         Value="{x:Static shell:NavigationTarget.CashDesk}">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </views:CashDeskView.Style>
+            </views:CashDeskView>
 
             <views:GoLiveView x:Name="GoLiveScreen">
                 <views:GoLiveView.Style>

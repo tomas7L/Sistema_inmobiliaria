@@ -2,8 +2,12 @@ using System.IO;
 using System.Text.Json;
 using System.Windows;
 using Inmobiliaria.Domain.Access;
+using Inmobiliaria.Domain.Accounts;
+using Inmobiliaria.Domain.Collection;
 using Inmobiliaria.Domain.GoLive;
+using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Infrastructure.Access;
+using Inmobiliaria.Presentation.CashDesk;
 using Inmobiliaria.Presentation.Common;
 using Inmobiliaria.Presentation.GoLive;
 using Inmobiliaria.Presentation.Shell;
@@ -133,7 +137,18 @@ public partial class App : Application
                 ? new GoLiveViewModel(_sessionProvider.GetRequiredService<IGoLiveSetup>())
                 : null;
 
-            var mainWindow = new MainWindow(shellViewModel, goLiveViewModel);
+            // The desk is registered only with valid recargo terms (design D16); without it the shell's entry
+            // is disabled with the setting named, and no desk is built.
+            var cashDeskViewModel = _sessionProvider.GetService<ICollectionDesk>() is { } collectionDesk
+                ? new CashDeskViewModel(
+                    collectionDesk,
+                    _sessionProvider.GetRequiredService<IAccountDirectory>(),
+                    _sessionProvider.GetRequiredService<IDueAdjustmentQuery>(),
+                    _sessionProvider.GetRequiredService<IReciboReader>(),
+                    _sessionProvider.GetRequiredService<IAgencyClock>())
+                : null;
+
+            var mainWindow = new MainWindow(shellViewModel, cashDeskViewModel, goLiveViewModel);
             MainWindow = mainWindow;
             // ShutdownMode is OnExplicitShutdown (App.xaml) precisely so that closing
             // LoginWindow or ChangePasswordWindow mid-bootstrap never ends the process before

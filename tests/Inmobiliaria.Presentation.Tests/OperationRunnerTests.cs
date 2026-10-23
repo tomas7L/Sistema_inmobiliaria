@@ -15,12 +15,6 @@ public sealed class OperationRunnerTests
 
     private static readonly CollectionRequest AnyRequest = new(Guid.NewGuid(), null, null, 0m);
 
-    /// <summary>What a screen keeps on display while an operation fails (the operator's typed values).</summary>
-    private sealed class TypedValues
-    {
-        public string HandedAmount { get; set; } = "";
-    }
-
     private static FakeCollectionDesk DeskThatThrows() => new()
     {
         OnPreview = _ => throw new InvalidOperationException(SecretExceptionText),
@@ -41,19 +35,6 @@ public sealed class OperationRunnerTests
         Assert.DoesNotContain("hunter2", runner.ErrorMessage);
         Assert.DoesNotContain("Host=", runner.ErrorMessage);
         Assert.DoesNotContain("timed out", runner.ErrorMessage);
-    }
-
-    [Fact]
-    public async Task AnException_LeavesTheTypedValuesInPlace_AndDoesNotThrow()
-    {
-        var runner = new OperationRunner();
-        var desk = DeskThatThrows();
-        var typed = new TypedValues { HandedAmount = "47860" };
-
-        var outcome = await runner.RunAsync(() => desk.PreviewAsync(AnyRequest));
-
-        Assert.False(outcome.Completed);
-        Assert.Equal("47860", typed.HandedAmount);
     }
 
     [Fact]
@@ -148,6 +129,46 @@ public sealed class OperationRunnerTests
         Assert.True(outcome.IsCancelled);
         Assert.Null(outcome.ErrorMessage);
         Assert.Null(runner.ErrorMessage);
+        Assert.False(runner.IsBusy);
+    }
+
+    /// <summary>
+    /// S1 review R3-cancelled-commit-silent: a commit whose task is cancelled may still have reached the
+    /// database, so it tells the operator what a failed commit tells them. Only a cancelled read is silent.
+    /// </summary>
+    [Fact]
+    public async Task ACancelledCommit_SaysItMayOrMayNotHaveBeenRecorded()
+    {
+        var runner = new OperationRunner();
+
+        var outcome = await runner.RunAsync<int>(() => throw new OperationCanceledException(), OperationKind.Commit);
+
+        Assert.False(outcome.Completed);
+        Assert.False(outcome.IsCancelled);
+        Assert.Equal(ErrorMessages.CommitFailed, outcome.ErrorMessage);
+        Assert.Equal(ErrorMessages.CommitFailed, runner.ErrorMessage);
+    }
+
+    /// <summary>
+    /// S1 review R3-isbusy-overlap: with latest-wins previews two runs can overlap. The first to finish
+    /// must not clear the busy flag while the second still runs.
+    /// </summary>
+    [Fact]
+    public async Task OverlappingRuns_StayBusyUntilTheLastOneEnds()
+    {
+        var runner = new OperationRunner();
+        var first = new TaskCompletionSource<int>();
+        var second = new TaskCompletionSource<int>();
+
+        var running1 = runner.RunAsync(() => first.Task);
+        var running2 = runner.RunAsync(() => second.Task);
+
+        first.SetResult(1);
+        await running1;
+        Assert.True(runner.IsBusy);
+
+        second.SetResult(2);
+        await running2;
         Assert.False(runner.IsBusy);
     }
 }
