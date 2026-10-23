@@ -7,6 +7,7 @@ using Inmobiliaria.Domain.Units;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
+using static Inmobiliaria.Infrastructure.Persistence.ReciboRows;
 
 namespace Inmobiliaria.Infrastructure.Persistence;
 
@@ -21,22 +22,13 @@ namespace Inmobiliaria.Infrastructure.Persistence;
 /// any other reason never touches it; being an UPDATE in the same transaction, a rollback gives the number
 /// back (PV5, proved by Tests 15 and 16).
 ///
-/// The five recibo-side tables are property-bag entities (tasks.md "Issues found" 9): the bags are touched
-/// only in this file, through the small private helpers at the end, which build the domain types from
-/// them and them from the domain types. Nothing outside this file knows what a bag is. Every
+/// The five recibo-side tables are property-bag entities (tasks.md "Issues found" 9): the bags are built and
+/// read through <see cref="ReciboRows"/>, which this desk and <c>ReciboReader</c> share, so a recibo is
+/// rebuilt from its rows the same way wherever it is read (ui-de-cobranza design D20). Every
 /// <c>PostgresException</c> is read here too, by SQLSTATE and constraint name; no Npgsql type leaves it.
 /// </summary>
 public sealed class CollectionDesk : ICollectionDesk
 {
-    /// <summary>
-    /// Several tenants, lessors or units on one recibo are one text column each. A name containing this
-    /// separator would be split in two when a voiding rebuilds the header, which only matters to that
-    /// in-memory header, never to the document already issued.
-    /// </summary>
-    internal const string NameSeparator = "; ";
-
-    private static readonly TimeZoneInfo AgencyZone = AgencyClock.ResolveZone();
-
     private readonly InmobiliariaDbContext _context;
     private readonly IAgencyClock _clock;
     private readonly RecargoTerms _terms;
@@ -269,7 +261,7 @@ public sealed class CollectionDesk : ICollectionDesk
 
         // When the payment was recorded is the database's answer, converted through the agency's zone;
         // it is never something the operator supplies (design 7.5).
-        var recordedOn = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(Read<DateTimeOffset>(collection, "RecordedAt"), AgencyZone).DateTime);
+        var recordedOn = AgencyDateOf(Read<DateTimeOffset>(collection, "RecordedAt"));
 
         return new VoidingLoaded(account, record, pair, recordedOn, rows);
     }
@@ -450,85 +442,6 @@ public sealed class CollectionDesk : ICollectionDesk
         return $"{a.Street} {a.Number}{floor}{apartment}, {a.City}";
     }
 
-    // ---- Property bags: the small typed helpers (tasks.md "Issues found" 9) ----
-
-    private static T Read<T>(Dictionary<string, object> bag, string key) => (T)bag[key];
-
-    private static Dictionary<string, object> CollectionBag(
-        Guid id, Guid accountId, DateOnly period, int attempt, DateOnly receivedOn, Guid paymentId, Guid? recargoId) =>
-        new()
-        {
-            ["Id"] = id,
-            ["AccountId"] = accountId,
-            ["Period"] = period,
-            ["Attempt"] = checked((short)attempt),
-            ["ReceivedOn"] = receivedOn,
-            ["PaymentMovementId"] = paymentId,
-            ["RecargoMovementId"] = recargoId!,
-        };
-
-    private static Dictionary<string, object> ReciboBag(Recibo recibo, Guid id, Guid collectionId, Guid contractId) =>
-        new()
-        {
-            ["Id"] = id,
-            ["CollectionId"] = collectionId,
-            ["Number"] = checked((int)recibo.Number),
-            ["Copy"] = recibo.Copy.ToString(),
-            ["ContractId"] = contractId,
-            ["Period"] = recibo.Period,
-            ["ReceivedOn"] = recibo.ReceivedOn,
-            ["TenantName"] = recibo.Header.Tenant,
-            ["LessorNames"] = string.Join(NameSeparator, recibo.Header.Lessors),
-            ["UnitsDescription"] = recibo.Header.Units,
-            ["Legend"] = recibo.Legend,
-            ["Total"] = recibo.Total,
-        };
-
-    private static Dictionary<string, object> LineBag(ReciboLine line, Guid reciboId) =>
-        new()
-        {
-            ["Id"] = Guid.NewGuid(),
-            ["ReciboId"] = reciboId,
-            ["Position"] = checked((short)line.Position),
-            ["Kind"] = line.Kind.ToString(),
-            ["Amount"] = line.Amount,
-        };
-
-    private static Dictionary<string, object> AnnulmentBag(Guid reciboId, string reason) =>
-        new()
-        {
-            ["Id"] = Guid.NewGuid(),
-            ["ReciboId"] = reciboId,
-            ["Reason"] = reason,
-        };
-
-    private static CollectionRecord CollectionFrom(Dictionary<string, object> bag, bool isAnnulled) =>
-        new(
-            Read<Guid>(bag, "Id"),
-            Read<Guid>(bag, "AccountId"),
-            Read<DateOnly>(bag, "Period"),
-            Read<DateOnly>(bag, "ReceivedOn"),
-            Read<Guid>(bag, "PaymentMovementId"),
-            bag.TryGetValue("RecargoMovementId", out var recargo) && recargo is Guid recargoId ? recargoId : null,
-            isAnnulled);
-
-    private static Recibo ReciboFrom(Dictionary<string, object> row, IEnumerable<Dictionary<string, object>> lines)
-    {
-        var copy = Enum.Parse<ReciboCopy>(Read<string>(row, "Copy"));
-        var header = new ReciboHeader(
-            Read<string>(row, "TenantName"),
-            Read<string>(row, "LessorNames").Split(NameSeparator),
-            Read<string>(row, "UnitsDescription"));
-        var draft = new ReciboDraft(
-            copy,
-            lines
-                .OrderBy(l => Read<short>(l, "Position"))
-                .Select(l => new ReciboLine(
-                    Enum.Parse<ReciboLineKind>(Read<string>(l, "Kind")), Read<short>(l, "Position"), Read<decimal>(l, "Amount")))
-                .ToList());
-
-        return new Recibo(Read<int>(row, "Number"), Read<DateOnly>(row, "Period"), Read<DateOnly>(row, "ReceivedOn"), header, draft);
-    }
 }
 
 /// <summary>

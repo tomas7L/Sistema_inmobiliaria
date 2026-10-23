@@ -48,11 +48,11 @@ public sealed class GoLiveSetup : IGoLiveSetup
         return contracts
             .Select(c => new CutoverListing(
                 c.Id,
-                string.Join(CollectionDesk.NameSeparator, c.Parties
+                string.Join(ReciboRows.NameSeparator, c.Parties
                     .Where(p => p.Role == PartyRole.Tenant)
                     .Select(p => CollectionDesk.DescribeParty(parties[p.PartyId]))
                     .Order(StringComparer.Ordinal)),
-                string.Join(CollectionDesk.NameSeparator, c.Units
+                string.Join(ReciboRows.NameSeparator, c.Units
                     .Select(u => CollectionDesk.DescribeUnit(units[u.UnitId]))
                     .Order(StringComparer.Ordinal)),
                 c.StartDate,

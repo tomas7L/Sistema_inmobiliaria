@@ -84,6 +84,8 @@ public sealed class SessionServicesTests
         Assert.IsAssignableFrom<ICollectionDesk>(provider.GetRequiredService<ICollectionDesk>());
         Assert.IsAssignableFrom<IDueAdjustmentQuery>(provider.GetRequiredService<IDueAdjustmentQuery>());
         Assert.IsAssignableFrom<IGoLiveSetup>(provider.GetRequiredService<IGoLiveSetup>());
+        Assert.IsAssignableFrom<IAccountDirectory>(provider.GetRequiredService<IAccountDirectory>());
+        Assert.IsAssignableFrom<IReciboReader>(provider.GetRequiredService<IReciboReader>());
         Assert.IsAssignableFrom<IAgencyClock>(provider.GetRequiredService<IAgencyClock>());
         Assert.Equal(role, provider.GetRequiredService<IUserSession>().Role);
         Assert.Empty(factory.Created);
@@ -135,6 +137,8 @@ public sealed class SessionServicesTests
         Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(ICollectionDesk));
         Assert.NotNull(provider.GetRequiredService<IDueAdjustmentQuery>());
         Assert.NotNull(provider.GetRequiredService<IGoLiveSetup>());
+        Assert.NotNull(provider.GetRequiredService<IAccountDirectory>());
+        Assert.NotNull(provider.GetRequiredService<IReciboReader>());
         Assert.NotNull(provider.GetRequiredService<IAgencyClock>());
     }
 
@@ -178,6 +182,36 @@ public sealed class SessionServicesTests
 
         await Assert.ThrowsAsync<ConnectionRefusedException>(() => setup.ListContractsAsync());
         await Assert.ThrowsAsync<ConnectionRefusedException>(() => setup.GetStartingNumberStateAsync());
+
+        Assert.Equal(2, factory.Created.Count);
+        Assert.NotSame(factory.Created[0], factory.Created[1]);
+        Assert.All(factory.Created, context => Assert.Throws<ObjectDisposedException>(() => context.ChangeTracker));
+    }
+
+    [Fact]
+    public async Task TheDirectoryWrapper_AlsoObtainsOneDisposedContextPerCall()
+    {
+        var factory = new SpySessionFactory();
+        using var provider = Collect(factory, UserRole.Empleado, ValidSettings()).BuildServiceProvider();
+        var directory = provider.GetRequiredService<IAccountDirectory>();
+
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => directory.SearchAsync("perez"));
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => directory.SearchAsync("perez"));
+
+        Assert.Equal(2, factory.Created.Count);
+        Assert.NotSame(factory.Created[0], factory.Created[1]);
+        Assert.All(factory.Created, context => Assert.Throws<ObjectDisposedException>(() => context.ChangeTracker));
+    }
+
+    [Fact]
+    public async Task TheReaderWrapper_AlsoObtainsOneDisposedContextPerCall()
+    {
+        var factory = new SpySessionFactory();
+        using var provider = Collect(factory, UserRole.Empleado, ValidSettings()).BuildServiceProvider();
+        var reader = provider.GetRequiredService<IReciboReader>();
+
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => reader.FindByNumberAsync(31001));
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => reader.RecentAsync(50));
 
         Assert.Equal(2, factory.Created.Count);
         Assert.NotSame(factory.Created[0], factory.Created[1]);
