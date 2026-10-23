@@ -2,6 +2,7 @@ using System.Data.Common;
 using Inmobiliaria.Domain.Access;
 using Inmobiliaria.Domain.Accounts;
 using Inmobiliaria.Domain.Collection;
+using Inmobiliaria.Domain.GoLive;
 using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Infrastructure.Access;
 using Inmobiliaria.Infrastructure.Persistence;
@@ -82,6 +83,7 @@ public sealed class SessionServicesTests
 
         Assert.IsAssignableFrom<ICollectionDesk>(provider.GetRequiredService<ICollectionDesk>());
         Assert.IsAssignableFrom<IDueAdjustmentQuery>(provider.GetRequiredService<IDueAdjustmentQuery>());
+        Assert.IsAssignableFrom<IGoLiveSetup>(provider.GetRequiredService<IGoLiveSetup>());
         Assert.IsAssignableFrom<IAgencyClock>(provider.GetRequiredService<IAgencyClock>());
         Assert.Equal(role, provider.GetRequiredService<IUserSession>().Role);
         Assert.Empty(factory.Created);
@@ -132,6 +134,7 @@ public sealed class SessionServicesTests
         Assert.Null(provider.GetService<ICollectionDesk>());
         Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(ICollectionDesk));
         Assert.NotNull(provider.GetRequiredService<IDueAdjustmentQuery>());
+        Assert.NotNull(provider.GetRequiredService<IGoLiveSetup>());
         Assert.NotNull(provider.GetRequiredService<IAgencyClock>());
     }
 
@@ -160,6 +163,21 @@ public sealed class SessionServicesTests
 
         await Assert.ThrowsAsync<ConnectionRefusedException>(() => desk.PreviewAsync(request));
         await Assert.ThrowsAsync<ConnectionRefusedException>(() => desk.PreviewAsync(request));
+
+        Assert.Equal(2, factory.Created.Count);
+        Assert.NotSame(factory.Created[0], factory.Created[1]);
+        Assert.All(factory.Created, context => Assert.Throws<ObjectDisposedException>(() => context.ChangeTracker));
+    }
+
+    [Fact]
+    public async Task TheGoLiveWrapper_AlsoObtainsOneDisposedContextPerCall()
+    {
+        var factory = new SpySessionFactory();
+        using var provider = Collect(factory, UserRole.Admin, ValidSettings()).BuildServiceProvider();
+        var setup = provider.GetRequiredService<IGoLiveSetup>();
+
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => setup.ListContractsAsync());
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => setup.GetStartingNumberStateAsync());
 
         Assert.Equal(2, factory.Created.Count);
         Assert.NotSame(factory.Created[0], factory.Created[1]);

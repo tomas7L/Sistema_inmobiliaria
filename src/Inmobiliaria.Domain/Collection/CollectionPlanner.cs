@@ -43,7 +43,10 @@ public enum CollectionRefusal
     ReceivedOnBeyondBound,
     NegativeTasaMunicipal,
 
-    /// <summary>A contract that predates the system has no cutover date yet. Raised by the desk, which knows the go-live date.</summary>
+    /// <summary>
+    /// The recibo counter has no starting number yet, so no recibo can be numbered. Raised by the desk at the
+    /// commit, which reads the counter. The member keeps its historical name (ui-de-cobranza design section 6.4).
+    /// </summary>
     CutoverNotSet,
 
     /// <summary>The commit's fresh preview differs from the one the operator confirmed (design D21).</summary>
@@ -79,7 +82,7 @@ public static class CollectionRefusalText
         CollectionRefusal.NegativeTasaMunicipal =>
             "La tasa municipal no puede ser negativa.",
         CollectionRefusal.CutoverNotSet =>
-            "Al contrato le falta la fecha de corte. Cárguela antes de cobrar.",
+            "El número inicial de recibo no está cargado. Un Administrador debe cargarlo en Puesta en marcha antes de cobrar.",
         CollectionRefusal.PreviewStale =>
             "La cuenta cambió desde la vista previa. Genere una nueva vista previa.",
         CollectionRefusal.ConcurrentChange =>

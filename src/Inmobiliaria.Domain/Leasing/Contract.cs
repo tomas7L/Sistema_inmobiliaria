@@ -194,19 +194,56 @@ public sealed class Contract
     /// Records that this contract predates the system and goes live on <paramref name="cutoverDate"/>
     /// (design D17): the schedule then produces nothing due on or before it. One-way once the
     /// account holds any movement, because by then the account has already been read and either
-    /// carries the history or has been told it does not. The database trigger repeats this rule.
+    /// carries the history or has been told it does not. The database trigger repeats this rule
+    /// (and, since ui-de-cobranza, refuses the change to anyone but an Admin).
+    /// The date must lie between <see cref="StartDate"/> and <paramref name="today"/>, both included
+    /// (ui-de-cobranza design D5); <paramref name="today"/> is an argument because Domain has no clock.
+    /// Call <see cref="CheckCutoverDate"/> first to get the refusal as a value.
     /// </summary>
-    public void SetCutoverDate(DateOnly cutoverDate, ContractAccount account)
+    public void SetCutoverDate(DateOnly cutoverDate, ContractAccount account, DateOnly today)
+    {
+        switch (CheckCutoverDate(cutoverDate, account, today))
+        {
+            case CutoverRefusal.AccountHasMovement:
+                throw new InvalidOperationException(
+                    "The cutover date cannot be set once the account holds a movement.");
+            case CutoverRefusal.AfterToday:
+                throw new ArgumentOutOfRangeException(
+                    nameof(cutoverDate), cutoverDate, "The cutover date cannot be after today.");
+            case CutoverRefusal.BeforeContractStart:
+                throw new ArgumentOutOfRangeException(
+                    nameof(cutoverDate), cutoverDate, "The cutover date cannot be before the contract's start date.");
+        }
+
+        _cutoverDate = cutoverDate;
+    }
+
+    /// <summary>
+    /// The rule of <see cref="SetCutoverDate"/> as a value, null when the date would be accepted. Checked
+    /// in this order: the account is this contract's own (still an <see cref="ArgumentException"/>, a
+    /// programming error rather than a refusal), the account holds no movement, the date is not after
+    /// <paramref name="today"/>, the date is not before <see cref="StartDate"/>.
+    /// </summary>
+    public CutoverRefusal? CheckCutoverDate(DateOnly cutoverDate, ContractAccount account, DateOnly today)
     {
         RequireOwnAccount(account);
 
         if (account.Movements.Count > 0)
         {
-            throw new InvalidOperationException(
-                "The cutover date cannot be set once the account holds a movement.");
+            return CutoverRefusal.AccountHasMovement;
         }
 
-        _cutoverDate = cutoverDate;
+        if (cutoverDate > today)
+        {
+            return CutoverRefusal.AfterToday;
+        }
+
+        if (cutoverDate < StartDate)
+        {
+            return CutoverRefusal.BeforeContractStart;
+        }
+
+        return null;
     }
 
     private void RequireOwnAccount(ContractAccount account)

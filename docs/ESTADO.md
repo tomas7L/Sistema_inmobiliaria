@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-10-16 (tarde), cierre de sesión_
+_Última actualización: 2026-10-22, cierre de sesión_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -8,44 +8,37 @@ _Última actualización: 2026-10-16 (tarde), cierre de sesión_
 
 ## En qué estamos
 
-**Change activo: `ui-de-cobranza`**, fase **propuesta escrita, esperando que Tomás la lea**.
-Preflight SDD de la sesión: Interactive · Both (openspec + Engram) · Ask me.
+**Change activo: `ui-de-cobranza`**, fase **apply**. PR 1 de 6 (S1) mergeado en `develop` (#71).
+Preflight SDD de la sesión: Interactive · Both (openspec + Engram) · Auto (auto-chain), cadena `stacked-to-main`.
 
-- Exploración: `openspec/changes/ui-de-cobranza/exploration.md`.
-- Propuesta: `openspec/changes/ui-de-cobranza/proposal.md` — la nota de arriba dice qué leer y qué saltear.
-- Todavía no hay `tasks.md` para este change.
+- Tareas y su estado: `openspec/changes/ui-de-cobranza/tasks.md` (Phase 1 tildada; sigue Phase 2).
+- Spec y design: `openspec/changes/ui-de-cobranza/spec.md`, `openspec/changes/ui-de-cobranza/design.md`.
 
 ## Próximos pasos
 
-1. **Tomás lee la propuesta** y la aprueba o pide cambios.
-2. Con la aprobación: Tomás commitea `openspec/changes/ui-de-cobranza/` y abre el PR `ramatomy` → `develop`
-   (hito: propuesta cerrada).
-3. `/gentle-sdd-continue ui-de-cobranza` → spec y design.
-4. Antes de tasks/apply, Tomás elige la estrategia de cadena (`stacked-to-main` o
-   `feature-branch-chain`): §6 Open Items de la propuesta.
+1. `/gentle-sdd-apply ui-de-cobranza` → **Phase 2 (S2, go-live)** de `tasks.md`, empezando por la segunda
+   inspección (2.1) y la tarea 2.1a (salida de la revisión de S1).
+2. Revisión de gentle-ai sobre el S2 (con archivos nuevos: ver Engram `pattern/gentle-ai-review-untracked`).
+3. Handover del S2 → Tomás commitea, PR, merge.
+4. **Después del merge del S2:** Tomás despausa Supabase y aplica la migración `HardenCutoverDateToAdmin` (H.1 de `tasks.md`).
 
 ## Pendientes / bloqueos
 
-- **Sin commitear, a propósito (Tomás no los leyó):** `openspec/changes/ui-de-cobranza/exploration.md`,
-  `openspec/changes/ui-de-cobranza/proposal.md`. `docs/ESTADO.md` sí se commitea en cada cierre.
-- **`ramatomy` pusheada, sin PR:** 3 commits de docs sobre `develop` (`06e6eb2`, `650f423`, `6f67e5f`).
-  El PR se abre por hito, no por cierre.
-- **Para Nicolás, cuando se pueda:** H.2 de `openspec/changes/archive/2026-09-21-rent-adjustments/tasks.md`
-  (índice que sale tarde) y el papel del recibo (§6 Open Item 2 de la propuesta).
-- **Change siguiente ya decidido:** carga inicial desde el Excel de Nicolás (incluye H.2 de
-  `cuenta-corriente`). El Excel tiene datos personales: **nunca al repo**.
-- **Follow-ups técnicos:** `openspec/changes/archive/2026-10-15-cobranza-y-recibos/archive-report.md`, "Follow-ups Carried Over".
-  Más uno nuevo en Engram: facturación futura necesitaría condición IVA + CUIL del propietario.
-- **Defecto conocido, no arreglado:** comentario de `src/Inmobiliaria.Domain/Leasing/RentAdjustment.cs:76`
-  (dice que es el único que trunca; `AdjustmentProposal.cs:64` también trunca).
+- **Sin commitear:** `docs/ESTADO.md` (este cierre) y `.atl/skill-registry.md` (sólo la fecha; lo tocó `gentle-ai sync`).
+- **Antes de la Phase 6 (impresión):** H.3 de `tasks.md` — membrete y logo. Los datos están en Engram
+  `discovery/recibo-paper-layout`; el logo se puede sacar del PDF de muestra (fuera del repo, tiene datos personales).
+- **Change futuro anotado:** cobrar la diferencia de un ajuste tardío como opción del operador
+  (Out of Scope de `spec.md`). Reemplaza la pregunta H.2 a Nicolás.
+- **Change siguiente ya decidido:** carga inicial desde el Excel de Nicolás. El Excel tiene datos personales: **nunca al repo**.
+- **Defecto conocido, no arreglado:** comentario de `src/Inmobiliaria.Domain/Leasing/RentAdjustment.cs:76`.
 - **La rama `ramateo`** sigue muy atrás de `develop`, con un stash viejo.
 
 ## Precondiciones del próximo paso
 
 | | |
 |---|---|
-| **Docker** | No para leer la propuesta ni para spec/design. **Sí** desde apply (tests de Infrastructure con Testcontainers `postgres:17.6`) |
-| **Supabase** | No. Sólo cuando haya que aplicar la migración del `cutover_date` (slice S2); la aplica Tomás |
+| **Docker** | **Sí**, prendido antes de arrancar el S2 (Testcontainers `postgres:17.6`, tests de trigger con roles de login) |
+| **Supabase** | No para implementar el S2. **Sí después de su merge**, despausada, para que Tomás aplique la migración |
 
 ## Para retomar
 
@@ -57,13 +50,13 @@ git diff --stat HEAD origin/develop
 
 # La suite completa, con Docker PRENDIDO
 dotnet build Inmobiliaria.sln --configuration Release
-dotnet test Inmobiliaria.sln --configuration Release
+dotnet test Inmobiliaria.Core.slnf --configuration Release
 
 # El modelo de EF sigue coincidiendo con la última migración
 dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure
 ```
 
-Esperado: **598 pasados, 0 fallas, 0 omitidos** (corrido el 2026-10-16 sobre `06e6eb2`; lo posterior es sólo docs), build sin
+Esperado: **631 pasados, 0 fallas, 0 omitidos** (corrido el 2026-10-22 sobre el S1, ahora `6506cef`), build sin
 advertencias y el modelo en sintonía con `20261015204506_AddCollectionsAndRecibos`.
 
 **Leer la salida por el contador de errores o el código de salida, nunca por un patrón.** En esta
@@ -74,12 +67,11 @@ máquina dotnet responde en español ("Superado", "Con error", "Omitido").
 | Para qué | Dónde |
 |---|---|
 | Cómo trabajamos | `CLAUDE.md` (raíz) |
-| Lo que hay que leer ahora | `openspec/changes/ui-de-cobranza/proposal.md` |
-| Lo que la UI tiene que llamar | `src/Inmobiliaria.Domain/Collection/ICollectionDesk.cs` |
-| Specs vivas de cobro y recibo | `openspec/specs/collection/`, `openspec/specs/receipt/` |
+| Lo próximo a implementar | `openspec/changes/ui-de-cobranza/tasks.md`, Phase 2 |
+| El porqué del S2 | `openspec/changes/ui-de-cobranza/design.md` §6 |
+| Lo que dejó el S1 | `src/Inmobiliaria.Infrastructure/Access/SessionServices.cs`, `src/Inmobiliaria.Presentation/` |
 
 ### Herramientas
 
-gentle-ai **4.2.0** (ya no trae `sdd-status`), engram **3.4.0**, Docker 29.8.2 con `postgres:17.6`,
-`gh` 2.102.0 en `C:\Program Files\GitHub CLI\gh.exe`, logueado como `tomas7L` (en el PATH de Bash
-recién después de reiniciar Claude Code).
+gentle-ai **4.2.0** (sync corrido el 2026-10-22; ya no trae `sdd-status`), engram **3.4.0**, Docker 29.8.2 con
+`postgres:17.6`, `gh` 2.102.0 en `C:\Program Files\GitHub CLI\gh.exe`, logueado como `tomas7L`.

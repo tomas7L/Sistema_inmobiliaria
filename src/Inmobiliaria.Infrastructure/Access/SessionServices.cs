@@ -1,6 +1,7 @@
 using Inmobiliaria.Domain.Access;
 using Inmobiliaria.Domain.Accounts;
 using Inmobiliaria.Domain.Collection;
+using Inmobiliaria.Domain.GoLive;
 using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Infrastructure.Persistence;
 using Inmobiliaria.Infrastructure.Persistence.PerCall;
@@ -36,6 +37,8 @@ public static class SessionServices
         services.AddSingleton(session);
         services.AddSingleton<IAgencyClock>(_ => new AgencyClock());
         services.AddSingleton<IDueAdjustmentQuery>(_ => new PerCallDueAdjustmentQuery(factory));
+        services.AddSingleton<IGoLiveSetup>(provider =>
+            new PerCallGoLiveSetup(factory, provider.GetRequiredService<IAgencyClock>()));
 
         if (recargo.Terms is { } terms)
         {
