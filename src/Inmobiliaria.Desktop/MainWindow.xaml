@@ -4,6 +4,8 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:Inmobiliaria.Desktop"
+        xmlns:views="clr-namespace:Inmobiliaria.Desktop.Views"
+        xmlns:shell="clr-namespace:Inmobiliaria.Presentation.Shell;assembly=Inmobiliaria.Presentation"
         mc:Ignorable="d"
         Title="Sistema Inmobiliaria" Height="450" Width="800">
     <DockPanel>
@@ -25,7 +27,8 @@
             </ItemsControl.ItemTemplate>
         </ItemsControl>
 
-        <ListBox ItemsSource="{Binding Navigation}"
+        <ListBox x:Name="NavigationList"
+                 ItemsSource="{Binding Navigation}"
                  DisplayMemberPath="Title"
                  Width="220"
                  DockPanel.Dock="Left"
@@ -38,9 +41,38 @@
             </ListBox.ItemContainerStyle>
         </ListBox>
 
-        <TextBlock Text="Sistema Inmobiliaria"
-                   HorizontalAlignment="Center"
-                   VerticalAlignment="Center"
-                   FontSize="24" />
+        <!-- The screen of the selected entry. Chosen by triggers on the selection, so no code decides it. -->
+        <Grid>
+            <TextBlock Text="Sistema Inmobiliaria"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       FontSize="24">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Visibility" Value="Visible" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding SelectedItem.Target, ElementName=NavigationList}"
+                                         Value="{x:Static shell:NavigationTarget.GoLive}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+
+            <views:GoLiveView x:Name="GoLiveScreen">
+                <views:GoLiveView.Style>
+                    <Style TargetType="views:GoLiveView">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding SelectedItem.Target, ElementName=NavigationList}"
+                                         Value="{x:Static shell:NavigationTarget.GoLive}">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </views:GoLiveView.Style>
+            </views:GoLiveView>
+        </Grid>
     </DockPanel>
 </Window>

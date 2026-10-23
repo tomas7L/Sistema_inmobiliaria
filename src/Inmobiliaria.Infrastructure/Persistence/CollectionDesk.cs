@@ -33,7 +33,7 @@ public sealed class CollectionDesk : ICollectionDesk
     /// separator would be split in two when a voiding rebuilds the header, which only matters to that
     /// in-memory header, never to the document already issued.
     /// </summary>
-    private const string NameSeparator = "; ";
+    internal const string NameSeparator = "; ";
 
     private static readonly TimeZoneInfo AgencyZone = AgencyClock.ResolveZone();
 
@@ -418,7 +418,7 @@ public sealed class CollectionDesk : ICollectionDesk
         List<string> NamesIn(PartyRole role) => contract.Parties
             .Where(cp => cp.Role == role)
             .Select(cp => parties.Single(p => p.Id == cp.PartyId))
-            .Select(p => $"{p.LastName}, {p.FirstName}")
+            .Select(DescribeParty)
             .Order(StringComparer.Ordinal)
             .ToList();
 
@@ -437,7 +437,11 @@ public sealed class CollectionDesk : ICollectionDesk
             string.Join(NameSeparator, units.Select(DescribeUnit).Order(StringComparer.Ordinal)));
     }
 
-    private static string DescribeUnit(Unit unit)
+    /// <summary>A party as the recibo names it. Shared with the go-live list.</summary>
+    internal static string DescribeParty(Party party) => $"{party.LastName}, {party.FirstName}";
+
+    /// <summary>A unit as the recibo describes it. Shared with the go-live list.</summary>
+    internal static string DescribeUnit(Unit unit)
     {
         var a = unit.Address;
         var floor = string.IsNullOrWhiteSpace(a.Floor) ? string.Empty : $" piso {a.Floor}";

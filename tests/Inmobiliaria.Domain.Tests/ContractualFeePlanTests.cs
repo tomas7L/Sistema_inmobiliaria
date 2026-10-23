@@ -209,7 +209,7 @@ public class ContractualFeePlanTests
         var account = NewAccount(contract);
         var cutover = new DateOnly(2026, 6, 30);
 
-        contract.SetCutoverDate(cutover, account);
+        contract.SetCutoverDate(cutover, account, today: July);
 
         Assert.Equal(cutover, contract.CutoverDate);
         Assert.DoesNotContain(AccrualSchedule.PeriodsDue(contract, July.AddDays(20)), p => p.DueDate <= cutover);
@@ -225,7 +225,7 @@ public class ContractualFeePlanTests
             Guid.NewGuid(), 0m, new DateOnly(2026, 6, 30), period: null));
 
         Assert.Throws<InvalidOperationException>(() =>
-            contract.SetCutoverDate(new DateOnly(2026, 6, 30), account));
+            contract.SetCutoverDate(new DateOnly(2026, 6, 30), account, today: July));
 
         Assert.Null(contract.CutoverDate);
     }
@@ -237,6 +237,6 @@ public class ContractualFeePlanTests
         var foreignAccount = NewAccount(NewContract());
 
         Assert.Throws<ArgumentException>(() =>
-            contract.SetCutoverDate(new DateOnly(2026, 6, 30), foreignAccount));
+            contract.SetCutoverDate(new DateOnly(2026, 6, 30), foreignAccount, today: July));
     }
 }

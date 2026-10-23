@@ -2,8 +2,10 @@ using System.IO;
 using System.Text.Json;
 using System.Windows;
 using Inmobiliaria.Domain.Access;
+using Inmobiliaria.Domain.GoLive;
 using Inmobiliaria.Infrastructure.Access;
 using Inmobiliaria.Presentation.Common;
+using Inmobiliaria.Presentation.GoLive;
 using Inmobiliaria.Presentation.Shell;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -21,6 +23,7 @@ public partial class App : Application
     private ServiceProvider? _serviceProvider;
     private ServiceProvider? _sessionProvider;
     private ISessionDbContextFactory? _activeSessionFactory;
+    private bool _shellShown;
 
     // async void is deliberate here, not an oversight: WPF's own lifecycle methods
     // (OnStartup/OnExit) return void and have no caller to await them — the well-established
@@ -33,7 +36,8 @@ public partial class App : Application
         base.OnStartup(e);
 
         // The last-resort backstop for an exception no screen operation caught (design D24): the same
-        // fixed message OperationRunner shows, never the exception's text, and the window stays open.
+        // fixed message OperationRunner shows, never the exception's text. Once the shell is up the window
+        // stays open; before it, the application ends.
         DispatcherUnhandledException += OnDispatcherUnhandledException;
 
         var endpoint = LoadConnectionEndpoint();
@@ -121,9 +125,15 @@ public partial class App : Application
             _sessionProvider = sessionServices.BuildServiceProvider();
 
             var settingsProblems = recargo.Problem is null ? Array.Empty<string>() : [recargo.Problem];
-            var shellViewModel = new ShellViewModel(_sessionProvider.GetRequiredService<IUserSession>(), settingsProblems);
+            var session = _sessionProvider.GetRequiredService<IUserSession>();
+            var shellViewModel = new ShellViewModel(session, settingsProblems);
 
-            var mainWindow = new MainWindow(shellViewModel);
+            // Built only for the role the shell offers it to (spec Requirement 2); the database still decides.
+            var goLiveViewModel = session.Role == UserRole.Admin
+                ? new GoLiveViewModel(_sessionProvider.GetRequiredService<IGoLiveSetup>())
+                : null;
+
+            var mainWindow = new MainWindow(shellViewModel, goLiveViewModel);
             MainWindow = mainWindow;
             // ShutdownMode is OnExplicitShutdown (App.xaml) precisely so that closing
             // LoginWindow or ChangePasswordWindow mid-bootstrap never ends the process before
@@ -131,14 +141,23 @@ public partial class App : Application
             // that actually should end it.
             mainWindow.Closed += (_, _) => Shutdown();
             mainWindow.Show();
+            _shellShown = true;
             return;
         }
     }
 
-    private static void OnDispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
+    private void OnDispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
     {
         MessageBox.Show(ErrorMessages.Generic, "Sistema Inmobiliaria", MessageBoxButton.OK, MessageBoxImage.Error);
         e.Handled = true;
+
+        // Before the shell is shown (endpoint, login gates, recargo settings) nothing would ever call
+        // Shutdown, and ShutdownMode is OnExplicitShutdown: handling the exception alone would leave a
+        // windowless process running (S1 review, R3-dispatcher-backstop-zombie).
+        if (!_shellShown)
+        {
+            Shutdown();
+        }
     }
 
     /// <summary>

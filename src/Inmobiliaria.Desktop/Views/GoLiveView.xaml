@@ -1,0 +1,67 @@
+<UserControl x:Class="Inmobiliaria.Desktop.Views.GoLiveView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DesignHeight="450" d:DesignWidth="800">
+    <DockPanel Margin="12">
+        <StackPanel DockPanel.Dock="Top">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Actualizar" Padding="12,4" Command="{Binding LoadCommand}" />
+                <TextBlock Text="Puesta en marcha" FontSize="18" FontWeight="SemiBold" />
+            </DockPanel>
+
+            <TextBlock Text="{Binding RefusalMessage}" TextWrapping="Wrap" Foreground="#FF8A4B00" Margin="0,8,0,0" />
+            <TextBlock Text="{Binding Runner.ErrorMessage}" TextWrapping="Wrap" Foreground="#FFB00020" Margin="0,4,0,0" />
+
+            <GroupBox Header="Número inicial de recibo" Margin="0,12,0,0" Padding="8">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Actual: " />
+                        <TextBlock Text="{Binding StartingNumberText}" FontWeight="SemiBold" />
+                        <TextBlock Text=" - " />
+                        <TextBlock Text="{Binding StartingNumberStateText}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <TextBox Width="140"
+                                 Text="{Binding NewStartingNumber, UpdateSourceTrigger=PropertyChanged}"
+                                 IsEnabled="{Binding CanChangeStartingNumber}" />
+                        <Button Content="Guardar número" Margin="8,0,0,0" Padding="12,2"
+                                Command="{Binding SetStartingNumberCommand}" />
+                    </StackPanel>
+                </StackPanel>
+            </GroupBox>
+
+            <TextBlock Text="Fecha de corte por contrato" FontWeight="SemiBold" Margin="0,12,0,4" />
+        </StackPanel>
+
+        <DataGrid ItemsSource="{Binding Contracts}"
+                  AutoGenerateColumns="False"
+                  CanUserAddRows="False"
+                  CanUserDeleteRows="False"
+                  HeadersVisibility="Column">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Locatario" Binding="{Binding Tenants}" IsReadOnly="True" />
+                <DataGridTextColumn Header="Unidades" Binding="{Binding Units}" IsReadOnly="True" Width="*" />
+                <DataGridTextColumn Header="Inicio" Binding="{Binding StartDateText}" IsReadOnly="True" />
+                <DataGridTextColumn Header="Fecha de corte" Binding="{Binding CutoverText}" IsReadOnly="True" />
+                <DataGridTextColumn Header="Estado" Binding="{Binding StateText}" IsReadOnly="True" />
+                <DataGridTemplateColumn Header="Nueva fecha">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal">
+                                <DatePicker Width="130"
+                                            SelectedDate="{Binding NewCutoverDate, UpdateSourceTrigger=PropertyChanged}"
+                                            IsEnabled="{Binding CanChange}" />
+                                <Button Content="Guardar" Margin="4,0,0,0" Padding="8,0"
+                                        Command="{Binding DataContext.SetCutoverDateCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        CommandParameter="{Binding}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+            </DataGrid.Columns>
+        </DataGrid>
+    </DockPanel>
+</UserControl>
