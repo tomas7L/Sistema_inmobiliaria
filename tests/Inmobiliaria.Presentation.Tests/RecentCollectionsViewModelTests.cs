@@ -77,4 +77,19 @@ public class RecentCollectionsViewModelTests
 
         Assert.Equal([entry.CollectionId], handed);
     }
+
+    /// <summary>
+    /// Task 6.0a (e), S4a review R3-anular-silently-noop-without-desk: with no voiding screen (invalid recargo
+    /// terms, D16) the list does not offer "Anular".
+    /// </summary>
+    [Fact]
+    public async Task WithoutAVoidingScreen_NoEntryOffersAnular()
+    {
+        var entry = Entry(31001, annulled: false);
+        var recent = new RecentCollectionsViewModel(new FakeReciboReader { Recent = [entry] }, _ => Task.CompletedTask, canVoid: false);
+        await recent.LoadCommand.ExecuteAsync(null);
+
+        Assert.False(recent.VoidCommand.CanExecute(recent.Entries.Single()));
+        Assert.False(recent.CanVoid);
+    }
 }

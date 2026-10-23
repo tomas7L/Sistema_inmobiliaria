@@ -236,4 +236,89 @@ public class VoidingViewModelTests
 
         Assert.Equal(1, kit.Desk.VoidCalls);
     }
+
+    /// <summary>
+    /// Task 6.0a (a), S4a review R4-void-reread-failure-generic-retry: when the pair cannot be read back after
+    /// a voiding, the screen withdraws it and says the voiding was recorded, never a generic "try again".
+    /// </summary>
+    [Fact]
+    public async Task APairThatCannotBeReadBack_AfterAVoiding_IsWithdrawn_AndTheVoidingIsSaidDone()
+    {
+        var kit = new Kit();
+        kit.Desk.OnVoid = _ =>
+        {
+            kit.Reader.Throws = true;
+            return Task.FromResult(VoidingResult.Done());
+        };
+        var voiding = await PreviewedAsync(kit);
+
+        await voiding.ConfirmCommand.ExecuteAsync(null);
+
+        Assert.Null(voiding.Recibo);
+        Assert.Null(voiding.Gate);
+        Assert.Equal(VoidingTexts.DoneButNotShown, voiding.DoneMessage);
+        Assert.Null(voiding.Runner.ErrorMessage);
+        Assert.False(voiding.PreviewCommand.CanExecute(null));
+    }
+
+    /// <summary>
+    /// Task 6.0a (b), S4a review R4-open-during-inflight-preview-mismatched-target: a preview of pair A still in
+    /// flight when pair B is opened never becomes confirmable under B.
+    /// </summary>
+    [Fact]
+    public async Task APreviewOfAnotherPair_StillInFlight_NeverLandsOnTheOpenedOne()
+    {
+        var kit = new Kit();
+        var otherId = Guid.NewGuid();
+        kit.Reader.Payments[otherId] = Issued(otherId, 31101);
+        var slow = new TaskCompletionSource<VoidingPreview>();
+        kit.Desk.OnPreviewVoid = (_, _, _) => slow.Task;
+        var voiding = await FoundAsync(kit);
+        voiding.ReasonText = "Cobrado por error";
+
+        var previewing = voiding.PreviewCommand.ExecuteAsync(null);
+        await voiding.OpenAsync(otherId);
+        slow.SetResult(kit.PreviewFor("Cobrado por error", UserRole.Admin));
+        await previewing;
+
+        Assert.Equal("N° 31101", voiding.Recibo!.Copies[0].NumberText);
+        Assert.Null(voiding.VoidPreview);
+        Assert.False(voiding.ConfirmCommand.CanExecute(null));
+    }
+
+    /// <summary>
+    /// Task 6.0a (c), S4a review R3-failed-void-reoffers-preview: a voiding that raises withdraws the pair, so
+    /// nothing is offered until the recibo is looked up again, as its text says.
+    /// </summary>
+    [Fact]
+    public async Task AFailedVoiding_WithdrawsThePair()
+    {
+        var kit = new Kit();
+        kit.Desk.OnVoid = _ => throw new TimeoutException("Host=db");
+        var voiding = await PreviewedAsync(kit);
+
+        await voiding.ConfirmCommand.ExecuteAsync(null);
+
+        Assert.Null(voiding.Recibo);
+        Assert.False(voiding.PreviewCommand.CanExecute(null));
+        Assert.Equal(ErrorMessages.VoidFailed, voiding.Runner.ErrorMessage);
+    }
+
+    /// <summary>Task 6.0a (d), S4a review R3-open-from-list-keeps-done-message: opening another pair clears the old messages.</summary>
+    [Fact]
+    public async Task OpeningAnotherPair_AfterAVoiding_ClearsTheDoneMessage()
+    {
+        var kit = new Kit();
+        var otherId = Guid.NewGuid();
+        kit.Reader.Payments[otherId] = Issued(otherId, 31101);
+        var voiding = await PreviewedAsync(kit);
+        await voiding.ConfirmCommand.ExecuteAsync(null);
+        Assert.NotNull(voiding.DoneMessage);
+
+        await voiding.OpenAsync(otherId);
+
+        Assert.Null(voiding.DoneMessage);
+        Assert.Null(voiding.FindMessage);
+        Assert.True(voiding.Gate!.Offered);
+    }
 }
