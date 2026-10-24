@@ -23,11 +23,12 @@ _Última actualización: 2026-10-23, cierre de sesión_
    - Apuntar el sistema a la base de pruebas cambiando `Supabase:ProjectRef` y `Supabase:Host` solo en `src/Inmobiliaria.Desktop/bin/Release/net10.0-windows/appsettings.json`, nunca en el repo.
 2. **H.4 y H.5 juntas** (`tasks.md`, "Human Follow-Ups"): entrar, cobrar, imprimir a PDF con **Microsoft Print to PDF** (M1, M2), anular, reimprimir, y confirmar que cobrar y anular no abren el diálogo (M3). El PDF se puede imprimir en papel desde la PC vieja.
 3. Cerrar `ui-de-cobranza` (verify y archive).
-4. **Change siguiente: carga inicial desde el Excel de Nicolás.** Tomás le pide una copia (no una reunión); el asistente la lee desde fuera del repo y arma una lista corta de preguntas para mandarle por WhatsApp.
+4. **Change siguiente: pantalla de usuarios (solo Admin), obligatoria antes de entregar.** Alta de Empleado, reseteo de contraseña y baja, desde la aplicación. La spec ya lo exige (`openspec/specs/user-registry/spec.md:78`) y la lógica existe con tests (`src/Inmobiliaria.Infrastructure/Access/IUserProvisioning.cs`); falta solo la pantalla. Hoy, si se va un empleado, Nicolás no puede dar de alta al reemplazo sin que nosotros corramos SQL. Crear otro **Admin** sigue siendo por runbook, a propósito (`docs/runbooks/bootstrap-first-admin.md`).
+5. **Change después: carga inicial desde el Excel de Nicolás.** Tomás le pide una copia (no una reunión) ya mismo, en paralelo; el asistente la lee desde fuera del repo y arma una lista corta de preguntas para mandarle por WhatsApp.
 
 ## Pendientes / bloqueos
 
-- **Sin commitear:** `docs/ESTADO.md` (este cierre), `openspec/changes/ui-de-cobranza/tasks.md` y `tests/Inmobiliaria.Presentation.Tests/VoidingViewModelTests.cs` (el test de seguimiento agregado después del merge del S4b).
+- **Commiteado en `ramatomy`, sin PR todavía:** `9d6926d` (este archivo, `tasks.md` y el test de seguimiento de `VoidingViewModelTests.cs`), 1 commit por delante de `develop`. Va en el próximo PR.
 - **Seguimiento chico, para el próximo change que toque impresión:** envolver el armado de la hoja en `src/Inmobiliaria.Presentation/Recibos/ReciboViewModel.cs` (`PrintAsync`) para que un fallo sea un mensaje de impresión.
 - **Datos personales, nunca al repo:** el Excel de Nicolás y el PDF de muestra (`C:\Users\buffa\Downloads\abregu.pdf`). El logo original queda en `C:\Users\buffa\Downloads\LogoDelLago.jpg`; el del repo es `src/Inmobiliaria.Desktop/Assets/agency-logo.png`.
 - **La impresora no la toma la PC nueva de Tomás** (drivers de Windows, no del sistema). Para H.4 alcanza con Microsoft Print to PDF.
