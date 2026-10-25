@@ -82,6 +82,9 @@ public sealed class LoginBootstrapTests
         public InmobiliariaDbContext Create() =>
             throw new NotSupportedException("Not exercised by LoginBootstrapTests.");
 
+        public void UsePassword(string newPassword) =>
+            throw new NotSupportedException("Not exercised by LoginBootstrapTests.");
+
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }

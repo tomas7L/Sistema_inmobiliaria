@@ -54,6 +54,9 @@ public sealed class SessionServicesTests
             return context;
         }
 
+        public void UsePassword(string newPassword) =>
+            throw new NotSupportedException("Not exercised by SessionServicesTests.");
+
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 

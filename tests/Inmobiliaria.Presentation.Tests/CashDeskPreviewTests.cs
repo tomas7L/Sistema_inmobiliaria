@@ -2,6 +2,8 @@ using Inmobiliaria.Domain.Collection;
 using Inmobiliaria.Domain.Indices;
 using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Presentation.CashDesk;
+using Inmobiliaria.Presentation.Common;
+using Inmobiliaria.Presentation.Tests.Fakes;
 using static Inmobiliaria.Presentation.Tests.CashDeskTestKit;
 
 namespace Inmobiliaria.Presentation.Tests;
@@ -305,6 +307,42 @@ public class CashDeskPreviewTests
 
         Assert.Null(desk.Runner.ErrorMessage);
         Assert.Equal("2", desk.LocatarioLines.Single(l => l.Label == "Seguro").AmountText);
+    }
+
+    /// <summary>
+    /// Live smoke H.5 (2026-10-24): typing the handed amount digit by digit broke the desk against Supabase,
+    /// and the failure of each superseded preview was thrown away. It stays off the screen but is recorded.
+    /// </summary>
+    [Fact]
+    public async Task ASupersededPreviewThatFails_IsRecordedInTheErrorLog()
+    {
+        var log = new RecordingErrorLog();
+        var previous = OperationRunner.DefaultErrorLog;
+        OperationRunner.DefaultErrorLog = log;
+        try
+        {
+            var kit = new CashDeskTestKit();
+            var desk = await kit.ChosenAsync();
+            var slow = new TaskCompletionSource<CollectionPreview>();
+            kit.Desk.OnPreview = request => request.Seguro == 1m ? slow.Task : Task.FromResult(PreviewFor(request, Ledger, Today));
+            var failure = new InvalidOperationException("superseded preview failure " + Guid.NewGuid());
+
+            desk.SeguroText = "1";
+            var older = desk.PreviewInFlight;
+            desk.SeguroText = "2";
+            await desk.PreviewInFlight;
+            slow.SetException(failure);
+            await older;
+
+            // Other test classes run in parallel with the default log installed; only this failure is ours.
+            var entry = Assert.Single(log.Entries, e => ReferenceEquals(e.Exception, failure));
+            Assert.Equal("Superseded read", entry.Context);
+            Assert.Null(desk.Runner.ErrorMessage);
+        }
+        finally
+        {
+            OperationRunner.DefaultErrorLog = previous;
+        }
     }
 
     /// <summary>

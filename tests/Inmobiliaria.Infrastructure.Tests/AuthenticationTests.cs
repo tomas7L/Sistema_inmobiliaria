@@ -159,4 +159,36 @@ public sealed class AuthenticationTests
             superuserContext, "lucia", newPassword);
         await freshConnection.OpenAsync();
     }
+
+    /// <summary>
+    /// Live smoke H.5 (2026-10-24): after a self password change the session kept working only on the
+    /// connection it already had. The first time the pool needed a second physical connection (two previews
+    /// at once, as typing an amount does) it authenticated with the OLD password and every screen failed.
+    /// Two connections held open at once force that second physical connection.
+    /// </summary>
+    [SkippableFact]
+    public async Task SelfPasswordChange_KeepsTheSessionWorking_WhenItNeedsANewPhysicalConnection()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var superuserContext = _fixture.CreateDbContext();
+        await AccessTestSupport.ProvisionUserAsync(superuserContext, "tobias", UserRole.Empleado);
+        var authenticator = new NpgsqlAuthenticator(AccessTestSupport.BuildEndpoint(superuserContext));
+
+        var login = Assert.IsType<AuthenticationResult.Success>(
+            await authenticator.AuthenticateAsync("tobias", AccessTestSupport.DefaultPassword));
+
+        await new PostgresPasswordService(login.Factory, login.Session)
+            .ChangeOwnPasswordAsync(AccessTestSupport.DefaultPassword, "BrandNewPassword789!");
+
+        await using var first = login.Factory.Create();
+        await using var second = login.Factory.Create();
+        await first.Database.OpenConnectionAsync();
+        await second.Database.OpenConnectionAsync();
+
+        Assert.True(await first.AppUsers.CountAsync() >= 1);
+        Assert.True(await second.AppUsers.CountAsync() >= 1);
+
+        await login.Factory.DisposeAsync();
+    }
 }

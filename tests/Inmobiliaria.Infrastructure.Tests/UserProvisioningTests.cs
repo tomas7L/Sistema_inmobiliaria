@@ -329,6 +329,35 @@ public sealed class UserProvisioningTests
         await reloadedLogin.Factory.DisposeAsync();
     }
 
+    /// <summary>
+    /// Spec "Setting It MUST Clear The Requirement", read back from the database. Live smoke H.5 (2026-10-24):
+    /// the forced change was asked again at every login, because the clearing function matched nobody.
+    /// </summary>
+    [SkippableFact]
+    public async Task ChangeOwnPassword_CompletingAForcedChange_ClearsTheRequirementForTheNextLogin()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var superuserContext = _fixture.CreateDbContext();
+        await AccessTestSupport.ProvisionUserAsync(
+            superuserContext, "sofia19", UserRole.Empleado, mustChangePassword: true);
+
+        var authenticator = new NpgsqlAuthenticator(AccessTestSupport.BuildEndpoint(superuserContext));
+        var login = Assert.IsType<AuthenticationResult.Success>(
+            await authenticator.AuthenticateAsync("sofia19", AccessTestSupport.DefaultPassword));
+        Assert.True(login.Session.MustChangePassword);
+
+        const string newPassword = "ForcedChange123!";
+        await new PostgresPasswordService(login.Factory, login.Session)
+            .ChangeOwnPasswordAsync(AccessTestSupport.DefaultPassword, newPassword);
+        await login.Factory.DisposeAsync();
+
+        var reloadedLogin = Assert.IsType<AuthenticationResult.Success>(
+            await authenticator.AuthenticateAsync("sofia19", newPassword));
+        Assert.False(reloadedLogin.Session.MustChangePassword);
+        await reloadedLogin.Factory.DisposeAsync();
+    }
+
     /// <summary>Spec test 18: a voluntary change with nothing pending does not set MustChangePassword.</summary>
     [SkippableFact]
     public async Task ChangeOwnPassword_VoluntaryChangeWithNothingPending_RaisesNoRequirement()

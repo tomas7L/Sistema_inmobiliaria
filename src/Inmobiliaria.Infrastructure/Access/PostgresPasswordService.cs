@@ -65,6 +65,9 @@ public sealed class PostgresPasswordService : IPasswordService
 
         await transaction.CommitAsync(ct);
 
+        // The database now rejects the old password, so every connection the pool opens from here on must
+        // use the new one (live smoke H.5).
+        _sessionFactory.UsePassword(newPassword);
         _session.ClearMustChangePassword();
     }
 }

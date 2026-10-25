@@ -43,6 +43,10 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        // Every unexpected failure is kept on this PC for diagnosis (live smoke H.5); the screen still shows
+        // only the fixed text. Installed first, so even a failure during login is recorded.
+        OperationRunner.DefaultErrorLog = new FileErrorLog(ErrorLogFolder);
+
         // The last-resort backstop for an exception no screen operation caught (design D24): the same
         // fixed message OperationRunner shows, never the exception's text. Once the shell is up the window
         // stays open; before it, the application ends.
@@ -185,8 +189,24 @@ public partial class App : Application
         }
     }
 
+    /// <summary>
+    /// <c>%LOCALAPPDATA%\SistemaInmobiliaria\logs</c>: writable by the Windows user without elevation, unlike
+    /// the folder the application is installed in.
+    /// </summary>
+    private static string ErrorLogFolder => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SistemaInmobiliaria", "logs");
+
     private void OnDispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
     {
+        try
+        {
+            OperationRunner.DefaultErrorLog.Record("Unhandled", e.Exception);
+        }
+        catch (Exception)
+        {
+            // The backstop must still show its message.
+        }
+
         MessageBox.Show(ErrorMessages.Generic, "Sistema Inmobiliaria", MessageBoxButton.OK, MessageBoxImage.Error);
         e.Handled = true;
 

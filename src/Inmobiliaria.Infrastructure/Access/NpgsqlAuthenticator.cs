@@ -32,10 +32,16 @@ public sealed class NpgsqlAuthenticator : IAuthenticator
             Database = _endpoint.Database,
             SslMode = _endpoint.SslMode,
             Username = SupavisorUsername.For(username, _endpoint.ProjectRef),
-            Password = password,
         }.ConnectionString;
 
-        var dataSource = new NpgsqlDataSourceBuilder(connectionString).Build();
+        // The password is supplied per physical connection rather than fixed in the connection string, so
+        // a self password change reaches every connection the pool opens afterwards.
+        var sessionPassword = new SessionPassword(password);
+        var dataSource = new NpgsqlDataSourceBuilder(connectionString)
+            .UsePasswordProvider(
+                _ => sessionPassword.Value,
+                (_, _) => ValueTask.FromResult(sessionPassword.Value))
+            .Build();
 
         NpgsqlConnection connection;
         try
@@ -84,7 +90,7 @@ public sealed class NpgsqlAuthenticator : IAuthenticator
             // Precedence when both memberships return true: Admin wins (design Decision 2).
             var role = isAdmin ? UserRole.Admin : UserRole.Empleado;
             var session = new UserSession(appUser, role);
-            var factory = new SessionDbContextFactory(dataSource);
+            var factory = new SessionDbContextFactory(dataSource, sessionPassword);
 
             return new AuthenticationResult.Success(session, factory);
         }

@@ -171,4 +171,68 @@ public sealed class OperationRunnerTests
         await running2;
         Assert.False(runner.IsBusy);
     }
+
+    /// <summary>
+    /// Live smoke H.5 (2026-10-24): the screen keeps the fixed message, but the exception itself is recorded,
+    /// so a failure in the field can be diagnosed instead of guessed.
+    /// </summary>
+    [Fact]
+    public async Task AFailure_IsRecordedInTheErrorLog_WithItsKind_WhileTheScreenStillShowsOnlyTheFixedMessage()
+    {
+        var log = new RecordingErrorLog();
+        var runner = new OperationRunner(log);
+        var desk = DeskThatThrows();
+
+        var outcome = await runner.RunAsync(() => desk.CommitAsync(
+            new CollectionPreview(null, new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 1), false, 0m, 0m, 0m, null, null, [], null),
+            AnyRequest), OperationKind.Commit);
+
+        var entry = Assert.Single(log.Entries);
+        Assert.Equal(nameof(OperationKind.Commit), entry.Context);
+        Assert.IsType<InvalidOperationException>(entry.Exception);
+        Assert.Equal(ErrorMessages.CommitFailed, outcome.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task APlainCancelledRead_RecordsNothing()
+    {
+        var log = new RecordingErrorLog();
+        var runner = new OperationRunner(log);
+
+        await runner.RunAsync<int>(() => throw new OperationCanceledException());
+
+        Assert.Empty(log.Entries);
+    }
+
+    /// <summary>
+    /// A superseded preview's failure is turned into a cancellation so the operator never sees it, but it is
+    /// exactly the failure a diagnosis needs: it is recorded, and the run stays silently cancelled.
+    /// </summary>
+    [Fact]
+    public async Task ACancelledReadCarryingAFailure_RecordsTheFailure_AndStaysSilent()
+    {
+        var log = new RecordingErrorLog();
+        var runner = new OperationRunner(log);
+        var failure = new InvalidOperationException(SecretExceptionText);
+
+        var outcome = await runner.RunAsync<int>(() => throw new OperationCanceledException("superseded", failure));
+
+        var entry = Assert.Single(log.Entries);
+        Assert.Equal("Superseded read", entry.Context);
+        Assert.Same(failure, entry.Exception);
+        Assert.True(outcome.IsCancelled);
+        Assert.Null(runner.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task AnErrorLogThatThrows_DoesNotChangeTheOutcome()
+    {
+        var runner = new OperationRunner(new RecordingErrorLog { Throws = true });
+
+        var outcome = await runner.RunAsync<int>(() => throw new InvalidOperationException(SecretExceptionText));
+
+        Assert.False(outcome.Completed);
+        Assert.Equal(ErrorMessages.Generic, outcome.ErrorMessage);
+        Assert.False(runner.IsBusy);
+    }
 }

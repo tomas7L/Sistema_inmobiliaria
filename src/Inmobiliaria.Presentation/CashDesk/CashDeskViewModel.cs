@@ -328,10 +328,14 @@ public sealed partial class CashDeskViewModel : ObservableObject
             {
                 return await _desk.PreviewAsync(request, token);
             }
-            catch (Exception) when (version != _previewVersion)
+            catch (Exception exception) when (version != _previewVersion)
             {
-                // Superseded: its failure is not the operator's business either (S3b review).
-                throw new OperationCanceledException();
+                // Superseded: its failure is not the operator's business either (S3b review). A real failure
+                // rides inside the cancellation so the runner records it (live smoke H.5); a plain
+                // cancellation is the expected end of a superseded preview and carries nothing.
+                throw exception is OperationCanceledException
+                    ? new OperationCanceledException()
+                    : new OperationCanceledException("Superseded preview.", exception);
             }
         });
 
