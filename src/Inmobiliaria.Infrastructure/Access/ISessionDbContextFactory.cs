@@ -10,4 +10,10 @@ namespace Inmobiliaria.Infrastructure.Access;
 public interface ISessionDbContextFactory : IAsyncDisposable
 {
     InmobiliariaDbContext Create();
+
+    /// <summary>
+    /// Makes every physical connection opened from now on authenticate with <paramref name="newPassword"/>.
+    /// Called after the session's own password changed; connections already open are unaffected.
+    /// </summary>
+    void UsePassword(string newPassword);
 }

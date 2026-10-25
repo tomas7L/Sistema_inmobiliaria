@@ -13,12 +13,30 @@ namespace Inmobiliaria.Infrastructure.Access;
 public sealed class SessionDbContextFactory : ISessionDbContextFactory
 {
     private readonly NpgsqlDataSource _dataSource;
+    private readonly SessionPassword? _password;
     private bool _disposed;
 
-    public SessionDbContextFactory(NpgsqlDataSource dataSource)
+    /// <param name="password">
+    /// The password <paramref name="dataSource"/> reads for each new physical connection, when it was built
+    /// with one (<see cref="NpgsqlAuthenticator"/>); null for a data source with a fixed password.
+    /// </param>
+    public SessionDbContextFactory(NpgsqlDataSource dataSource, SessionPassword? password = null)
     {
         ArgumentNullException.ThrowIfNull(dataSource);
         _dataSource = dataSource;
+        _password = password;
+    }
+
+    public void UsePassword(string newPassword)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        if (_password is null)
+        {
+            throw new InvalidOperationException("This session's data source has a fixed password; it cannot be replaced.");
+        }
+
+        _password.Replace(newPassword);
     }
 
     public InmobiliariaDbContext Create()

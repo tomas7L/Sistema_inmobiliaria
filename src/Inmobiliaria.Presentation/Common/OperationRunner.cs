@@ -32,6 +32,26 @@ public sealed record OperationOutcome<T>(T? Value, bool Completed, string? Error
 /// </summary>
 public sealed partial class OperationRunner : ObservableObject
 {
+    private readonly IErrorLog? _errorLog;
+
+    /// <summary>A runner that records into <see cref="DefaultErrorLog"/> as it stands when a failure happens.</summary>
+    public OperationRunner()
+    {
+    }
+
+    /// <summary>A runner that records into <paramref name="errorLog"/> only.</summary>
+    public OperationRunner(IErrorLog errorLog)
+    {
+        ArgumentNullException.ThrowIfNull(errorLog);
+        _errorLog = errorLog;
+    }
+
+    /// <summary>
+    /// The log every runner built without one records into. The application installs the file log once at
+    /// startup; every screen builds its runner itself, so this saves threading it through each of them.
+    /// </summary>
+    public static IErrorLog DefaultErrorLog { get; set; } = NullErrorLog.Instance;
+
     /// <summary>
     /// True while any operation runs; every state-changing command's <c>CanExecute</c> reads it. Runs can
     /// overlap (a superseded preview still finishing), so it counts them rather than flipping per run.
@@ -57,16 +77,23 @@ public sealed partial class OperationRunner : ObservableObject
             var value = await operation();
             return new OperationOutcome<T>(value, Completed: true, ErrorMessage: null);
         }
-        catch (OperationCanceledException) when (kind == OperationKind.Read)
+        catch (OperationCanceledException cancelled) when (kind == OperationKind.Read)
         {
             // A superseded or abandoned read: not a failure, and nothing to tell the operator. A cancelled
-            // commit falls through: it may still have reached the database (S1 review).
+            // commit falls through: it may still have reached the database (S1 review). A superseded read
+            // that had failed carries that failure inside; it is recorded, still unseen.
+            if (cancelled.InnerException is { } failure)
+            {
+                Record("Superseded read", failure);
+            }
+
             return new OperationOutcome<T>(default, Completed: false, ErrorMessage: null);
         }
-        catch (Exception)
+        catch (Exception exception)
         {
-            // Deliberately discarded: the exception's text can carry a connection string or a database
-            // error and must never reach the screen (spec Requirement 4).
+            // Never on the screen: the exception's text can carry a connection string or a database error
+            // (spec Requirement 4). It goes to the error log only.
+            Record(kind.ToString(), exception);
             var message = kind switch
             {
                 OperationKind.Commit => ErrorMessages.CommitFailed,
@@ -80,6 +107,18 @@ public sealed partial class OperationRunner : ObservableObject
         {
             _running--;
             IsBusy = _running > 0;
+        }
+    }
+
+    private void Record(string context, Exception exception)
+    {
+        try
+        {
+            (_errorLog ?? DefaultErrorLog).Record(context, exception);
+        }
+        catch (Exception)
+        {
+            // A log that fails must not turn into a second failure.
         }
     }
 }
