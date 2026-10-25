@@ -546,12 +546,20 @@ instalments and recargo) and on the locatario recibo, never on the propietario r
 - THEN it MUST be refused
 
 ### Requirement: A Pre-Existing Contract Accrues Nothing Due On or Before Its Cutover Date
+
 The **cutover date** is stored on the contract. A contract loaded as one that predates the system
 carries it from the moment it is loaded; a contract created in the system carries none. It MUST NOT be
 derived from the account's movements: a pre-existing contract read before its opening balances are
 typed would then have no cutover, and because reading an account (and the mora worklist, which reads
 every account) materialises accruals onto an append-only ledger, its whole history would be written
 permanently. The cutover date MUST NOT change once the account holds any movement (Decision 41).
+
+**The value of a cutover date MUST NOT be after the agency's today and MUST NOT be before the
+contract's start date.** A value outside those bounds MUST be refused and MUST leave the stored date
+unchanged. **Only an Admin may set or change it** (`access-control`, Requirement 22).
+
+(Previously: the rule refused only a change after a movement and accepted any date from anyone with
+`UPDATE` on contracts.)
 
 For a contract that predates the system, the system MUST NOT raise a `RentAccrual` or a
 `ContractualFeeInstalment` for any period whose due date falls on or before the cutover date: those
@@ -596,6 +604,30 @@ contract's start, so the instalments skipped by this rule are not renumbered ont
   balance entered yet
 - WHEN the mora worklist reads every account on 6 October
 - THEN no `RentAccrual` and no instalment MUST be written for any period due on or before 5 October
+
+#### Scenario: A cutover date in the future is refused
+
+- GIVEN the agency's today is 20 October
+- WHEN a cutover date of 21 October is set on a contract whose account holds no movement
+- THEN it MUST be refused and the stored date MUST be unchanged
+
+#### Scenario: A cutover date before the contract's start is refused
+
+- GIVEN a contract starting 1 March 2025
+- WHEN a cutover date of 28 February 2025 is set
+- THEN it MUST be refused and the stored date MUST be unchanged
+
+#### Scenario: The bounds themselves are accepted
+
+- GIVEN a contract starting 1 March 2025 and an agency's today of 20 October 2026
+- WHEN a cutover date of 20 October 2026, and separately of 1 March 2025, is set
+- THEN each MUST be accepted
+
+#### Scenario: A cutover date cannot change after a movement
+
+- GIVEN an account that holds any movement
+- WHEN a change of the cutover date is attempted, by the domain or by raw SQL
+- THEN it MUST be refused
 
 ## Tests
 
@@ -691,3 +723,11 @@ contract's start, so the instalments skipped by this rule are not renumbered ont
 33. **Every new table ships with its GRANTs.** After the migration, connecting as each application
     role confirms it can perform exactly its intended operations on the new tables — none silently
     unreachable.
+
+34. **A cutover date after the agency's today, before the contract's start, is refused and leaves the
+    stored date unchanged; today and the start date themselves are accepted.** *(Domain.Tests)*
+35. **The existing cutover scenarios (no history accrued, later period accrues, instalments, system-created
+    contract, mora worklist before opening balances) still hold.** *(Domain.Tests, existing tests
+    unchanged)*
+36. **A cutover date cannot change after a movement, by the domain or by raw SQL, for either role.**
+    *(Domain.Tests for the domain; Infrastructure.Tests for raw SQL)*
