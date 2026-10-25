@@ -4,8 +4,9 @@
 
 The recibo: the numbered document handed over when a tenant pays. A header plus signed, typed lines,
 in two copies per payment (*locatario* and *propietario*), numbered gaplessly from the agency's own
-sequence, never edited, annulled by an appended record. It is a document, not a PDF: rendering is
-`recibo-pdf`.
+sequence, never edited, annulled by an appended record. It is a document, not a PDF. Showing it on
+screen and printing it through the operating system's print dialog belong to `cash-desk`; producing a
+PDF file is `recibo-pdf`.
 
 ## Requirements
 
@@ -323,6 +324,36 @@ naming the owner and their DNI/CUIL; a VAT-registered or VAT-exempt owner invoic
 - WHEN each is read
 - THEN each MUST carry the non-fiscal legend
 
+### Requirement: A Printed Recibo Says What the Issued Recibo Says
+
+Whatever is displayed or printed of a recibo MUST be the recibo as stored: its number, copy, tenant,
+lessors, units, period, received date, lines with kind and signed amount, total and non-fiscal legend.
+Nothing on a display or a print MUST be recomputed from the contract, the rate, the ledger or the clock
+(`receipt`: the stored honorarios line is never recomputed, Decision 46). A recibo's display or print MUST
+add, beyond what is stored, only: the annulment mark and the annulment's date and reason when it has been
+annulled (`cash-desk`, Requirement 15); the agency's fixed data from configuration; the amount in words
+derived from the stored total; the caption ORIGINAL or DUPLICADO; and the paper's empty rows
+(`cash-desk`, Requirement 14). Nothing else. A recibo that is annulled MUST be shown as
+annulled in every read, including this one.
+
+#### Scenario: A print equals the stored recibo
+
+- GIVEN an issued recibo
+- WHEN it is displayed and printed
+- THEN each line, each amount and the total MUST equal the stored ones, and the total MUST equal the sum of the signed lines
+
+#### Scenario: A later change to the contract does not reach a print
+
+- GIVEN an issued recibo, and the tenant's name is later changed on the party record
+- WHEN the recibo is reprinted
+- THEN it MUST carry the tenant text as issued (the header is a snapshot, `ReciboHeader.cs:3-8`)
+
+#### Scenario: A recibo number never appears twice with different content
+
+- GIVEN a printed recibo and its reprint
+- WHEN the two are compared
+- THEN the number, lines and total MUST be identical
+
 ## Tests
 
 28. **Each payment issues exactly one locatario and one propietario recibo**, stating the same period
@@ -368,3 +399,7 @@ naming the owner and their DNI/CUIL; a VAT-registered or VAT-exempt owner invoic
 51. **An annulled recibo is read as annulled**, with number, reason, user and time; the user and time
     are stamped by the database (`current_user`, `now()`), and a supplied value is ignored.
     *(Infrastructure.Tests)*
+
+52. **A display and a print equal the stored recibo: lines, amounts and total (the total is the sum of the
+    signed lines), the header as a snapshot, no recomputation from the clock or the contract.**
+    *(Infrastructure.Tests for the reader; Presentation.Tests for the print model)*

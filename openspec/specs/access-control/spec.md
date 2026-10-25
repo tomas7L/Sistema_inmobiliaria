@@ -8,7 +8,16 @@ This capability states, once, what each role MAY do, and how that rule is enforc
 
 ### Requirement: The Operation Rule Is Stated Over Actions, Not Screens
 
-Empleado MUST own every operational action. Empleado MUST be excluded from exactly two things: system governance (creating, deactivating, or resetting users) and aggregate business reporting (agency-level income, profitability, and totals). There is no third exclusion.
+Empleado MUST own every operational action. Empleado MUST be excluded from exactly two **categories**:
+system governance (creating, deactivating, or resetting users) and aggregate business reporting
+(agency-level income, profitability, and totals). **There is one named, bounded departure: the two go-live
+parameters, the starting recibo number and a contract's cutover date, are set by an Admin only**
+(`receipt`: Decision 39 of `cobranza-y-recibos`; the cutover date: this change). It is a departure, not a
+new category: it is not a reservation of "money-moving" or "financially sensitive" operations, which this
+requirement continues to refuse, and it MUST NOT be read as licence to reserve any other operation.
+
+(Previously: "Empleado MUST be excluded from exactly two things ... There is no third exclusion.", which
+the starting-number rule already contradicted.)
 
 No operation is reserved to Admin for being financially sensitive. Collecting rent, issuing a receipt, and confirming a rent adjustment are ordinary operational work that **both** roles perform. Empleado MUST retain the ability to see and act on contracts, tenants, owners, rents, receipts, and the honorarios percentage printed on a receipt she issues herself.
 
@@ -33,6 +42,13 @@ An earlier draft of this requirement also reserved to Admin "every operation tha
 - THEN all of that MUST be visible to her
 - AND WHEN she attempts to view agency-level aggregate income or profitability totals
 - THEN that MUST be refused
+
+#### Scenario: Empleado cannot set a go-live parameter
+
+- GIVEN "maria" holds the Empleado role
+- WHEN she attempts to set the starting recibo number or a contract's cutover date
+- THEN each MUST be refused by the database
+- AND she MUST still be able to collect rent, void within 7 days and end a contract
 
 ### Requirement: Enforcement by Database GRANT — Bypassing the Application Gains Nothing
 
@@ -144,6 +160,63 @@ database enforcement that does not exist.
 - WHEN either role queries any new table
 - THEN it MUST not fail with a permission error for an operation this requirement grants
 
+### Requirement: The Cutover Date Is Admin-Only, Enforced by the Database
+
+Changing `contracts.cutover_date` MUST be refused by PostgreSQL unless the session's login role is a
+member of `inmobiliaria_admin`, in addition to the existing rule that it cannot change once the account
+holds a movement (`contracts_cutover_lock`, `20261014204601_AddFeePlanCutoverAndLedgerConstraints.cs:153-173`).
+The refusal MUST hold for raw SQL from any client, because `contracts` is granted `INSERT, UPDATE` to both
+roles as a whole table (`20260924202549_AddUsersAndRoles.cs:161`) and a column grant cannot separate the
+operation without removing the Empleado's ability to update the rest of the contract.
+
+The refusal applies to a **change**: an `UPDATE` that names `cutover_date` without changing it, and an
+`UPDATE` of any other column, MUST still succeed for an Empleado (ending a contract, entering a rate).
+The migration that does this MUST NOT change the EF model; if design finds that it would, the model change
+and the migration ship in one PR (project rule).
+
+**A named limit** (Decision 23). The database cannot distinguish, in an `INSERT` of a contract, a cutover
+date entered by an Empleado from one entered by an Admin, because this change hardens `UPDATE` only. An
+Empleado can therefore insert a contract that carries a cutover date; she cannot change it afterwards.
+This is stated so no reader assumes database enforcement that does not exist.
+
+#### Scenario: An Admin changes the cutover date
+
+- GIVEN a contract whose account holds no movement
+- WHEN a session in `inmobiliaria_admin` updates its cutover date, directly or through the application
+- THEN it MUST succeed
+
+#### Scenario: An Empleado is refused by the database, not only hidden
+
+- GIVEN "maria" holds `inmobiliaria_empleado` and connects with pgAdmin
+- WHEN she executes an `UPDATE contracts SET cutover_date = ...` that changes the value
+- THEN PostgreSQL MUST refuse it and the stored date MUST be unchanged
+
+#### Scenario: An Empleado's other updates still work
+
+- GIVEN a contract with a cutover date and "maria" as Empleado
+- WHEN she ends the contract, or updates its honorarios percentage, or updates the contract with
+  `cutover_date` named but unchanged
+- THEN each MUST succeed
+
+#### Scenario: The lock after a movement still holds for both roles
+
+- GIVEN an account holding a movement
+- WHEN an Admin, and separately an Empleado, changes the cutover date
+- THEN both MUST be refused
+
+#### Scenario: An Empleado can insert a contract with a date (the named limit)
+
+- GIVEN "maria" as Empleado
+- WHEN she inserts a new contract that carries a cutover date
+- THEN the insert MUST succeed
+- AND she MUST then be refused when she changes that date
+
+#### Scenario: The migration reverses cleanly
+
+- GIVEN the migration applied
+- WHEN it is reverted
+- THEN the previous trigger function MUST be restored, and no data MUST change
+
 ## Tests
 
 Derived from the requirements above, not generic CRUD coverage. Each names the requirement it proves. Integration tests require a real Postgres (`postgres:17.6` via Testcontainers) connecting as each application role in turn; permission and trigger behavior cannot be validated against a fake.
@@ -156,3 +229,15 @@ Derived from the requirements above, not generic CRUD coverage. Each names the r
 27. **Aggregate reporting is not database-enforced, and the spec says so.** Connecting as Empleado and running an aggregate over rows she may legitimately read succeeds at the database. The exclusion is application-level, asserted here so the living specification never claims a `GRANT` that cannot exist.
 28. **No row-level restriction exists.** Both roles, granted `SELECT` on the same table, retrieve every row in it.
 29. **A new table's GRANTs ship in the same migration.** After any migration that creates a table, an integration test connects as each role and confirms it can perform exactly its intended operations on that table — none unreachable.
+
+30. **An Admin changes the cutover date directly and succeeds; an Empleado changing it directly through a
+    raw `UPDATE` is refused by the database. The refusing trigger must be seen failing with the Admin
+    check removed before it is trusted.** *(Infrastructure.Tests)*
+31. **An Empleado can still end a contract, update the honorarios percentage, and update a contract
+    naming `cutover_date` without changing it.** *(Infrastructure.Tests)*
+32. **The lock after a movement still refuses both roles.** *(Infrastructure.Tests)*
+33. **An Empleado can insert a contract carrying a cutover date and then cannot change it (the named
+    limit).** *(Infrastructure.Tests)*
+34. **The migration's `Down` restores the previous function body.** *(Infrastructure.Tests)*
+35. **`dotnet ef migrations has-pending-model-changes` reports no pending change after the migration.**
+    *(Run by the assistant; needs no database or Docker)*
