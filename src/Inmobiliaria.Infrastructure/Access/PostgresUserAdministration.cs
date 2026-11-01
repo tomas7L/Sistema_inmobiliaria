@@ -103,22 +103,31 @@ public sealed class PostgresUserAdministration : IUserAdministration
         }
 
         var password = _generatePassword();
-        return await RefusingForeignRolesAsync(async () =>
+        try
         {
-            // One transaction: the login role and the app_users row land together, or neither does. PostgreSQL's
-            // DDL is transactional, so CREATE ROLE rolls back with the row insert.
-            await using var transaction = await context.Database.BeginTransactionAsync(ct);
+            return await RefusingInsufficientPrivilegeAsync(UserAdminRefusal.AdminGrantsMissing, async () =>
+            {
+                // One transaction: the login role and the app_users row land together, or neither does.
+                // PostgreSQL's DDL is transactional, so CREATE ROLE rolls back with the row insert.
+                await using var transaction = await context.Database.BeginTransactionAsync(ct);
 
-            await context.Database.ExecuteSqlInterpolatedAsync(
-                $"SELECT app_create_login_role({roleName}, {password}, {EmpleadoGroupRole})", ct);
+                await context.Database.ExecuteSqlInterpolatedAsync(
+                    $"SELECT app_create_login_role({roleName}, {password}, {EmpleadoGroupRole})", ct);
 
-            context.AppUsers.Add(new AppUser(
-                Guid.CreateVersion7(), roleName, name, isActive: true, mustChangePassword: true));
-            await context.SaveChangesAsync(ct);
+                context.AppUsers.Add(new AppUser(
+                    Guid.CreateVersion7(), roleName, name, isActive: true, mustChangePassword: true));
+                await context.SaveChangesAsync(ct);
 
-            await transaction.CommitAsync(ct);
-            return UserAdminResult.Issued(new ProvisionalCredential(roleName, password));
-        });
+                await transaction.CommitAsync(ct);
+                return UserAdminResult.Issued(new ProvisionalCredential(roleName, password));
+            });
+        }
+        catch (Exception exception) when (IsDuplicate(exception))
+        {
+            // A role that already exists without a row (42710), or a create racing past the check above, such as a
+            // double click or two Admins at once (23505). The transaction rolled back; the name is taken.
+            return UserAdminResult.Refused(UserAdminRefusal.UsernameTaken);
+        }
     }
 
     public async Task<UserAdminResult> ResetPasswordAsync(Guid userId, CancellationToken ct = default)
@@ -137,7 +146,7 @@ public sealed class PostgresUserAdministration : IUserAdministration
         }
 
         var password = _generatePassword();
-        return await RefusingForeignRolesAsync(async () =>
+        return await RefusingInsufficientPrivilegeAsync(UserAdminRefusal.CreatedByAnotherAdmin, async () =>
         {
             // PostgreSQL lets ALTER ROLE on an existing role succeed only for that role's creator (42501 otherwise,
             // user-registry). The open session of the user being reset is not disturbed.
@@ -165,10 +174,14 @@ public sealed class PostgresUserAdministration : IUserAdministration
 
         if (!user!.IsActive)
         {
-            return UserAdminResult.Success;
+            // Nothing to change, but the answer must not depend on the target's state: an Empleado is refused here
+            // as the database would refuse an active target.
+            return _session.Role == UserRole.Admin
+                ? UserAdminResult.Success
+                : UserAdminResult.Refused(UserAdminRefusal.AdminOnly);
         }
 
-        return await RefusingForeignRolesAsync(async () =>
+        return await RefusingInsufficientPrivilegeAsync(UserAdminRefusal.CreatedByAnotherAdmin, async () =>
         {
             // NOLOGIN refuses new connections; it does not end a session already open (spec Finding F1).
             await using var transaction = await context.Database.BeginTransactionAsync(ct);
@@ -199,7 +212,7 @@ public sealed class PostgresUserAdministration : IUserAdministration
         }
 
         var password = _generatePassword();
-        return await RefusingForeignRolesAsync(async () =>
+        return await RefusingInsufficientPrivilegeAsync(UserAdminRefusal.CreatedByAnotherAdmin, async () =>
         {
             // Login and a new password together, or neither: without the new password the person would come back
             // with the one they had when they left (spec Requirement 5).
@@ -246,26 +259,30 @@ public sealed class PostgresUserAdministration : IUserAdministration
     }
 
     /// <summary>
-    /// PostgreSQL refuses with 42501 both an Empleado calling an Admin-only function and an Admin changing a role
-    /// it did not create; the session's role tells the two apart (design D8). The transaction rolls back.
+    /// PostgreSQL refuses with 42501 an Empleado calling an Admin-only function, and an Admin who may not do what was
+    /// asked: change a role another Admin created, or create one without the runbook's grants. The session's role
+    /// tells an Empleado apart (design D8); <paramref name="adminRefusal"/> says what it means for an Admin. The
+    /// transaction rolls back.
     /// </summary>
-    private async Task<UserAdminResult> RefusingForeignRolesAsync(Func<Task<UserAdminResult>> action)
+    private async Task<UserAdminResult> RefusingInsufficientPrivilegeAsync(
+        UserAdminRefusal adminRefusal, Func<Task<UserAdminResult>> action)
     {
         try
         {
             return await action();
         }
-        catch (Exception exception) when (IsInsufficientPrivilege(exception))
+        catch (Exception exception) when (HasSqlState(exception, PostgresErrorCodes.InsufficientPrivilege))
         {
-            return UserAdminResult.Refused(_session.Role == UserRole.Admin
-                ? UserAdminRefusal.CreatedByAnotherAdmin
-                : UserAdminRefusal.AdminOnly);
+            return UserAdminResult.Refused(_session.Role == UserRole.Admin ? adminRefusal : UserAdminRefusal.AdminOnly);
         }
     }
 
-    private static bool IsInsufficientPrivilege(Exception exception) =>
-        exception is PostgresException { SqlState: PostgresErrorCodes.InsufficientPrivilege }
-        || exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.InsufficientPrivilege };
+    private static bool IsDuplicate(Exception exception) =>
+        HasSqlState(exception, PostgresErrorCodes.DuplicateObject) || HasSqlState(exception, PostgresErrorCodes.UniqueViolation);
+
+    private static bool HasSqlState(Exception exception, string sqlState) =>
+        exception is PostgresException direct && direct.SqlState == sqlState
+        || exception.InnerException is PostgresException inner && inner.SqlState == sqlState;
 
     private sealed class ListingRow
     {

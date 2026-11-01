@@ -34,7 +34,7 @@ public sealed class ShellViewModelTests
     }
 
     [Fact]
-    public void AnEmpleadosNavigation_HasTheDeskTheRecentListAndVoiding_AndNoGoLive()
+    public void AnEmpleadosNavigation_HasTheDeskTheRecentListAndVoiding_AndNoGoLiveOrUsers()
     {
         var shell = ShellFor(UserRole.Empleado);
 
@@ -42,16 +42,22 @@ public sealed class ShellViewModelTests
             [NavigationTarget.CashDesk, NavigationTarget.RecentCollections, NavigationTarget.Voiding],
             TargetsOf(shell));
         Assert.DoesNotContain(NavigationTarget.GoLive, TargetsOf(shell));
+        Assert.DoesNotContain(NavigationTarget.Users, TargetsOf(shell));
     }
 
+    /// <summary>gestion-de-usuarios spec Test 20: an Admin also has Usuarios.</summary>
     [Fact]
     public void AnAdminsNavigation_HasEveryScreen()
     {
         var shell = ShellFor(UserRole.Admin);
 
         Assert.Equal(
-            [NavigationTarget.CashDesk, NavigationTarget.RecentCollections, NavigationTarget.Voiding, NavigationTarget.GoLive],
+            [
+                NavigationTarget.CashDesk, NavigationTarget.RecentCollections, NavigationTarget.Voiding,
+                NavigationTarget.GoLive, NavigationTarget.Users,
+            ],
             TargetsOf(shell));
+        Assert.Equal("Usuarios", shell.Navigation.Single(e => e.Target == NavigationTarget.Users).Title);
     }
 
     [Fact]

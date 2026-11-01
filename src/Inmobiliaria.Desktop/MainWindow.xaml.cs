@@ -3,6 +3,7 @@ using Inmobiliaria.Presentation.CashDesk;
 using Inmobiliaria.Presentation.GoLive;
 using Inmobiliaria.Presentation.Recibos;
 using Inmobiliaria.Presentation.Shell;
+using Inmobiliaria.Presentation.Users;
 using Inmobiliaria.Presentation.Voiding;
 
 namespace Inmobiliaria.Desktop;
@@ -19,7 +20,8 @@ public partial class MainWindow : Window
         CashDeskViewModel? cashDesk,
         RecentCollectionsViewModel recentCollections,
         VoidingViewModel? voiding,
-        GoLiveViewModel? goLive)
+        GoLiveViewModel? goLive,
+        UsersViewModel? users)
     {
         ArgumentNullException.ThrowIfNull(viewModel);
         ArgumentNullException.ThrowIfNull(recentCollections);
@@ -30,6 +32,7 @@ public partial class MainWindow : Window
         RecentCollectionsViewScreen.DataContext = recentCollections;
         VoidingViewScreen.DataContext = voiding;
         GoLiveScreen.DataContext = goLive;
+        UsersScreen.DataContext = users;
     }
 
     /// <summary>Selects a screen's navigation entry, when it is offered and available.</summary>

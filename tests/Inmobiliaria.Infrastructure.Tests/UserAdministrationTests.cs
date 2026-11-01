@@ -98,11 +98,12 @@ public sealed class UserAdministrationTests
         await login.Factory.DisposeAsync();
 
         // A PostgreSQL role that already exists with no app_users row: CREATE ROLE fails inside the same
-        // transaction (42710), and no row is left behind.
+        // transaction (42710), the name is reported as taken, and no row is left behind.
         string preCreateRoleSql = $"CREATE ROLE \"{Composed("collide2")}\" LOGIN PASSWORD 'Whatever123!';";
         await superuserContext.Database.ExecuteSqlRawAsync(preCreateRoleSql);
 
-        await Assert.ThrowsAnyAsync<Exception>(() => admin.Users.CreateEmpleadoAsync("collide2", "Should Not Land"));
+        var collision = await admin.Users.CreateEmpleadoAsync("collide2", "Should Not Land");
+        Assert.Equal(UserAdminRefusal.UsernameTaken, collision.Refusal);
         Assert.False(await superuserContext.AppUsers.AnyAsync(u => u.Username == Composed("collide2")));
     }
 
@@ -394,6 +395,8 @@ public sealed class UserAdministrationTests
         }
 
         Assert.Equal(UserAdminRefusal.UserNotFound, (await admin.Users.ResetPasswordAsync(Guid.NewGuid())).Refusal);
+        Assert.Equal(UserAdminRefusal.UserNotFound, (await admin.Users.DeactivateAsync(Guid.NewGuid())).Refusal);
+        Assert.Equal(UserAdminRefusal.UserNotFound, (await admin.Users.ReactivateAsync(Guid.NewGuid())).Refusal);
     }
 
     /// <summary>gestion-de-usuarios Test 15: a role another Admin created is refused by name, and nothing changes.</summary>
@@ -403,20 +406,39 @@ public sealed class UserAdministrationTests
         Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
 
         await using var superuserContext = _fixture.CreateDbContext();
-        await using var creator = await AdminAsync(superuserContext, "creator15", Passwords("first-pass-11111"));
+        await using var creator = await AdminAsync(superuserContext, "creator15", Passwords("first-pass-11111", "back-again-22222"));
         await using var other = await AdminAsync(superuserContext, "other15");
         await creator.Users.CreateEmpleadoAsync("sofia15", "Sofía Quince");
         var id = await IdOfAsync(superuserContext, "sofia15");
 
         Assert.Equal(UserAdminRefusal.CreatedByAnotherAdmin, (await other.Users.ResetPasswordAsync(id)).Refusal);
         Assert.Equal(UserAdminRefusal.CreatedByAnotherAdmin, (await other.Users.DeactivateAsync(id)).Refusal);
+        await creator.Users.DeactivateAsync(id);
+        Assert.Equal(UserAdminRefusal.CreatedByAnotherAdmin, (await other.Users.ReactivateAsync(id)).Refusal);
+        Assert.False(await CanLoginAsync(superuserContext, Composed("sofia15")));
+        await creator.Users.ReactivateAsync(id);
 
         var row = await superuserContext.AppUsers.AsNoTracking().SingleAsync(u => u.Id == id);
         Assert.True(row.IsActive);
-        var authenticator = new NpgsqlAuthenticator(AccessTestSupport.BuildEndpoint(superuserContext));
-        var login = Assert.IsType<AuthenticationResult.Success>(
-            await authenticator.AuthenticateAsync("sofia15", "first-pass-11111"));
-        await login.Factory.DisposeAsync();
+        Assert.True(await CanLoginAsync(superuserContext, Composed("sofia15")));
+    }
+
+    /// <summary>An Admin login without the runbook's grants cannot create roles; that is said, not blamed on another Admin.</summary>
+    [SkippableFact]
+    public async Task Create_ByAnAdminWithoutTheRunbookGrants_SaysSo()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var superuserContext = _fixture.CreateDbContext();
+        var id = await AccessTestSupport.ProvisionUserAsync(superuserContext, "bare-admin", UserRole.Admin);
+        await using var factory = AccessTestSupport.BuildSessionFactoryAs(superuserContext, "bare-admin");
+        var session = new UserSession(new AppUser(id, Composed("bare-admin"), "bare-admin"), UserRole.Admin);
+        var users = new PostgresUserAdministration(factory, session, roleNameFor: Composed);
+
+        var result = await users.CreateEmpleadoAsync("nadie", "Nadie");
+
+        Assert.Equal(UserAdminRefusal.AdminGrantsMissing, result.Refusal);
+        Assert.False(await superuserContext.AppUsers.AnyAsync(u => u.Username == Composed("nadie")));
     }
 
     /// <summary>gestion-de-usuarios Test 22: an Empleado session is refused by the database, and nothing changes.</summary>
@@ -443,6 +465,7 @@ public sealed class UserAdministrationTests
         Assert.Equal(UserAdminRefusal.AdminOnly, (await asEmpleado.ResetPasswordAsync(activeId)).Refusal);
         Assert.Equal(UserAdminRefusal.AdminOnly, (await asEmpleado.DeactivateAsync(activeId)).Refusal);
         Assert.Equal(UserAdminRefusal.AdminOnly, (await asEmpleado.ReactivateAsync(goneId)).Refusal);
+        Assert.Equal(UserAdminRefusal.AdminOnly, (await asEmpleado.DeactivateAsync(goneId)).Refusal);
 
         Assert.False(await superuserContext.AppUsers.AnyAsync(u => u.Username == Composed("intruso22")));
         Assert.True(await CanLoginAsync(superuserContext, Composed("active22")));

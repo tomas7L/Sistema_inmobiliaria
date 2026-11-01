@@ -7,6 +7,7 @@ public enum NavigationTarget
     RecentCollections,
     Voiding,
     GoLive,
+    Users,
 }
 
 /// <summary>The operator-facing names of the screens, which messages elsewhere point to.</summary>
@@ -16,6 +17,7 @@ public static class NavigationTitles
     public const string RecentCollections = "Cobros recientes";
     public const string Voiding = "Anular un cobro";
     public const string GoLive = "Puesta en marcha";
+    public const string Users = "Usuarios";
 }
 
 /// <summary>

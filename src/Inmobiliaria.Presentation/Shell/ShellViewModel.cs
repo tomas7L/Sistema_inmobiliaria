@@ -48,6 +48,7 @@ public sealed class ShellViewModel
         if (role == UserRole.Admin)
         {
             entries.Add(new NavigationEntry(NavigationTarget.GoLive, NavigationTitles.GoLive));
+            entries.Add(new NavigationEntry(NavigationTarget.Users, NavigationTitles.Users));
         }
 
         return entries;
