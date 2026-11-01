@@ -62,6 +62,20 @@ public sealed class FileErrorLogTests : IDisposable
         Assert.Contains("Host=db.internal", text);
     }
 
+    /// <summary>gestion-de-usuarios spec Test 13: a failed password statement quoted back by PostgreSQL is masked.</summary>
+    [Fact]
+    public void APasswordStatementInTheExceptionText_IsNeverWritten()
+    {
+        var log = new FileErrorLog(_folder, () => At);
+
+        log.Record("Read", new InvalidOperationException(
+            "42501: permission denied to alter role\nWhere: SQL statement \"ALTER ROLE sofia PASSWORD 'lago-sol-pan-48017'\""));
+
+        var text = File.ReadAllText(Path.Combine(_folder, "errores-2026-10-24.log"));
+        Assert.DoesNotContain("lago-sol-pan-48017", text);
+        Assert.Contains("ALTER ROLE sofia PASSWORD ***", text);
+    }
+
     [Fact]
     public void AFolderThatCannotBeWritten_IsSwallowed()
     {

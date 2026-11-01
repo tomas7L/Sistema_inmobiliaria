@@ -87,12 +87,12 @@ Same three commands as PR 1.
 **Docker: yes for the full suite. Supabase: no (the live smoke is H.2).** Spec tests: 12, 14 (view-model
 half), 16, 17, 20. Design anchors: D11, D12, §5, §6.
 
-- [ ] 3.1 **[Second inspection, read-only]** PR 2 merged intact
-- [ ] 3.2 **[RED then GREEN, Tests 12, 14, 16, 17]** `UsersViewModel`, `UserRow`, `PendingUserAction`, `IClipboard` in Presentation, with a fake port and a fake clipboard
-- [ ] 3.3 **[RED then GREEN, Test 20]** `ShellViewModelTests`: Usuarios for an Admin only
-- [ ] 3.4 **[Desktop]** `NavigationEntry`, `ShellViewModel`, `App.xaml.cs`, `MainWindow`, `UsersView`, `WpfClipboard`; build only
+- [x] 3.1 **[Second inspection, read-only]** PR 2 merged intact
+- [x] 3.2 **[RED then GREEN, Tests 12, 14, 16, 17]** `UsersViewModel`, `UserRow`, `PendingUserAction`, `IClipboard` in Presentation, with a fake port and a fake clipboard
+- [x] 3.3 **[RED then GREEN, Test 20]** `ShellViewModelTests`: Usuarios for an Admin only
+- [x] 3.4 **[Desktop]** `NavigationEntry`, `ShellViewModel`, `App.xaml.cs`, `MainWindow`, `UsersView`, `WpfClipboard`; build only
 - [ ] 3.5 **[Specs]** Merge the deltas into `openspec/specs/user-registry/spec.md` and `openspec/specs/desktop-shell/spec.md`
-- [ ] 3.6 **[Guardrails and handover]** as 1.11 and 1.12
+- [x] 3.6 **[Guardrails and handover]** as 1.11 and 1.12
 
 ### Verification, PR 3
 
@@ -189,3 +189,20 @@ Same three commands as PR 1.
   - **No action, recorded:** the password is generated before the database confirms the caller may create
     roles, so a refused create sends it once; it never becomes a login (the transaction rolls back) and the
     application log masks it. PostgreSQL's own server log is Supabase's, outside this application.
+
+**Phase 3 (S3), applied 2026-11-01.**
+
+- S2 advisories done: 42710/23505 on create → `UsernameTaken`; new `AdminGrantsMissing`; inactive target from a
+  non-Admin session → `AdminOnly`; tests for foreign-role reactivation and `UserNotFound` on every action.
+- 3.5 (merge spec deltas into `openspec/specs/`) deferred to the archive commit, as in `ui-de-cobranza`.
+- First review (`review-5ec449940c21afa7`) approved and acknowledged; its advisories were fixed before handover:
+  actions blocked while a password is shown, clipboard kept out of Windows history and cleared on dismiss, a
+  busy clipboard is said on screen, explicit action arms, helper renamed `RefusingInsufficientPrivilegeAsync`.
+- Second review (`review-e73425993dde6a68`) found one CRITICAL: a pending confirmation could replace a just-created
+  password. Fixed (RED seen): Create drops the pending confirmation; Confirm is blocked while a password is shown.
+- The targeted validation first failed on reviewer transport (provider usage limit, nothing changed). On resume
+  the bound status asked for recovery because the assistant had edited `tasks.md` after the correction;
+  restoring it brought back the identical re-offer, which **approved**; acknowledged. Two readability
+  suggestions remain (the row commands need not be async; the class summary should say a failure does not
+  reload), recorded only.
+- Last full suite before the correction: 1007 passed, 0 failed, 0 skipped; Presentation after it: 244 passed.

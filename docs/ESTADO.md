@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-01, con la propuesta de `gestion-de-usuarios` aprobada_
+_Última actualización: 2026-11-01, con el slice S3 de `gestion-de-usuarios` listo para commitear_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -8,21 +8,26 @@ _Última actualización: 2026-11-01, con la propuesta de `gestion-de-usuarios` a
 
 ## En qué estamos
 
-**Change activo: `gestion-de-usuarios`** (pantalla de usuarios, solo Admin). **Propuesta aprobada**
-2026-11-01 (decisiones 4 y 6 de `proposal.md` cerradas con Tomás). Hechos: `exploration.md` y `proposal.md`
-en `openspec/changes/gestion-de-usuarios/`. Todavía no hay spec, diseño ni `tasks.md`. Engram:
-`sdd/gestion-de-usuarios/explore`, `sdd/gestion-de-usuarios/proposal`, `sdd/gestion-de-usuarios/reactivation`.
+**Change activo: `gestion-de-usuarios`** (pantalla Usuarios, solo Admin). S1 (#81) y S2 (#82) mergeados. **S3, la
+pantalla, aplicado y aprobado por la revisión, sin commitear.** Estado y desvíos: `openspec/changes/gestion-de-usuarios/tasks.md`
+(Phase 3). Engram: `sdd/gestion-de-usuarios/apply-s3`.
 
 ## Próximos pasos
 
-1. **Spec** (un solo archivo, `openspec/changes/gestion-de-usuarios/spec.md`) y **diseño**, después `tasks.md`.
-2. **Change después: carga inicial desde el Excel de Nicolás.** Tomás se lo pide el **miércoles 2026-11-04**;
-   el asistente le ayuda a armar el mensaje, lo lee desde fuera del repo y arma una lista corta de preguntas.
+1. **Tomás commitea y mergea el S3.**
+2. **Prueba en vivo H.2** en la base de PRUEBA de Supabase (restaurarla antes; solo Tomás se conecta), detalle en
+   `tasks.md` "Human Follow-Ups": `tomas` crea un Empleado y entra con él; reinicia, desactiva y reactiva; **un Empleado
+   con `ñ` en el usuario entra** (si falla, la `ñ` sale de la regla). Además: Copiar pega bien en WhatsApp Web; la
+   contraseña copiada **no** aparece en el historial de Windows (Win+V) y se borra al apretar "Listo, ya la pasé".
+3. Después de la prueba: archivar el change, pasando las deltas a `openspec/specs/user-registry` y `desktop-shell`.
+4. **Change después: carga inicial desde el Excel de Nicolás.** Tomás se lo pide el **miércoles 2026-11-04**; el
+   asistente le ayuda a armar el mensaje.
 
 ## Pendientes / bloqueos
 
-- La rama `ramatomy` está 2 commits detrás de `origin/develop` (solo los merges #77 y #78, sin diferencia de
-  contenido).
+- **El registro de errores de la versión en producción puede contener contraseñas** de antes de este change (design
+  F5, confirmado): un cambio de contraseña fallido dentro de la base las escribía en texto plano. Desde #81 se tapan.
+  Conviene revisar y borrar `%LOCALAPPDATA%\SistemaInmobiliaria\logs` en la PC de la inmobiliaria al instalar.
 - **engram 3.6.0**: backup previo en `~/.engram/backup-20261025-pre-3.6.0/`. `engram doctor` marca
   `sync_target_closed_space` (sync a la nube nunca configurado): no afecta la memoria local.
 - **El `appsettings.json` compilado apunta a la base de PRUEBA** (`chygrzoqmcqpncogeiuz`, `aws-1-sa-east-1`),
@@ -41,8 +46,8 @@ en `openspec/changes/gestion-de-usuarios/`. Todavía no hay spec, diseño ni `ta
 
 | | |
 |---|---|
-| **Docker** | No para spec, diseño ni tareas; **sí** desde el slice S1 (Testcontainers `postgres:17.6`) |
-| **Supabase** | No hasta la prueba en vivo. La base de prueba se pausa tras unos 7 días sin uso; solo Tomás se conecta |
+| **Docker** | No para la prueba en vivo; **sí** para cualquier corrección que salga de ella (Testcontainers `postgres:17.6`) |
+| **Supabase** | **Sí** para la prueba en vivo H.2: la base de PRUEBA probablemente esté pausada; solo Tomás se conecta |
 
 ## Para retomar
 
@@ -60,7 +65,7 @@ dotnet test Inmobiliaria.Core.slnf --configuration Release
 dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure
 ```
 
-Esperado: **899 pasados, 0 fallas, 0 omitidos** (al merge del #77), build sin advertencias y el modelo en sintonía con
+Esperado: **1008 pasados, 0 fallas, 0 omitidos** (con el S3), build sin advertencias y el modelo en sintonía con
 `20261025005832_FixClearMustChangePasswordIdentity`. Si el build de Desktop falla con MSB3027, la aplicación está
 abierta y tiene tomadas sus DLL: cerrarla.
 

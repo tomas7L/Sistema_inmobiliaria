@@ -15,6 +15,7 @@ using Inmobiliaria.Presentation.Printing;
 using Inmobiliaria.Presentation.Recibos;
 using Inmobiliaria.Presentation.Voiding;
 using Inmobiliaria.Presentation.Shell;
+using Inmobiliaria.Presentation.Users;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
@@ -144,6 +145,9 @@ public partial class App : Application
             var goLiveViewModel = session.Role == UserRole.Admin
                 ? new GoLiveViewModel(_sessionProvider.GetRequiredService<IGoLiveSetup>())
                 : null;
+            var usersViewModel = session.Role == UserRole.Admin
+                ? new UsersViewModel(_sessionProvider.GetRequiredService<IUserAdministration>(), new WpfClipboard())
+                : null;
 
             // Every recibo display prints through the same seam, with the letterhead read once (Decision 37).
             var reader = _sessionProvider.GetRequiredService<IReciboReader>();
@@ -176,7 +180,7 @@ public partial class App : Application
                 }
             }, canVoid: voidingViewModel is not null, printing: printing);
 
-            mainWindow = new MainWindow(shellViewModel, cashDeskViewModel, recentViewModel, voidingViewModel, goLiveViewModel);
+            mainWindow = new MainWindow(shellViewModel, cashDeskViewModel, recentViewModel, voidingViewModel, goLiveViewModel, usersViewModel);
             MainWindow = mainWindow;
             // ShutdownMode is OnExplicitShutdown (App.xaml) precisely so that closing
             // LoginWindow or ChangePasswordWindow mid-bootstrap never ends the process before

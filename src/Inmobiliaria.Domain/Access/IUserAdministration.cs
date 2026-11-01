@@ -54,6 +54,9 @@ public enum UserAdminRefusal
 
     /// <summary>The session is not an Admin's.</summary>
     AdminOnly,
+
+    /// <summary>An Admin login without the runbook's CREATEROLE and ADMIN OPTION grants cannot create a user.</summary>
+    AdminGrantsMissing,
 }
 
 public sealed record UserAdminResult(UserAdminRefusal? Refusal, ProvisionalCredential? Credential)
@@ -89,6 +92,8 @@ public static class UserAdminRefusalText
             "Este usuario lo creó otro Administrador, y sólo quien lo creó puede modificarlo.",
         UserAdminRefusal.AdminOnly =>
             "Sólo un Administrador puede administrar usuarios.",
+        UserAdminRefusal.AdminGrantsMissing =>
+            "Su usuario Administrador no tiene los permisos para crear usuarios. Hay que completar su alta según el procedimiento de Administradores.",
         _ => throw new ArgumentOutOfRangeException(nameof(refusal), refusal, "A refusal without operator text."),
     };
 }
