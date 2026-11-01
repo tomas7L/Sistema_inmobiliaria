@@ -44,6 +44,23 @@ public class SecretMaskTests
         Assert.EndsWith("\" at EXECUTE", masked);
     }
 
+    [Theory]
+    [InlineData("ALTER ROLE sofia PASSWORD 'lago-sol-pa", "lago-sol-pa")]
+    [InlineData("ALTER ROLE sofia PASSWORD E'lago-sol-pa", "lago-sol-pa")]
+    public void ALiteralCutOffBeforeItsClosingQuote_IsMasked(string text, string secret)
+    {
+        Assert.DoesNotContain(secret, SecretMask.Mask(text));
+    }
+
+    [Fact]
+    public void ACutOffLiteral_DoesNotSwallowTheNextLine()
+    {
+        var masked = SecretMask.Mask("ALTER ROLE sofia PASSWORD 'cut-off\n   at Npgsql.Internal.Read()");
+
+        Assert.DoesNotContain("cut-off", masked);
+        Assert.Contains("at Npgsql.Internal.Read()", masked);
+    }
+
     [Fact]
     public void TextWithoutAPassword_IsUnchanged()
     {

@@ -87,6 +87,7 @@ public sealed class SessionServicesTests
         Assert.IsAssignableFrom<ICollectionDesk>(provider.GetRequiredService<ICollectionDesk>());
         Assert.IsAssignableFrom<IDueAdjustmentQuery>(provider.GetRequiredService<IDueAdjustmentQuery>());
         Assert.IsAssignableFrom<IGoLiveSetup>(provider.GetRequiredService<IGoLiveSetup>());
+        Assert.IsAssignableFrom<IUserAdministration>(provider.GetRequiredService<IUserAdministration>());
         Assert.IsAssignableFrom<IAccountDirectory>(provider.GetRequiredService<IAccountDirectory>());
         Assert.IsAssignableFrom<IReciboReader>(provider.GetRequiredService<IReciboReader>());
         Assert.IsAssignableFrom<IAgencyClock>(provider.GetRequiredService<IAgencyClock>());

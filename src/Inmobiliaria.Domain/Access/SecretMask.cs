@@ -21,7 +21,8 @@ public static partial class SecretMask
     [GeneratedRegex(@"(?<key>password)\s*=\s*('[^']*'|""[^""]*""|[^;\s]*)", RegexOptions.IgnoreCase)]
     private static partial Regex AssignedPassword();
 
-    // A SQL string literal: '' is an escaped quote; in an E'' literal a backslash escapes the next character.
-    [GeneratedRegex(@"(?<key>\bpassword)\s+(E'(?:[^'\\]|\\.|'')*'|'(?:[^']|'')*')", RegexOptions.IgnoreCase)]
+    // A SQL string literal: '' is an escaped quote; in an E'' literal a backslash escapes the next character. The
+    // closing quote is optional, so a literal cut off by a truncated message is still masked, up to the line end.
+    [GeneratedRegex(@"(?<key>\bpassword)\s+(E'(?:[^'\\\r\n]|\\.|'')*'?|'(?:[^'\r\n]|'')*'?)", RegexOptions.IgnoreCase)]
     private static partial Regex SqlPasswordClause();
 }

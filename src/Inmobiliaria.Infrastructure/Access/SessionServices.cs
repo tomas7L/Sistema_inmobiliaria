@@ -37,6 +37,7 @@ public static class SessionServices
         services.AddSingleton(session);
         services.AddSingleton<IAgencyClock>(_ => new AgencyClock());
         services.AddSingleton<IDueAdjustmentQuery>(_ => new PerCallDueAdjustmentQuery(factory));
+        services.AddSingleton<IUserAdministration>(_ => new PostgresUserAdministration(factory, session));
         services.AddSingleton<IGoLiveSetup>(provider =>
             new PerCallGoLiveSetup(factory, provider.GetRequiredService<IAgencyClock>()));
         services.AddSingleton<IAccountDirectory>(provider =>
