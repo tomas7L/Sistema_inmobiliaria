@@ -25,6 +25,10 @@ public sealed class NpgsqlAuthenticator : IAuthenticator
         ArgumentException.ThrowIfNullOrWhiteSpace(username);
         ArgumentException.ThrowIfNullOrWhiteSpace(password);
 
+        // Read the username the way it was created: "Sofia " logs in as "sofia" (gestion-de-usuarios spec
+        // Requirement 10). The password is sent exactly as typed.
+        username = Username.Normalize(username);
+
         var connectionString = new NpgsqlConnectionStringBuilder
         {
             Host = _endpoint.Host,

@@ -87,13 +87,12 @@ public sealed partial class ChangePasswordViewModel : ObservableObject
             await _passwordService.ChangeOwnPasswordAsync(CurrentPassword, NewPassword);
             PasswordChangeSucceeded?.Invoke(this, EventArgs.Empty);
         }
-        catch (InvalidOperationException)
+        catch (PasswordChangeRefusedException refused)
         {
-            // Spec "Re-Entering The Provisional Password Is Rejected" — the same value was
-            // submitted as both current and new. The requirement stays pending; this is not a
-            // security message, only credential hygiene (spec Decision 14), so it says exactly
-            // that and nothing more.
-            ErrorMessage = "La nueva contraseña debe ser distinta de la actual.";
+            // Spec "Re-Entering The Provisional Password Is Rejected" and gestion-de-usuarios
+            // Requirement 9 (at least 8 characters, not the username). Nothing reached the database,
+            // so a forced change stays pending; the message says which rule was broken.
+            ErrorMessage = refused.Refusal.OperatorText();
         }
         catch (Exception)
         {
