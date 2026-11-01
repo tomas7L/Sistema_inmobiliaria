@@ -78,6 +78,18 @@ public class AppUserTests
     }
 
     [Fact]
+    public void Activate_SetsIsActiveTrue_AndIsIdempotent()
+    {
+        var user = new AppUser(Guid.NewGuid(), "maria", "Maria Lopez", isActive: false);
+
+        user.Activate();
+        Assert.True(user.IsActive);
+
+        user.Activate();
+        Assert.True(user.IsActive);
+    }
+
+    [Fact]
     public void RequirePasswordChange_SetsMustChangePasswordTrue_AndIsIdempotent()
     {
         var user = new AppUser(Guid.NewGuid(), "sofia", "Sofia Martinez");

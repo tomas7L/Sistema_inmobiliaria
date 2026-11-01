@@ -3,7 +3,7 @@ namespace Inmobiliaria.Infrastructure.Access;
 /// <summary>
 /// Self password change only (spec "Self-Service Password Change Is Immediate; Admin Reset
 /// Takes Effect Next Login"). Resetting a DIFFERENT user's password is
-/// <see cref="IUserProvisioning.ResetPasswordAsync"/>'s job.
+/// <see cref="Domain.Access.IUserAdministration.ResetPasswordAsync"/>'s job.
 /// </summary>
 public interface IPasswordService
 {

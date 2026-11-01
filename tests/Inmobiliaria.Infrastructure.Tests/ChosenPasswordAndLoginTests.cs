@@ -52,9 +52,13 @@ public sealed class ChosenPasswordAndLoginTests
         await again.Factory.DisposeAsync();
     }
 
-    /// <summary>Spec Test 19: the username, in any case, is refused as a password.</summary>
+    /// <summary>
+    /// Spec Test 19 against a real login: the session's username, in another case, is refused and a forced change
+    /// stays pending. Here the session name is the test database's role name, suffix included; production's
+    /// plain name is <see cref="WithAPlainSessionUsername_TheUsernameIsRefusedAsAPassword"/>.
+    /// </summary>
     [SkippableFact]
-    public async Task TheUsername_IsRefusedAsAPassword()
+    public async Task TheSessionUsername_IsRefusedAsAPassword_AndAForcedChangeStaysPending()
     {
         Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
 
@@ -198,6 +202,9 @@ public sealed class ChosenPasswordAndLoginTests
         var unmasked = failure.ToString();
         _output.WriteLine($"SqlState {failure.SqlState}; unmasked text carries the password: {unmasked.Contains(secret)}");
         Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, failure.SqlState);
+        // Observed on 2026-11-01 (design Finding F5): PostgreSQL quotes the failed statement, password included.
+        // Asserted first so the mask below is proven against the real text, not against a text with nothing to hide.
+        Assert.Contains(secret, unmasked);
         Assert.DoesNotContain(secret, SecretMask.Mask(unmasked));
     }
 

@@ -103,7 +103,7 @@ internal static class AccessTestSupport
     /// <summary>
     /// Wraps a role's connection in an <see cref="ISessionDbContextFactory"/> — the same shape
     /// <see cref="NpgsqlAuthenticator"/> hands a real login through — so
-    /// <see cref="PostgresUserProvisioning"/> and <see cref="PostgresPasswordService"/> can be
+    /// <see cref="PostgresUserAdministration"/> and <see cref="PostgresPasswordService"/> can be
     /// exercised exactly as PR 5's ViewModels eventually will, without going through a full
     /// login handshake for a role the test already knows exists.
     /// </summary>

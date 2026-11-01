@@ -68,13 +68,13 @@ All three slices touch credentials or permissions (high-risk item 2), so each is
 **Docker: yes. Supabase: no. Model change: no.** Spec tests: 1, 2, 3, 5, 6, 7, 8, 9, 10, 13 (adapter
 half), 14 (port half), 15, 21, 22, 23. Design anchors: D1, D2, D3, D8, D9, §2.1, §3.
 
-- [ ] 2.1 **[Second inspection, read-only]** PR 1 merged intact; `PostgresUserProvisioning.cs` and `UserProvisioningTests.cs` unchanged since the design
-- [ ] 2.2 **[Domain]** `IUserAdministration`, `UserListing`, `UserAdminResult`, `ProvisionalCredential` (`ToString` without the password), `UserAdminRefusal` and its text; `AppUser.Activate()` with Domain.Tests
-- [ ] 2.3 **[RED then GREEN]** Rename `PostgresUserProvisioning` to `PostgresUserAdministration` and its test class; implement the port per design §3.1; delete `IUserProvisioning`; fix the stale comments (spec F3)
-- [ ] 2.4 **[Tests 1-3, 5-10, 15, 22, 23]** in Infrastructure.Tests, as an Admin and as an Empleado, per the spec's wording
-- [ ] 2.5 **[Test 21]** `SessionServicesTests` resolves `IUserAdministration` for both roles without a connection
-- [ ] 2.6 **[Prove the guards by making them fail]** The 42501 mapping and the Admin-target refusal, once each
-- [ ] 2.7 **[Guardrails and handover]** as 1.11 and 1.12
+- [x] 2.1 **[Second inspection, read-only]** PR 1 merged intact; `PostgresUserProvisioning.cs` and `UserProvisioningTests.cs` unchanged since the design
+- [x] 2.2 **[Domain]** `IUserAdministration`, `UserListing`, `UserAdminResult`, `ProvisionalCredential` (`ToString` without the password), `UserAdminRefusal` and its text; `AppUser.Activate()` with Domain.Tests
+- [x] 2.3 **[RED then GREEN]** Rename `PostgresUserProvisioning` to `PostgresUserAdministration` and its test class; implement the port per design §3.1; delete `IUserProvisioning`; fix the stale comments (spec F3)
+- [x] 2.4 **[Tests 1-3, 5-10, 15, 22, 23]** in Infrastructure.Tests, as an Admin and as an Empleado, per the spec's wording
+- [x] 2.5 **[Test 21]** `SessionServicesTests` resolves `IUserAdministration` for both roles without a connection
+- [x] 2.6 **[Prove the guards by making them fail]** The 42501 mapping and the Admin-target refusal, once each
+- [x] 2.7 **[Guardrails and handover]** as 1.11 and 1.12
 
 ### Verification, PR 2 (Docker: yes)
 
@@ -154,3 +154,38 @@ Same three commands as PR 1.
   - **No action, recorded:** the rule runs in the application only; a direct database client can set any
     password. Same honest limit as `user-registry` "The Requirement Does Not Confine a Direct Database
     Client".
+
+**Phase 2 (S2), applied 2026-11-01.**
+
+- 2.1: PR #81 merged intact (docs and code as two commits); `PostgresUserProvisioning.cs` unchanged since the
+  design.
+- 2.2: RED observed as a compile failure (port types and `AppUser.Activate()` missing), then GREEN.
+- 2.3: the adapter takes a `roleNameFor` seam: through Supavisor the role name is the username; the
+  Testcontainers database has no Supavisor, so tests compose `.test-ref` into it. Validation and login are
+  unchanged by the seam. **Found while running:** EF applies the model's snake_case convention to unmapped
+  `SqlQuery<T>` rows too, so the aliases are `is_admin`, not `"IsAdmin"` (first run: 42703).
+- 2.4: user-registry tests 9 to 12, 14 to 16 and 31 ported to the new port in `UserAdministrationTests`; the
+  self-service tests 17 and 18 moved with them unchanged. Test 9 (atomic reactivation) uses a generated password
+  containing NUL, which fails after `LOGIN` was restored inside the transaction, instead of revoking `EXECUTE`.
+- S1 advisories done here: the F5 test asserts the real text contains the password before masking;
+  `SecretMask` masks a literal cut off before its closing quote, without crossing the line end; the
+  composed-name username test is renamed and points to the plain-name one.
+- 2.6: 42501 always mapped to `AdminOnly` → 2 tests red; Admin target accepted → 1 red; registration removed →
+  2 red. Each restored.
+- 2.7: build 0 warnings, 0 errors; full suite 981 passed, 0 failed, 0 skipped (Domain 433, Presentation 218,
+  Infrastructure 330); `has-pending-model-changes`: no changes. About 1,100 lines added and 659 removed (the
+  old port, adapter and their tests, ported rather than kept).
+- Review (gentle-ai, risk and reliability, lineage `review-b4b907646c0aa3a3`): **approved and acknowledged**, no
+  correction. One capture had to be relaunched because the assistant's script skipped the second lens; the
+  identical re-offer ran it.
+- Review advisories, non-blocking, to fold into S3:
+  - **Do:** a duplicate that races past the taken-username check (double click, two Admins), or a role that
+    exists with no row (42710 / 23505), should come back as `UsernameTaken`, not the generic error.
+  - **Do:** 42501 on **create** from an Admin session means the Admin lacks the runbook grants, not "another
+    Admin created this user"; give it its own text.
+  - **Do:** `DeactivateAsync` on an already inactive user from an Empleado session answers Success; check the
+    session role first so it answers `AdminOnly`.
+  - **Do:** add the foreign-role test for `ReactivateAsync`, and `UserNotFound` for deactivate and reactivate.
+  - **No action, recorded:** the password is generated before the database confirms the caller may create
+    roles, so a refused create sends it once; it never becomes a login (the transaction rolls back) and the
+    application log masks it. PostgreSQL's own server log is Supabase's, outside this application.

@@ -72,15 +72,26 @@ public sealed class AppUser
 
     /// <summary>
     /// Deactivates this user. Paired at the database with <c>ALTER ROLE ... NOLOGIN</c>
-    /// (<see cref="Infrastructure.Access.IUserProvisioning"/> in the Infrastructure layer) — the
-    /// row itself is never deleted (spec "Deactivate, Never Delete"), so every FK that already
-    /// names this user (a <c>ContractDocument</c> upload, a <c>RentAdjustment</c> confirmation)
-    /// keeps resolving to it. Idempotent: deactivating an already-inactive user is a no-op, not
-    /// an error — there is nothing about "already deactivated" that a caller needs reported back.
+    /// (<see cref="IUserAdministration"/>, implemented in the Infrastructure layer) — the row
+    /// itself is never deleted (spec "Admin Provisions and Deactivates Users From Inside the
+    /// Application"), so every FK that already names this user (a <c>ContractDocument</c>
+    /// upload, a <c>RentAdjustment</c> confirmation) keeps resolving to it. Idempotent:
+    /// deactivating an already-inactive user is a no-op, not an error — there is nothing about
+    /// "already deactivated" that a caller needs reported back.
     /// </summary>
     public void Deactivate()
     {
         IsActive = false;
+    }
+
+    /// <summary>
+    /// Reactivates this same person (gestion-de-usuarios spec Requirement 5). Paired at the
+    /// database with <c>ALTER ROLE ... LOGIN</c> and a new provisional password, in one
+    /// transaction. Idempotent, like <see cref="Deactivate"/>.
+    /// </summary>
+    public void Activate()
+    {
+        IsActive = true;
     }
 
     /// <summary>
