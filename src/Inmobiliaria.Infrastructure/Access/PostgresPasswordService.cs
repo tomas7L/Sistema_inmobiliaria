@@ -31,19 +31,22 @@ public sealed class PostgresPasswordService : IPasswordService
         ArgumentException.ThrowIfNullOrWhiteSpace(currentPassword);
         ArgumentException.ThrowIfNullOrWhiteSpace(newPassword);
 
-        // Spec test 17 ("Re-entering the provisional password is rejected"): an ordinal
-        // comparison, checked BEFORE newPassword is ever bound to app_set_role_password — this
-        // rejection never reaches the database at all, so it carries none of the residual
-        // log_parameter_max_length risk task 3.13 flags (a rejected call here is not a FAILED
-        // SQL statement; it is never issued). This method does not itself re-verify that
-        // currentPassword is the genuine live password — the caller already holds an
-        // authenticated session, and design Decision 6 assigns that separate proof (the
-        // voluntary-change dialog's own extra confirmation, which "proves it by opening a
-        // throwaway connection with it") to the UI layer, PR 5's ChangePasswordViewModel.
-        if (string.Equals(currentPassword, newPassword, StringComparison.Ordinal))
+        // Spec test 17 ("Re-entering the provisional password is rejected") and gestion-de-usuarios
+        // Requirement 9 (at least 8 characters, not the username): checked BEFORE newPassword is ever
+        // bound to app_set_role_password — a refusal never reaches the database at all, so it carries
+        // none of the residual log_parameter_max_length risk task 3.13 flags (a rejected call here is
+        // not a FAILED SQL statement; it is never issued), and a forced change stays pending. This
+        // method does not itself re-verify that currentPassword is the genuine live password — the
+        // caller already holds an authenticated session, and design Decision 6 assigns that separate
+        // proof to the UI layer.
+        //
+        // _session.Username is the app_users username, which equals the PostgreSQL role name read back at
+        // login (current_user). Through Supavisor that is the plain name the user was created with ("sofia"):
+        // the pooler strips the ".<project-ref>" it needs for routing before PostgreSQL sees the role. Only a
+        // test database without Supavisor has the suffix in the role name itself.
+        if (PasswordRule.Check(_session.Username, currentPassword, newPassword) is { } refusal)
         {
-            throw new InvalidOperationException(
-                "The new password must be different from the current one.");
+            throw new PasswordChangeRefusedException(refusal);
         }
 
         await using var context = _sessionFactory.Create();

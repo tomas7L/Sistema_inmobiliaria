@@ -14,6 +14,9 @@ public interface IPasswordService
     /// stores a comparable verifier, so an ordinal string comparison against what the caller
     /// just supplied is the only mechanism this design offers (design Decision 6).
     /// </summary>
+    /// <exception cref="PasswordChangeRefusedException">
+    /// The new password breaks <see cref="Domain.Access.PasswordRule"/>; nothing was changed.
+    /// </exception>
     Task ChangeOwnPasswordAsync(
         string currentPassword, string newPassword, CancellationToken ct = default);
 }

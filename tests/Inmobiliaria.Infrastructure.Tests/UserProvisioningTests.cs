@@ -317,7 +317,8 @@ public sealed class UserProvisioningTests
         var exception = await Record.ExceptionAsync(
             () => passwordService.ChangeOwnPasswordAsync(
                 AccessTestSupport.DefaultPassword, AccessTestSupport.DefaultPassword));
-        Assert.IsType<InvalidOperationException>(exception);
+        var refused = Assert.IsType<PasswordChangeRefusedException>(exception);
+        Assert.Equal(PasswordRefusal.SameAsCurrent, refused.Refusal);
 
         await login.Factory.DisposeAsync();
 
