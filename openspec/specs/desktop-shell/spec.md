@@ -31,29 +31,38 @@ Today the main window receives nothing (`App.xaml.cs:104`, `MainWindow.xaml:9-11
 
 ### Requirement: Admin-Only Screens Are Hidden From an Empleado, and the Database Still Decides
 
-The go-live screen (Requirements 17 to 19) MUST NOT be offered to an Empleado. Hiding it is a
-convenience (Decision P12): an operation an Empleado reaches by any other means MUST still be refused by
-the database (`access-control`). Voiding is **not** Admin-only (Empleado may void within 7 days) and MUST
+The go-live screen (Requirements 17 to 19) and the Usuarios screen (`user-registry`) MUST NOT be offered to
+an Empleado. Hiding them is a convenience (Decision P12): an operation an Empleado reaches by any other
+means, including create, reset, deactivate and reactivate, MUST still be refused by the database
+(`access-control`). The post-login wiring MUST resolve the Usuarios services for an Admin and MUST still
+build for an Empleado. Voiding is **not** Admin-only (Empleado may void within 7 days) and MUST
 be offered to both roles.
 
-#### Scenario: An Empleado does not see the go-live screen
+#### Scenario: An Empleado does not see the go-live or Usuarios screens
 
 - GIVEN "maria" holds the Empleado role
 - WHEN the main window opens
-- THEN its navigation MUST NOT contain the go-live screen
+- THEN its navigation MUST NOT contain the go-live screen or Usuarios
 - AND it MUST contain the cash desk, the recent collections and the void action
 
 #### Scenario: An Admin sees every screen
 
 - GIVEN an Admin
 - WHEN the main window opens
-- THEN its navigation MUST contain the go-live screen as well
+- THEN its navigation MUST contain the go-live screen and Usuarios as well
 
 #### Scenario: Hiding is not enforcement
 
 - GIVEN an Empleado who reaches the go-live operation without the screen, by any means
 - WHEN she submits a change of a cutover date
 - THEN the database MUST refuse it (Requirement 22)
+
+#### Scenario: Hiding Usuarios is not enforcement
+
+- GIVEN an Empleado session that reaches the create, reset, deactivate or reactivate operation without
+  the screen
+- WHEN it submits the operation
+- THEN the database MUST refuse it, and nothing MUST change
 
 ### Requirement: Post-Login Services Are Wired From the Session, One Database Context per Operation
 
@@ -146,10 +155,10 @@ keep passing.
 
 1. **The main window shows the display name and role of the session it was built from.**
    *(Presentation.Tests)*
-2. **An Empleado's navigation has no go-live screen and has the desk, the recent list and voiding; an
-   Admin's has all.** *(Presentation.Tests)*
-3. **The post-login wiring resolves every screen's services for an Admin and for an Empleado, without
-   opening a connection.** *(Infrastructure.Tests, beside `CompositionGuardTests`)*
+2. **An Empleado's navigation has neither go-live nor Usuarios and has the desk, the recent list and voiding;
+   an Admin's has all.** *(Presentation.Tests)*
+3. **The post-login wiring resolves every screen's services, Usuarios included, for an Admin and still builds
+   for an Empleado, without opening a connection.** *(Infrastructure.Tests, beside `CompositionGuardTests`)*
 4. **Two operations from one session obtain two database contexts.** *(Infrastructure.Tests)*
 5. **An exception from the desk becomes a generic message with no exception text, leaves the window and the
    typed values in place, and a failed commit points to the recent collections.** *(Presentation.Tests)*
@@ -157,3 +166,5 @@ keep passing.
 7. **The shipped configuration yields a rate of 0.02 and 0 grace days; a missing or out-of-range value
    stops the desk and names the setting; the credential-shape guard still passes on the configuration.**
    *(Infrastructure.Tests)*
+8. **An Empleado session calling create, reset, deactivate or reactivate is refused by the database and
+   nothing changes.** *(Infrastructure.Tests)*

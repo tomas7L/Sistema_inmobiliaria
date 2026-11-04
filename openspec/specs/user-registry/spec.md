@@ -184,6 +184,279 @@ Every statement that sets or changes a PostgreSQL password (`CREATE ROLE ... PAS
 - THEN that literal string MUST become the password
 - AND no other table or statement MUST be affected — `app_users` MUST still exist afterward
 
+> **The ten requirements below come from `gestion-de-usuarios`**, in the order of its Requirements 1 to 10. Those numbers, its Decisions and its Findings are in `openspec/changes/archive/2026-11-04-gestion-de-usuarios/spec.md`.
+
+### Requirement: The Admin Sees Every User
+
+The Usuarios screen MUST list every `app_users` row, active or not, with the columns and order of
+Decision 7. The role MUST be derived from PostgreSQL group membership, as at login, and MUST NOT be read
+from any stored column (`user-registry/spec.md:60-62`). A user who belongs to neither group MUST still be
+listed, with no role shown, and MUST NOT be actionable.
+
+#### Scenario: Admins and Empleados are listed with their role
+
+- GIVEN an Admin "nicolas", an active Empleado "sofia" and a deactivated Empleado "maria"
+- WHEN the Admin opens the Usuarios screen
+- THEN all three MUST be listed
+- AND "nicolas" MUST show Admin, "sofia" Empleado and active, "maria" Empleado and deactivated
+
+#### Scenario: A pending password change is visible
+
+- GIVEN "sofia" was just created and has not logged in yet
+- WHEN the list is shown
+- THEN "sofia" MUST show a pending password change
+
+### Requirement: The Admin Creates an Empleado With a Generated Password
+
+The Admin MUST be able to create an Empleado by typing a username (Decision 8) and a display name
+(Decision 9). The system MUST generate the provisional password (Decisions P4 and 13); the form MUST NOT
+offer a password field. The login role and the `app_users` row MUST be created as one unit, with
+`MustChangePassword` set (`user-registry/spec.md:80,131`). A username already assigned to anyone, active or
+deactivated, MUST be refused (`user-registry/spec.md:80`), and the refusal MUST NOT send any password to
+the database.
+
+#### Scenario: Creating an Empleado shows the password once
+
+- GIVEN the Admin types username "sofia" and display name "Sofía Pérez"
+- WHEN the Admin creates the user
+- THEN "sofia" MUST exist as an active Empleado with a pending password change
+- AND the screen MUST show the generated password (Requirement 6)
+- AND "sofia" MUST be able to log in with that password and be forced to change it
+
+#### Scenario: A taken username is refused
+
+- GIVEN "maria" exists and is deactivated
+- WHEN the Admin tries to create "maria"
+- THEN the creation MUST be refused with the taken-username message
+- AND nothing MUST be created
+
+#### Scenario: An invalid username is refused before the database
+
+- GIVEN the Admin types "josé pérez"
+- WHEN the Admin tries to create the user
+- THEN the creation MUST be refused with a message naming the allowed characters
+- AND no database operation MUST be attempted
+
+#### Scenario: An `ñ` is accepted
+
+- GIVEN the Admin types "nuñez"
+- WHEN the Admin creates the user
+- THEN the user MUST be created as "nuñez" and MUST be able to log in as "nuñez"
+
+#### Scenario: Mixed case is lowercased
+
+- GIVEN the Admin types "Sofia"
+- WHEN the Admin creates the user
+- THEN the user MUST be created as "sofia"
+
+### Requirement: The Admin Resets an Active Empleado's Password
+
+The Admin MUST be able to reset the password of an active Empleado, after confirmation (Decision 10).
+The system MUST generate the new provisional password and set `MustChangePassword`. A session the
+Empleado already has open MUST keep working (`user-registry/spec.md:120-125`). Resetting a deactivated
+Empleado MUST be refused: the Admin reactivates instead (Requirement 5).
+
+#### Scenario: A reset forces a change at the next login
+
+- GIVEN "sofia" is active and has set her own password
+- WHEN the Admin resets it and confirms
+- THEN the screen MUST show a new generated password
+- AND "sofia"'s next login MUST require that password and then a change
+
+#### Scenario: Cancelling the confirmation changes nothing
+
+- GIVEN the Admin starts a reset of "sofia"
+- WHEN the Admin cancels the confirmation
+- THEN "sofia"'s password and pending state MUST be unchanged
+
+#### Scenario: A deactivated Empleado is not reset
+
+- GIVEN "maria" is deactivated
+- WHEN a reset of "maria" is attempted
+- THEN it MUST be refused, and the screen MUST NOT offer reset on her row
+
+### Requirement: The Admin Deactivates an Empleado
+
+The Admin MUST be able to deactivate an active Empleado, after a confirmation that names the person and
+says an open session keeps working until it is closed (Finding F1). Deactivation MUST remain logical:
+`NOLOGIN` and `IsActive = false`, nothing deleted, history still naming the person
+(`user-registry/spec.md:80,95-100`). Deactivating an already deactivated user MUST change nothing and MUST
+NOT be an error.
+
+#### Scenario: A deactivated Empleado cannot log in
+
+- GIVEN "sofia" is active
+- WHEN the Admin deactivates her and confirms
+- THEN "sofia" MUST be listed as deactivated
+- AND a new login as "sofia" MUST fail with the ordinary login failure message
+
+#### Scenario: The confirmation warns about an open session
+
+- GIVEN the Admin starts deactivating "sofia"
+- WHEN the confirmation is shown
+- THEN it MUST name "sofia" and say an open session keeps working until it is closed
+
+### Requirement: The Admin Reactivates an Empleado With a New Password
+
+The Admin MUST be able to reactivate a deactivated Empleado, after confirmation. Reactivation MUST, in one
+transaction, restore `LOGIN`, set `IsActive = true`, set a new generated provisional password and set
+`MustChangePassword` (Decision P3). If any step fails, none MUST take effect. The username and the
+`app_users` row MUST be the same ones: reactivation is the same person returning, never a reuse
+(`user-registry/spec.md:102-107`). Reactivating an active user MUST be refused.
+
+#### Scenario: A returning employee gets a new password
+
+- GIVEN "maria" was deactivated while her password was "old-one-123"
+- WHEN the Admin reactivates her and confirms
+- THEN "maria" MUST be listed as active with a pending password change
+- AND the screen MUST show a new generated password
+- AND a login as "maria" with "old-one-123" MUST fail
+- AND a login with the new password MUST succeed and force a change
+
+#### Scenario: Reactivation is all or nothing
+
+- GIVEN a reactivation whose password step fails
+- WHEN the transaction ends
+- THEN "maria" MUST still be deactivated, with `NOLOGIN` and `IsActive = false`
+
+### Requirement: A Provisional Password Is Shown Once and Never Logged
+
+Every operation that generates a password (Requirements 2, 3 and 5) MUST show it to the Admin on the
+screen, together with the username it belongs to and a Copy action, until the Admin dismisses it
+(Decision 11). It MUST NOT be shown again after that. The clipboard MUST be written only on Copy
+(Decision 12). The password MUST be easy to dictate: lowercase words and digits separated by hyphens,
+without look-alike characters, in the shape of `lago-4821-sol` (Decision P4; the word list is design's).
+It MUST NOT appear in the error log, in any exception message, or in any refusal text.
+
+#### Scenario: The password is gone after dismissing it
+
+- GIVEN a password was generated for "sofia" and is on screen
+- WHEN the Admin dismisses it
+- THEN no part of the screen MUST show that password again
+
+#### Scenario: Copy puts exactly the password on the clipboard
+
+- GIVEN a generated password is on screen
+- WHEN the Admin presses Copy
+- THEN the clipboard MUST hold exactly that password, with no username and no spaces around it
+
+#### Scenario: A failure after generating never logs the password
+
+- GIVEN an operation generated a password and then failed with an unexpected error
+- WHEN the error is recorded in `%LOCALAPPDATA%\SistemaInmobiliaria\logs`
+- THEN the log entry MUST NOT contain the password
+
+#### Scenario: Generated passwords are dictatable and differ
+
+- GIVEN many passwords generated in a row
+- WHEN they are inspected
+- THEN each MUST match the dictatable shape, contain no look-alike characters, be at least 8 characters
+- AND no two MUST be equal
+
+### Requirement: Admin Rows Are Read-Only, and Foreign Roles Are Refused by Name
+
+The screen MUST NOT offer reset, deactivate or reactivate on an Admin's row, including the logged-in
+Admin's own (Decision P2). If the port is asked to act on an Admin anyway, it MUST refuse without touching
+the database. If PostgreSQL refuses an action because the target role was not created by the logged-in
+Admin (`42501`, `user-registry/spec.md:86`), the screen MUST show that refusal's own message, which says
+the user was created by another Admin, and MUST NOT show the generic error (Decision 16).
+
+#### Scenario: The Admin cannot act on their own row
+
+- GIVEN the Admin "nicolas" opens the Usuarios screen
+- WHEN the list is shown
+- THEN no reset, deactivate or reactivate action MUST be offered
+
+#### Scenario: A role created by another Admin is refused by name
+
+- GIVEN "sofia" was created by Admin "nicolas", and Admin "tomas" is logged in
+- WHEN "tomas" resets "sofia"
+- THEN the screen MUST show the created-by-another-Admin message
+- AND "sofia"'s password and pending state MUST be unchanged
+
+### Requirement: Every Refusal Has Its Own Message
+
+Each of these MUST reach the screen as its own operator message, not as the generic error (Decision 17):
+username taken; username invalid; display name missing; user not found; user is an Admin; user already
+deactivated (for reset); user already active (for reactivate); created by another Admin. Anything else
+follows `desktop-shell`'s "A Failure That Is Not a Refusal Never Crashes the Window": a generic message,
+the window stays open, the typed form stays filled. After any action, refused or not, the list MUST be
+read again from the database (Decision 18).
+
+#### Scenario: A refusal keeps the form
+
+- GIVEN the Admin typed "maria" and "María Gómez" and "maria" is taken
+- WHEN the creation is refused
+- THEN the taken-username message MUST be shown
+- AND both typed fields MUST still hold what the Admin typed
+
+#### Scenario: The list reflects the database, not the screen
+
+- GIVEN another Admin deactivated "sofia" a minute ago
+- WHEN this Admin's next action ends, whatever it was
+- THEN the list MUST show "sofia" as deactivated
+
+### Requirement: A Chosen Password Has a Minimum Length
+
+Every password a user chooses for themselves (the forced change and a voluntary change,
+`user-registry/spec.md:109-167`) MUST be at least 8 characters and MUST NOT equal the user's username,
+compared ignoring case (Decision P6). It MUST NOT require uppercase letters, digits or symbols. It MUST
+accept spaces and MUST accept at least 64 characters, and MUST NOT trim what was typed (Decision 14). A
+refusal MUST say what the rule is and MUST leave a pending change pending. The rule MUST NOT be applied to
+passwords users already have (Decision 15). The rule MUST be testable without the desktop project (it is
+outside the CI solution filter).
+
+#### Scenario: A short password is refused
+
+- GIVEN "sofia" must change her provisional password
+- WHEN she submits "1234567"
+- THEN the change MUST be refused with a message saying the minimum is 8 characters
+- AND her change MUST remain pending
+
+#### Scenario: Eight characters with no symbols is accepted
+
+- GIVEN "sofia" must change her provisional password
+- WHEN she submits "girasoles"
+- THEN the change MUST succeed
+
+#### Scenario: The username is refused as a password
+
+- GIVEN the user "sofia1234"
+- WHEN she submits "Sofia1234" as her new password
+- THEN the change MUST be refused with a message saying it cannot be the username
+
+#### Scenario: A passphrase with spaces is accepted whole
+
+- GIVEN a user submits "la casa del lago " (with a trailing space)
+- WHEN the change succeeds
+- THEN the next login MUST require exactly that value, trailing space included
+
+#### Scenario: The rule also applies to a voluntary change
+
+- GIVEN "maria" has nothing pending and opens the change-password dialog
+- WHEN she submits "abc"
+- THEN the change MUST be refused
+
+### Requirement: The Login Username Is Read the Way It Was Created
+
+Before the connection attempt (`user-registry/spec.md:26-28`), the login MUST trim the spaces around the
+typed username, lowercase it and normalize it to Unicode NFC, the same treatment the username got when it
+was created (Decision 8). The password MUST be sent exactly as typed. A failed login MUST keep showing the
+one generic message, worded identically for a wrong password and an unknown username
+(`user-registry/spec.md:36-48`).
+
+#### Scenario: Capitals at login still log in
+
+- GIVEN the Empleado "nuñez" exists
+- WHEN she types "Nuñez " (capital and trailing space) with her correct password
+- THEN the login MUST succeed as "nuñez"
+
+#### Scenario: The password is not touched
+
+- GIVEN "sofia" has the password "Girasoles 1"
+- WHEN she logs in typing "girasoles 1"
+- THEN the login MUST fail with the generic message
+
 ## Tests
 
 Derived from the requirements above, not generic CRUD coverage. Each names the requirement it proves. Integration tests require a real Postgres (`postgres:17.6` via Testcontainers) connecting as each application role in turn; permission and trigger behavior cannot be validated against a fake.
@@ -209,3 +482,53 @@ Derived from the requirements above, not generic CRUD coverage. Each names the r
 19. **A pending change does not confine a direct database client.** A user with `MustChangePassword` set connects outside the application and performs exactly the operations their role grants — asserting the stated limit, so nobody later mistakes the flag for enforcement.
 20. **Password DDL survives a quote character in the password.** A password containing `'` is set correctly with no SQL error and no altered statement.
 21. **Password DDL neutralizes an injection payload.** A password field containing `x'; DROP TABLE app_users; --` results in exactly that literal password, with `app_users` still present and unaffected afterward.
+
+Tests 22 to 44 come from `gestion-de-usuarios`; `R` and Decision numbers in them refer to its archived spec.
+
+22. **The list returns every user with role, active state and pending change; the role comes from
+    membership, not a column; a user in no group is listed with no role.** R1 *(Infrastructure.Tests)*
+23. **Creating an Empleado makes the role and the row together, with `MustChangePassword` set, and the
+    generated password logs in.** R2 *(Infrastructure.Tests)*
+24. **A username taken by an active or a deactivated user is refused with no password sent and nothing
+    created.** R2 *(Infrastructure.Tests)*
+25. **Username validation: valid examples pass, `ñ` included; uppercase (`Ñ` included) is lowercased; a
+    decomposed `ñ` is normalized to the composed one; spaces, accented vowels, a leading digit, fewer than 3
+    or more than 30 characters are refused before any database call.** R2, Decision 8 *(Domain.Tests)*
+26. **A reset sets a new password and `MustChangePassword`; the old password stops working; an open session
+    of that user keeps working.** R3 *(Infrastructure.Tests)*
+27. **Resetting a deactivated user is refused and changes nothing.** R3 *(Infrastructure.Tests)*
+28. **Deactivation sets `NOLOGIN` and `IsActive = false`, deletes nothing, and a second deactivation is a
+    no-op.** R4 *(Infrastructure.Tests)*
+29. **Reactivation restores login, sets active, sets a new password and the pending change; the old
+    password fails; the row id and username are unchanged.** R5 *(Infrastructure.Tests)*
+30. **A reactivation whose password step is forced to fail leaves the user deactivated.** R5
+    *(Infrastructure.Tests)*
+31. **Reactivating an active user is refused.** R5 *(Infrastructure.Tests)*
+32. **Generated passwords match the dictatable shape, contain no look-alike characters, are at least 8
+    characters, and 1,000 in a row are all different.** R6, Decision 13 *(Domain.Tests or
+    Infrastructure.Tests, per design)*
+33. **The view-model shows a generated password until dismissed, then never again; Copy writes exactly the
+    password and nothing writes the clipboard otherwise.** R6 *(Presentation.Tests)*
+34. **An unexpected failure after a password was generated produces an error-log entry and a generic
+    message, neither containing the password.** R6 *(Presentation.Tests and Infrastructure.Tests)*
+35. **The view-model offers no action on Admin rows, including the logged-in Admin's; the port refuses an
+    Admin target without a database call.** R7 *(Presentation.Tests, Infrastructure.Tests)*
+36. **A reset or deactivation of a role created by a different Admin returns the created-by-another-Admin
+    refusal, not an exception, and changes nothing.** R7 *(Infrastructure.Tests)*
+37. **Every refusal in Requirement 8 maps to its own operator message; a refusal keeps the typed form; the
+    list is reloaded after every action.** R8 *(Presentation.Tests)*
+38. **Deactivate, reset and reactivate do nothing until confirmed, and cancelling changes nothing; the
+    deactivation confirmation mentions the open session.** R3, R4, R5, Decision 10 *(Presentation.Tests)*
+39. **Password rule: 7 characters refused, 8 accepted, no composition demanded, the username refused in any
+    case, spaces kept, 64 characters accepted.** R9 *(Domain.Tests)*
+40. **The change-password dialog refuses a password that breaks the rule, with the rule's message, in both
+    the forced and the voluntary case, and a forced change stays pending.** R9 *(Infrastructure.Tests or
+    Presentation.Tests, per design; never only in Desktop)*
+41. **A user whose username has `ñ` is created and logs in against real PostgreSQL.** R2, Decision 8
+    *(Infrastructure.Tests)*. The pooler half of this is the live smoke (Finding F4), not an automated test.
+42. **The login lowercases, trims and NFC-normalizes the username and sends the password untouched: `Nuñez `
+    logs in as `nuñez`; a password differing only in case fails.** R10 *(Infrastructure.Tests; never only in
+    Desktop)*
+43. **A failed login after normalization still shows the one generic message, identical for a wrong
+    password and an unknown username.** R10, extends `user-registry` Tests 4 and 5 *(Infrastructure.Tests)*
+44. **The pooler's refusal of an unknown or deactivated role is an ordinary failed login; any other `XX000` stays visible.** Found by the live smoke, where Testcontainers cannot see it because it has no pooler *(Infrastructure.Tests, `PoolerLoginRefusalTests`, a loopback socket replaying the error)*
