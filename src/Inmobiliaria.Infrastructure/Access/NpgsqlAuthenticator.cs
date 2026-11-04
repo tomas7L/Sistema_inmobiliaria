@@ -11,6 +11,8 @@ namespace Inmobiliaria.Infrastructure.Access;
 /// </summary>
 public sealed class NpgsqlAuthenticator : IAuthenticator
 {
+    private const string PoolerUserNotFound = "(EAUTHQUERY) user not found";
+
     private readonly ConnectionEndpoint _endpoint;
 
     public NpgsqlAuthenticator(ConnectionEndpoint endpoint)
@@ -18,6 +20,17 @@ public sealed class NpgsqlAuthenticator : IAuthenticator
         ArgumentNullException.ThrowIfNull(endpoint);
         _endpoint = endpoint;
     }
+
+    /// <summary>
+    /// PostgreSQL reports a refused login with its own codes. The Supabase pooler refuses an unknown or
+    /// deactivated role before PostgreSQL is involved, with a generic XX000, so only that message counts:
+    /// any other XX000 is a broken setup and must stay visible instead of reading as a wrong password.
+    /// </summary>
+    private static bool IsLoginRefusal(PostgresException exception) =>
+        exception.SqlState == PostgresErrorCodes.InvalidPassword
+        || exception.SqlState == PostgresErrorCodes.InvalidAuthorizationSpecification
+        || exception.SqlState == PostgresErrorCodes.InternalError
+            && exception.MessageText.StartsWith(PoolerUserNotFound, StringComparison.Ordinal);
 
     public async Task<AuthenticationResult> AuthenticateAsync(
         string username, string password, CancellationToken ct = default)
@@ -53,13 +66,11 @@ public sealed class NpgsqlAuthenticator : IAuthenticator
             // The one and only physical connection this method ever opens (spec test 2).
             connection = await dataSource.OpenConnectionAsync(ct);
         }
-        catch (PostgresException ex) when (
-            ex.SqlState == PostgresErrorCodes.InvalidPassword ||
-            ex.SqlState == PostgresErrorCodes.InvalidAuthorizationSpecification)
+        catch (PostgresException ex) when (IsLoginRefusal(ex))
         {
-            // Wrong password and unknown username fail identically here — neither case is
-            // told apart from the other (spec "Wrong Password Is Rejected Without Revealing
-            // Whether The Username Exists").
+            // Wrong password, unknown username and deactivated user fail identically here — no
+            // case is told apart from the others (spec "Wrong Password Is Rejected Without
+            // Revealing Whether The Username Exists").
             await dataSource.DisposeAsync();
             return new AuthenticationResult.Rejected();
         }
