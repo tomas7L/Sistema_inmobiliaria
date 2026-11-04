@@ -128,6 +128,11 @@ Do not re-read the codebase. Open only what the next task requires.
   cannot gate the Linux CI job. Tests go in `Inmobiliaria.Domain.Tests` or
   `Inmobiliaria.Infrastructure.Tests`.
 - **Prove a guard by making it fail.** A guard never seen failing proves nothing.
+- **A test that fails with `SocketException: Solo se permite un uso de cada dirección de socket` is this Windows
+  machine out of ports, not a defect in that test.** It appears at about 15,650 `TIME_WAIT` sockets, which clear about
+  two minutes later; one full suite run alone peaked near 4,300. Run `netstat -an | grep -c TIME_WAIT` **before**
+  rerunning and record the count, because the one real occurrence (2026-11-04) was not measured. Only reproduced here,
+  on demand. If it appears with a low count, the explanation is wrong: investigate.
 - `sd` and `fd` are not available in the Bash tool here; `rg` and `bat` are. Use python for
   in-place source edits — a bash heredoc breaks on C# apostrophes.
 
