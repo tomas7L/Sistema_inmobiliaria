@@ -106,6 +106,7 @@ Same three commands as PR 1.
 |---|---|---|
 | H.1 | Before each slice | Docker running |
 | H.2 | After PR 3 | **Live smoke on the test Supabase**, restored first; only Tomás connects. `tomas` creates an Empleado, logs in with it (forced change), resets, deactivates, reactivates. **One Empleado with `ñ` in the username logs in** (spec F4; if it fails, `ñ` leaves Decision 8). M1 Copy pastes into WhatsApp Web; M2 the screen at 1366×768 |
+| H.3 | After the login correction | **Live recheck on the test Supabase.** A nonexistent username and a deactivated user each show "Usuario o contraseña incorrectos." and the app stays open; a wrong password on an active user still does the same; a correct login still enters |
 
 ## Issues found (while slicing)
 
@@ -206,3 +207,22 @@ Same three commands as PR 1.
   suggestions remain (the row commands need not be async; the class summary should say a failure does not
   reload), recorded only.
 - Last full suite before the correction: 1007 passed, 0 failed, 0 skipped; Presentation after it: 244 passed.
+
+**Live smoke H.2, run by Tomás 2026-11-04 on the test Supabase.**
+
+- Passed: create an Empleado with `ñ` and log in, so `ñ` stays in Decision 8; forced change; reset invalidates the
+  old password; reactivation gives a new provisional password; an Empleado does not see Usuarios; Copy pastes into
+  WhatsApp Web; the password stays out of Win+V, checked with the history active; "Listo, ya la pasé" clears the
+  clipboard; the screen is complete at 1366×768.
+- **Failed, Requirement 4 "A deactivated Empleado cannot log in":** entry was refused, but not with the ordinary
+  login failure message. A deactivated user and a nonexistent one both got the generic connection message, and
+  the app closed on accepting it. The pooler answers both with `XX000: (EAUTHQUERY) user not found in the database`,
+  which `NpgsqlAuthenticator` did not treat as a refused login. The Testcontainers tests connect straight to
+  PostgreSQL with no pooler, so they could not see it.
+- Corrected (RED seen): `NpgsqlAuthenticator` treats that one pooler message as a refused login. Every other `XX000`
+  stays visible, because it means a broken setup. `PoolerLoginRefusalTests` replays the pooler's error over a loopback
+  socket, and an over-broad mutant (every `XX000` rejected) fails it.
+- H.3 passed, run by Tomás 2026-11-04 on the test Supabase: a nonexistent username, a wrong password and a deactivated
+  user each show "Usuario o contraseña incorrectos." and the app stays open; `tomas` logs in. `muñoz` is left deactivated.
+- Not changed: any other failure during login, such as no network, still shows the generic message and closes the app
+  (`App.xaml.cs:220`).
