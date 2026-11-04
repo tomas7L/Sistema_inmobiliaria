@@ -91,7 +91,7 @@ half), 16, 17, 20. Design anchors: D11, D12, §5, §6.
 - [x] 3.2 **[RED then GREEN, Tests 12, 14, 16, 17]** `UsersViewModel`, `UserRow`, `PendingUserAction`, `IClipboard` in Presentation, with a fake port and a fake clipboard
 - [x] 3.3 **[RED then GREEN, Test 20]** `ShellViewModelTests`: Usuarios for an Admin only
 - [x] 3.4 **[Desktop]** `NavigationEntry`, `ShellViewModel`, `App.xaml.cs`, `MainWindow`, `UsersView`, `WpfClipboard`; build only
-- [ ] 3.5 **[Specs]** Merge the deltas into `openspec/specs/user-registry/spec.md` and `openspec/specs/desktop-shell/spec.md`
+- [x] 3.5 **[Specs]** Merge the deltas into `openspec/specs/user-registry/spec.md` and `openspec/specs/desktop-shell/spec.md`
 - [x] 3.6 **[Guardrails and handover]** as 1.11 and 1.12
 
 ### Verification, PR 3
