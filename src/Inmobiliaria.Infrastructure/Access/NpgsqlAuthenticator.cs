@@ -24,7 +24,7 @@ public sealed class NpgsqlAuthenticator : IAuthenticator
     /// <summary>
     /// PostgreSQL reports a refused login with its own codes. The Supabase pooler refuses an unknown or
     /// deactivated role before PostgreSQL is involved, with a generic XX000, so only that message counts:
-    /// any other XX000 is a broken setup and must stay visible instead of reading as a wrong password.
+    /// any other XX000 is a broken setup and must not read as a wrong password.
     /// </summary>
     private static bool IsLoginRefusal(PostgresException exception) =>
         exception.SqlState == PostgresErrorCodes.InvalidPassword
@@ -60,11 +60,45 @@ public sealed class NpgsqlAuthenticator : IAuthenticator
                 (_, _) => ValueTask.FromResult(sessionPassword.Value))
             .Build();
 
-        NpgsqlConnection connection;
         try
         {
             // The one and only physical connection this method ever opens (spec test 2).
-            connection = await dataSource.OpenConnectionAsync(ct);
+            var connection = await dataSource.OpenConnectionAsync(ct);
+
+            await using (connection)
+            {
+                var (roleName, isAdmin, isEmpleado) = await ReadIdentityAsync(connection, ct);
+
+                if (!isAdmin && !isEmpleado)
+                {
+                    await dataSource.DisposeAsync();
+                    return new AuthenticationResult.NotProvisioned(
+                        "This role is not a member of either application role.");
+                }
+
+                var appUser = await LoadAppUserAsync(connection, roleName, ct);
+
+                if (appUser is null)
+                {
+                    await dataSource.DisposeAsync();
+                    return new AuthenticationResult.NotProvisioned(
+                        "No app_users row exists for this account.");
+                }
+
+                if (!appUser.IsActive)
+                {
+                    await dataSource.DisposeAsync();
+                    return new AuthenticationResult.NotProvisioned(
+                        "This account has been deactivated.");
+                }
+
+                // Precedence when both memberships return true: Admin wins (design Decision 2).
+                var role = isAdmin ? UserRole.Admin : UserRole.Empleado;
+                var session = new UserSession(appUser, role);
+                var factory = new SessionDbContextFactory(dataSource, sessionPassword);
+
+                return new AuthenticationResult.Success(session, factory);
+            }
         }
         catch (PostgresException ex) when (IsLoginRefusal(ex))
         {
@@ -74,40 +108,11 @@ public sealed class NpgsqlAuthenticator : IAuthenticator
             await dataSource.DisposeAsync();
             return new AuthenticationResult.Rejected();
         }
-
-        await using (connection)
+        catch (NpgsqlException ex)
         {
-            var (roleName, isAdmin, isEmpleado) = await ReadIdentityAsync(connection, ct);
-
-            if (!isAdmin && !isEmpleado)
-            {
-                await dataSource.DisposeAsync();
-                return new AuthenticationResult.NotProvisioned(
-                    "This role is not a member of either application role.");
-            }
-
-            var appUser = await LoadAppUserAsync(connection, roleName, ct);
-
-            if (appUser is null)
-            {
-                await dataSource.DisposeAsync();
-                return new AuthenticationResult.NotProvisioned(
-                    "No app_users row exists for this account.");
-            }
-
-            if (!appUser.IsActive)
-            {
-                await dataSource.DisposeAsync();
-                return new AuthenticationResult.NotProvisioned(
-                    "This account has been deactivated.");
-            }
-
-            // Precedence when both memberships return true: Admin wins (design Decision 2).
-            var role = isAdmin ? UserRole.Admin : UserRole.Empleado;
-            var session = new UserSession(appUser, role);
-            var factory = new SessionDbContextFactory(dataSource, sessionPassword);
-
-            return new AuthenticationResult.Success(session, factory);
+            // No verdict on the credentials: no network, a dropped connection, a broken setup.
+            await dataSource.DisposeAsync();
+            return new AuthenticationResult.Unavailable(ex);
         }
     }
 

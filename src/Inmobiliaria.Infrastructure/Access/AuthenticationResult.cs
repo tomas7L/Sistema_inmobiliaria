@@ -32,4 +32,11 @@ public abstract record AuthenticationResult
     /// in a password that was correct (design Decision 10).
     /// </summary>
     public sealed record NotProvisioned(string Reason) : AuthenticationResult;
+
+    /// <summary>
+    /// The database never gave a verdict on these credentials: no network, a dropped connection, or
+    /// a broken setup such as a paused project. Deliberately not <see cref="Rejected"/>, which would
+    /// send the user hunting for a typo. <paramref name="Cause"/> is for the error log, never the screen.
+    /// </summary>
+    public sealed record Unavailable(Exception Cause) : AuthenticationResult;
 }

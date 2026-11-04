@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Inmobiliaria.Infrastructure.Access;
+using Inmobiliaria.Presentation.Common;
 
 namespace Inmobiliaria.Desktop;
 
@@ -78,6 +79,12 @@ public sealed partial class LoginViewModel : ObservableObject
                     // credential problem, and the generic message above would send the user
                     // hunting for a typo in a password that was correct.
                     ErrorMessage = "Esta cuenta no puede iniciar sesión. Consulte al administrador.";
+                    break;
+
+                case AuthenticationResult.Unavailable unavailable:
+                    // The window stays open with what was typed, so the user can simply try again.
+                    OperationRunner.DefaultErrorLog.Record("Login", unavailable.Cause);
+                    ErrorMessage = "No se pudo conectar con el sistema. Revise la conexión a internet e intente de nuevo. Si sigue igual, avise al administrador.";
                     break;
             }
         }
