@@ -47,6 +47,14 @@ A login attempt MUST succeed if and only if PostgreSQL accepts a connection comp
 - THEN the connection MUST fail
 - AND the message shown MUST be worded identically to the wrong-password case, so a caller cannot distinguish "no such user" from "wrong password"
 
+#### Scenario: A login with no verdict keeps the window open
+
+- GIVEN the database cannot be reached, or fails with anything other than refusing the login
+- WHEN "maria" attempts to log in
+- THEN the login window MUST stay open with what she typed, and show a message telling her to check the connection and try again
+- AND that message MUST NOT read as a wrong password
+- AND the failure MUST be written to the error log
+
 ### Requirement: No Database Access Before Authentication
 
 The system MUST NOT expose any means of opening a database connection or issuing any query before a login attempt for the current session has already succeeded.
@@ -531,4 +539,5 @@ Tests 22 to 44 come from `gestion-de-usuarios`; `R` and Decision numbers in them
     Desktop)*
 43. **A failed login after normalization still shows the one generic message, identical for a wrong
     password and an unknown username.** R10, extends `user-registry` Tests 4 and 5 *(Infrastructure.Tests)*
-44. **The pooler's refusal of an unknown or deactivated role is an ordinary failed login; any other `XX000` stays visible.** Found by the live smoke, where Testcontainers cannot see it because it has no pooler *(Infrastructure.Tests, `PoolerLoginRefusalTests`, a loopback socket replaying the error)*
+44. **The pooler's refusal of an unknown or deactivated role is an ordinary failed login; any other `XX000` is unavailable, never a rejection.** Found by the live smoke, where Testcontainers cannot see it because it has no pooler *(Infrastructure.Tests, `LoginWithoutVerdictTests`, a loopback socket replaying the error)*
+45. **No server answering and a connection dropped before the answer are both unavailable.** *(Infrastructure.Tests, `LoginWithoutVerdictTests`)*. The login window's half is the live check, because it lives in Desktop, outside the CI filter.

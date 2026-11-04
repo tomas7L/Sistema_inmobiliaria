@@ -8,11 +8,11 @@ using Npgsql;
 namespace Inmobiliaria.Infrastructure.Tests;
 
 /// <summary>
-/// The Supabase pooler answers a login for an unknown or deactivated role with its own error, which plain
-/// PostgreSQL never sends, so the Testcontainers login tests cannot reach it (live smoke H.2 of
-/// gestion-de-usuarios). A loopback socket plays the pooler and replies with the exact error it sent.
+/// A login the database never judged, and the pooler's own refusal, which plain PostgreSQL never sends, so
+/// the Testcontainers login tests cannot reach them (live smoke H.2 of gestion-de-usuarios). A loopback socket
+/// plays the pooler and replies with the exact error it sent.
 /// </summary>
-public sealed class PoolerLoginRefusalTests
+public sealed class LoginWithoutVerdictTests
 {
     private const string InternalError = "XX000";
 
@@ -29,11 +29,61 @@ public sealed class PoolerLoginRefusalTests
     [Theory]
     [InlineData("Tenant or user not found")]
     [InlineData("(EAUTHQUERY) unsupported or invalid secret format")]
-    public async Task OtherPoolerErrors_AreNotPassedOffAsARejection(string message)
+    public async Task OtherPoolerErrors_AreUnavailable_NeverARejection(string message)
     {
-        var exception = await Assert.ThrowsAsync<PostgresException>(() => LogInAgainstPoolerReplying(message));
+        var result = await LogInAgainstPoolerReplying(message);
 
-        Assert.Equal(message, exception.MessageText);
+        var unavailable = Assert.IsType<AuthenticationResult.Unavailable>(result);
+        Assert.Equal(message, Assert.IsType<PostgresException>(unavailable.Cause).MessageText);
+    }
+
+    /// <summary>Nothing listens on the port, as when the office has no network: the login window must survive it.</summary>
+    [Fact]
+    public async Task NoServerAnswering_IsUnavailable()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        listener.Stop();
+
+        var result = await AuthenticatorOn(port).AuthenticateAsync("maria", "any-password");
+
+        Assert.IsType<NpgsqlException>(Assert.IsType<AuthenticationResult.Unavailable>(result).Cause, exactMatch: false);
+    }
+
+    /// <summary>The server is reached and then the line drops before it answers.</summary>
+    [Fact]
+    public async Task ConnectionDroppedBeforeAnswering_IsUnavailable()
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var dropper = DropEveryConnectionAsync(listener, timeout.Token);
+
+        var result = await AuthenticatorOn(port).AuthenticateAsync("maria", "any-password", timeout.Token);
+
+        await timeout.CancelAsync();
+        await dropper;
+        Assert.IsType<AuthenticationResult.Unavailable>(result);
+    }
+
+    private static NpgsqlAuthenticator AuthenticatorOn(int port) =>
+        new(new ConnectionEndpoint("127.0.0.1", port, "postgres", "testproject", SslMode.Disable));
+
+    private static async Task DropEveryConnectionAsync(TcpListener listener, CancellationToken ct)
+    {
+        try
+        {
+            while (true)
+            {
+                using var client = await listener.AcceptTcpClientAsync(ct);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The login finished, so nothing else will connect.
+        }
     }
 
     private static async Task<AuthenticationResult> LogInAgainstPoolerReplying(string message)
@@ -44,12 +94,9 @@ public sealed class PoolerLoginRefusalTests
         var pooler = ServeFatalErrorsAsync(listener, message, timeout.Token);
 
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        var authenticator = new NpgsqlAuthenticator(
-            new ConnectionEndpoint("127.0.0.1", port, "postgres", "testproject", SslMode.Disable));
-
         try
         {
-            return await authenticator.AuthenticateAsync("noexiste", "any-password", timeout.Token);
+            return await AuthenticatorOn(port).AuthenticateAsync("noexiste", "any-password", timeout.Token);
         }
         finally
         {

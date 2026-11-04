@@ -37,8 +37,8 @@ public enum BootstrapStage
 public static class LoginBootstrap
 {
     /// <summary>
-    /// The stage immediately after a login attempt. A <see cref="AuthenticationResult.Rejected"/>
-    /// or <see cref="AuthenticationResult.NotProvisioned"/> result stays at
+    /// The stage immediately after a login attempt. A <see cref="AuthenticationResult.Rejected"/>,
+    /// <see cref="AuthenticationResult.NotProvisioned"/> or <see cref="AuthenticationResult.Unavailable"/> result stays at
     /// <see cref="BootstrapStage.AwaitingLogin"/> — <c>LoginWindow</c> shows its error message
     /// and tries again; nothing beyond it is ever reachable from a failed attempt.
     /// </summary>
