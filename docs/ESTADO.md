@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-05, con la spec de `gestion-de-alquileres` aprobada por Tomás_
+_Última actualización: 2026-11-05, con la spec de `gestion-de-alquileres` mergeada en el PR #89 y el design aprobado por Tomás_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -9,12 +9,12 @@ _Última actualización: 2026-11-05, con la spec de `gestion-de-alquileres` apro
 ## En qué estamos
 
 **Change activo: `gestion-de-alquileres`**, en `openspec/changes/gestion-de-alquileres/`. Tiene `exploration.md`, `proposal.md`
-y `spec.md`; todavía no tiene design ni `tasks.md`. La spec cambió cosas de la propuesta: leer sus Findings.
+`spec.md` y `design.md`; todavía no tiene `tasks.md`. La spec cambió cosas de la propuesta: leer sus Findings.
 
 ## Próximos pasos
 
-1. **Tomás mergea el PR de la spec** y avisa.
-2. **Escribir el design** de `gestion-de-alquileres`. No espera a Nicolás.
+1. **Tomás mergea el PR del design** y avisa.
+2. **Escribir `tasks.md`** y arrancar por S1 (Personas). No espera a Nicolás ni a Mateo.
 
 ## Pendientes / bloqueos
 
