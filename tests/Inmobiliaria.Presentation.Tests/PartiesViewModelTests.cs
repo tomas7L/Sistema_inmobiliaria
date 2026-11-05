@@ -1,4 +1,5 @@
 using Inmobiliaria.Domain.Parties;
+using Inmobiliaria.Presentation.Common;
 using Inmobiliaria.Presentation.Parties;
 using Inmobiliaria.Presentation.Tests.Fakes;
 
@@ -292,6 +293,126 @@ public class PartiesViewModelTests
 
         Assert.Equal([false, true], port.Corrected.Select(c => c.Accepted).ToList());
         Assert.Null(viewModel.Editing);
+    }
+
+    /// <summary>Requirement 3: what is confirmed is what is written, so editing any field withdraws the confirmation.</summary>
+    [Theory]
+    [InlineData(nameof(PartiesViewModel.FirstName))]
+    [InlineData(nameof(PartiesViewModel.LastName))]
+    [InlineData(nameof(PartiesViewModel.Dni))]
+    [InlineData(nameof(PartiesViewModel.Cuil))]
+    [InlineData(nameof(PartiesViewModel.Email))]
+    [InlineData(nameof(PartiesViewModel.PhoneNumber))]
+    [InlineData(nameof(PartiesViewModel.Domicile))]
+    public async Task EditingAFieldAfterSaving_WithdrawsTheConfirmation(string field)
+    {
+        var port = Port();
+        var viewModel = await LoadedAsync(port);
+        viewModel.EditCommand.Execute(Row(viewModel, JuanId));
+        viewModel.LastName = "Perez";
+        await viewModel.SaveCommand.ExecuteAsync(null);
+        Assert.NotNull(viewModel.Pending);
+
+        typeof(PartiesViewModel).GetProperty(field)!.SetValue(viewModel, "27222333");
+
+        Assert.Null(viewModel.Pending);
+        Assert.False(viewModel.ConfirmCommand.CanExecute(null));
+        Assert.Empty(port.Corrected);
+    }
+
+    /// <summary>Requirement 3: the summary is asked again for the values now in the form, and those are what is written.</summary>
+    [Fact]
+    public async Task SavingAgainAfterEditing_ConfirmsAndWritesTheNewValues()
+    {
+        var port = Port();
+        var viewModel = await LoadedAsync(port);
+        viewModel.EditCommand.Execute(Row(viewModel, JuanId));
+        viewModel.FirstName = "Juan Carlos";
+        await viewModel.SaveCommand.ExecuteAsync(null);
+        viewModel.FirstName = "Juan Pablo";
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        var change = Assert.Single(viewModel.Pending!.Changes);
+        Assert.Equal(("Nombre", "Juan", "Juan Pablo"), (change.Field, change.Old, change.New));
+
+        await viewModel.ConfirmCommand.ExecuteAsync(null);
+
+        Assert.Equal("Juan Pablo", Assert.Single(port.Corrected).Draft.FirstName);
+    }
+
+    /// <summary>Spec Test 6: accepting the warning covers the person it warned about, so editing withdraws it too.</summary>
+    [Fact]
+    public async Task EditingAFieldAfterTheWarning_WithdrawsIt()
+    {
+        var port = Port();
+        port.OnCreate = (_, _) => PartyResult.Refused(PartyRefusal.NoIdentifierNotAccepted);
+        var viewModel = await LoadedAsync(port);
+        Fill(viewModel, "Hans", "Müller");
+        await viewModel.SaveCommand.ExecuteAsync(null);
+        Assert.NotNull(viewModel.NoIdentifierWarning);
+
+        viewModel.LastName = "Mueller";
+
+        Assert.Null(viewModel.NoIdentifierWarning);
+        Assert.False(viewModel.AcceptNoIdentifierCommand.CanExecute(null));
+        Assert.Single(port.Created);
+    }
+
+    /// <summary>A write that fails shows the generic text only, keeps what was typed and the commands, and reads nothing.</summary>
+    [Fact]
+    public async Task ACorrectionThatFails_ShowsTheGenericMessage_AndKeepsTheForm()
+    {
+        var port = Port();
+        port.OnCorrect = (_, _, _) => throw new InvalidOperationException("Host=secret");
+        var viewModel = await LoadedAsync(port);
+        viewModel.EditCommand.Execute(Row(viewModel, JuanId));
+        viewModel.FirstName = "Juan Carlos";
+        await viewModel.SaveCommand.ExecuteAsync(null);
+        var searches = port.Searches.Count;
+
+        await viewModel.ConfirmCommand.ExecuteAsync(null);
+
+        Assert.Equal(ErrorMessages.Generic, viewModel.Runner.ErrorMessage);
+        Assert.Null(viewModel.RefusalMessage);
+        Assert.Null(viewModel.OfferedHolder);
+        Assert.Equal(JuanId, viewModel.Editing!.Id);
+        Assert.Equal("Juan Carlos", viewModel.FirstName);
+        Assert.Equal(searches, port.Searches.Count);
+        Assert.True(viewModel.SaveCommand.CanExecute(null));
+    }
+
+    /// <summary>Same for a person being created: the form survives, so nothing is typed twice.</summary>
+    [Fact]
+    public async Task ACreationThatFails_ShowsTheGenericMessage_AndKeepsTheForm()
+    {
+        var port = Port();
+        port.OnCreate = (_, _) => throw new InvalidOperationException("Host=secret");
+        var viewModel = await LoadedAsync(port);
+        Fill(viewModel, "Lía", "Sosa", "28111222");
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal(ErrorMessages.Generic, viewModel.Runner.ErrorMessage);
+        Assert.Equal("Lía", viewModel.FirstName);
+        Assert.Equal("28111222", viewModel.Dni);
+        Assert.True(viewModel.SaveCommand.CanExecute(null));
+    }
+
+    /// <summary>A write that landed stands even if the list cannot be read after it: the form clears, so it is not sent twice.</summary>
+    [Fact]
+    public async Task ASavedPerson_ClearsTheForm_EvenIfTheListCannotBeReadAgain()
+    {
+        var port = Port();
+        var viewModel = await LoadedAsync(port);
+        Fill(viewModel, "Lía", "Sosa", "28111222");
+        port.SearchFailure = new InvalidOperationException("Host=secret");
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Single(port.Created);
+        Assert.Equal(ErrorMessages.Generic, viewModel.Runner.ErrorMessage);
+        Assert.Equal(string.Empty, viewModel.FirstName);
     }
 
     /// <summary>The next action clears the previous refusal and offer.</summary>

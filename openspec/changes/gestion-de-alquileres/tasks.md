@@ -73,7 +73,7 @@ D19, D20, §2.1, §4, §6. Needs: nothing.
 - [x] 1.8 **[Prove the guards by making them fail]** Recorded below
 - [x] 1.9 **[Differential]** Existing callers of `Party` and `SessionServices` behave as before. Recorded below
 - [x] 1.10 **[Guardrails]** Build, suite, `has-pending-model-changes`. Recorded below
-- [ ] 1.11 **[Handover]** File list, commit Summary and Description, PR title and description to Tomás. No commit by the assistant
+- [x] 1.11 **[Handover]** File list, commit Summary and Description, PR title and description to Tomás. No commit by the assistant. Merged as PR #91
 
 ### Verification, PR 1 (Docker: yes)
 
@@ -342,7 +342,7 @@ SELECT contract_id, effective_date FROM rent_adjustments WHERE kind = 'Regular' 
    digits-only twin. Suggested addition to H.4, not in the design: `SELECT id FROM parties WHERE dni ~ '[^0-9]' OR cuil ~ '[^0-9]';`, expecting no rows.
 2. **The spec's Preconditions table names slices S1 to S6 from the proposal** (design F6). The Verification tables here are the current ones.
 3. **Test 71 is split**: proven per slice, audited at S12. **Test 92 is split**: its cancellation half closes in S10, its correction half in S11.
-4. **To fix before S2, from S1's review** (lineage `review-0f581f6b7015ea49`, approved; its findings are non-blocking and left for separate work):
+4. **Fixed on 2026-11-05, before S2, from S1's review** (lineage `review-0f581f6b7015ea49`, approved; its findings were non-blocking). Editing any form field now withdraws a pending confirmation or an unaccepted no-identifier warning, so the operator saves and confirms again; the warning had the same defect and the review had not named it. Suite 1128 passed, 0 failed, 0 skipped. What the review found:
    - `PartiesViewModel.cs:218-222`, a real defect: confirming a correction writes the form as it stands, not the values shown in the summary. Editing a field after saving does not clear the pending confirmation, so the operator can confirm one thing and store another. Requirement 3 needs what was confirmed to be what is written.
    - `PartiesViewModel.cs:234-255`: the failure path has no test.
    - `PartyRegistry.cs:110-117`: searching rows that still hold dots, and partial identifiers, have no test.

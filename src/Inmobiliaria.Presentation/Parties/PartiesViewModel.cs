@@ -110,6 +110,30 @@ public sealed partial class PartiesViewModel : ObservableObject
     [ObservableProperty]
     private PartyRow? _chosenParty;
 
+    partial void OnFirstNameChanged(string value) => WithdrawConfirmations();
+
+    partial void OnLastNameChanged(string value) => WithdrawConfirmations();
+
+    partial void OnDniChanged(string value) => WithdrawConfirmations();
+
+    partial void OnCuilChanged(string value) => WithdrawConfirmations();
+
+    partial void OnEmailChanged(string value) => WithdrawConfirmations();
+
+    partial void OnPhoneNumberChanged(string value) => WithdrawConfirmations();
+
+    partial void OnDomicileChanged(string value) => WithdrawConfirmations();
+
+    /// <summary>
+    /// What is confirmed is what is written (spec Requirement 3), and a write takes the form as it stands, so a confirmation
+    /// or an accepted warning covers only the values it was asked about. Editing a field means saving again.
+    /// </summary>
+    private void WithdrawConfirmations()
+    {
+        Pending = null;
+        NoIdentifierWarning = null;
+    }
+
     private bool CanAct() => !Runner.IsBusy;
 
     private PartyDraft Draft() => new(FirstName, LastName, Dni, Cuil, Email, PhoneNumber, Domicile);
