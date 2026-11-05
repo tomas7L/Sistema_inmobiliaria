@@ -61,4 +61,44 @@ public static class RentSplit
 
         return result;
     }
+
+    /// <summary>
+    /// Converts an amount typed per unit into percentages (gestion-de-alquileres spec Requirement 7). Each is truncated to
+    /// 6 decimal places, and the residue goes to the largest resulting share, ties to the smallest <see cref="Guid"/>.
+    /// Null when an amount is not positive or they do not total <paramref name="canon"/>: there is no split to convert.
+    /// </summary>
+    public static IReadOnlyList<UnitShare>? FromAmounts(decimal canon, IReadOnlyList<(Guid UnitId, decimal Amount)> amounts)
+    {
+        ArgumentNullException.ThrowIfNull(amounts);
+
+        if (amounts.Count == 0 || amounts.Any(a => a.Amount <= 0m))
+        {
+            return null;
+        }
+
+        // Taken from what is left of the canon, since amounts an operator typed may not even fit in a sum.
+        var left = canon;
+        foreach (var (_, amount) in amounts)
+        {
+            if (amount > left)
+            {
+                return null;
+            }
+
+            left -= amount;
+        }
+
+        if (left != 0m)
+        {
+            return null;
+        }
+
+        var shares = amounts
+            .Select(a => new UnitShare(a.UnitId, Math.Floor(a.Amount / canon * HundredPercent * SharePrecisionScale) / SharePrecisionScale))
+            .ToList();
+        var residue = HundredPercent - shares.Sum(s => s.Percentage);
+        var winner = shares.OrderByDescending(s => s.Percentage).ThenBy(s => s.UnitId).First();
+
+        return shares.Select(s => s.UnitId == winner.UnitId ? s with { Percentage = s.Percentage + residue } : s).ToList();
+    }
 }

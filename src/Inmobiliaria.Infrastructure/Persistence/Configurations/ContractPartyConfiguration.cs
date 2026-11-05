@@ -25,6 +25,18 @@ public sealed class ContractPartyConfiguration : IEntityTypeConfiguration<Contra
             .HasMaxLength(16)
             .IsRequired();
 
+        builder.Property(cp => cp.RemovedAt)
+            .HasColumnName("removed_at");
+
+        // Removing leaves a row, since neither role holds DELETE, so every ordinary read filters it out (design D13).
+        builder.HasQueryFilter(cp => cp.RemovedAt == null);
+
+        // "At least one tenant" lives in the creation port; "at most one" is refused here whoever writes (spec Decision 34).
+        builder.HasIndex(cp => cp.ContractId)
+            .IsUnique()
+            .HasFilter("role = 'Tenant' AND removed_at IS NULL")
+            .HasDatabaseName("ux_contract_parties_one_tenant");
+
         builder.HasOne<Contract>()
             .WithMany(c => c.Parties)
             .HasForeignKey(cp => cp.ContractId)

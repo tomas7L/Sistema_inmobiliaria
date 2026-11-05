@@ -233,17 +233,21 @@ public sealed class Contract
             return CutoverRefusal.AccountHasMovement;
         }
 
+        return CheckCutoverBounds(cutoverDate, StartDate, today);
+    }
+
+    /// <summary>
+    /// The bounds of a cutover date, null when they hold: not after <paramref name="today"/>, not before the contract's
+    /// start. Shared with the creation form's rules, which have no contract yet (gestion-de-alquileres design §2.3).
+    /// </summary>
+    public static CutoverRefusal? CheckCutoverBounds(DateOnly cutoverDate, DateOnly startDate, DateOnly today)
+    {
         if (cutoverDate > today)
         {
             return CutoverRefusal.AfterToday;
         }
 
-        if (cutoverDate < StartDate)
-        {
-            return CutoverRefusal.BeforeContractStart;
-        }
-
-        return null;
+        return cutoverDate < startDate ? CutoverRefusal.BeforeContractStart : null;
     }
 
     private void RequireOwnAccount(ContractAccount account)

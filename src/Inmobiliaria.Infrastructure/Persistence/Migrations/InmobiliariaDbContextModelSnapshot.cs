@@ -434,8 +434,17 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(16)")
                         .HasColumnName("role");
 
+                    b.Property<DateTimeOffset?>("RemovedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("removed_at");
+
                     b.HasKey("ContractId", "PartyId", "Role")
                         .HasName("pk_contract_parties");
+
+                    b.HasIndex("ContractId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_contract_parties_one_tenant")
+                        .HasFilter("role = 'Tenant' AND removed_at IS NULL");
 
                     b.HasIndex("PartyId")
                         .HasDatabaseName("ix_contract_parties_party_id");

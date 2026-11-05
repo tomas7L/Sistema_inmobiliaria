@@ -47,6 +47,8 @@ public static class SessionServices
         services.AddSingleton<IReciboReader>(_ => new PerCallReciboReader(factory));
         services.AddSingleton<IPartyRegistry>(_ => new PerCallPartyRegistry(factory));
         services.AddSingleton<IUnitRegistry>(_ => new PerCallUnitRegistry(factory));
+        services.AddSingleton<IContractRegistry>(provider =>
+            new PerCallContractRegistry(factory, provider.GetRequiredService<IAgencyClock>()));
 
         if (recargo.Terms is { } terms)
         {
