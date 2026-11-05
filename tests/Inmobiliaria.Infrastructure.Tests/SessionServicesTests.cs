@@ -4,6 +4,7 @@ using Inmobiliaria.Domain.Accounts;
 using Inmobiliaria.Domain.Collection;
 using Inmobiliaria.Domain.GoLive;
 using Inmobiliaria.Domain.Leasing;
+using Inmobiliaria.Domain.Parties;
 using Inmobiliaria.Infrastructure.Access;
 using Inmobiliaria.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -90,6 +91,7 @@ public sealed class SessionServicesTests
         Assert.IsAssignableFrom<IUserAdministration>(provider.GetRequiredService<IUserAdministration>());
         Assert.IsAssignableFrom<IAccountDirectory>(provider.GetRequiredService<IAccountDirectory>());
         Assert.IsAssignableFrom<IReciboReader>(provider.GetRequiredService<IReciboReader>());
+        Assert.IsAssignableFrom<IPartyRegistry>(provider.GetRequiredService<IPartyRegistry>());
         Assert.IsAssignableFrom<IAgencyClock>(provider.GetRequiredService<IAgencyClock>());
         Assert.Equal(role, provider.GetRequiredService<IUserSession>().Role);
         Assert.Empty(factory.Created);
@@ -143,6 +145,7 @@ public sealed class SessionServicesTests
         Assert.NotNull(provider.GetRequiredService<IGoLiveSetup>());
         Assert.NotNull(provider.GetRequiredService<IAccountDirectory>());
         Assert.NotNull(provider.GetRequiredService<IReciboReader>());
+        Assert.NotNull(provider.GetRequiredService<IPartyRegistry>());
         Assert.NotNull(provider.GetRequiredService<IAgencyClock>());
     }
 
@@ -204,6 +207,23 @@ public sealed class SessionServicesTests
 
         Assert.Equal(2, factory.Created.Count);
         Assert.NotSame(factory.Created[0], factory.Created[1]);
+        Assert.All(factory.Created, context => Assert.Throws<ObjectDisposedException>(() => context.ChangeTracker));
+    }
+
+    [Fact]
+    public async Task ThePartyWrapper_AlsoObtainsOneDisposedContextPerCall()
+    {
+        var factory = new SpySessionFactory();
+        using var provider = Collect(factory, UserRole.Empleado, ValidSettings()).BuildServiceProvider();
+        var parties = provider.GetRequiredService<IPartyRegistry>();
+        var draft = new PartyDraft("Juan", "Perez", "30123456");
+
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => parties.SearchAsync("perez"));
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => parties.CreateAsync(draft, false));
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => parties.CorrectAsync(Guid.NewGuid(), draft, false));
+
+        Assert.Equal(3, factory.Created.Count);
+        Assert.Equal(3, factory.Created.Distinct().Count());
         Assert.All(factory.Created, context => Assert.Throws<ObjectDisposedException>(() => context.ChangeTracker));
     }
 

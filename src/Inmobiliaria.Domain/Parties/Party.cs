@@ -45,4 +45,32 @@ public sealed class Party
         PhoneNumber = phoneNumber;
         Domicile = domicile;
     }
+
+    /// <summary>
+    /// Corrects name, DNI and CUIL in place (gestion-de-alquileres spec Decision 29). The constructor keeps storing
+    /// what it is given; this path stores identifiers normalized and refuses an invalid one, as the registry has
+    /// already checked them by then.
+    /// </summary>
+    public void CorrectIdentity(string firstName, string lastName, string? dni, string? cuil)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(firstName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(lastName);
+
+        var normalizedDni = PartyIdentifiers.NormalizeDni(dni);
+        if (normalizedDni is not null && !PartyIdentifiers.IsValidDni(normalizedDni))
+        {
+            throw new ArgumentException("Not a valid DNI.", nameof(dni));
+        }
+
+        var normalizedCuil = PartyIdentifiers.NormalizeCuil(cuil);
+        if (normalizedCuil is not null && !PartyIdentifiers.IsValidCuil(normalizedCuil))
+        {
+            throw new ArgumentException("Not a valid CUIL.", nameof(cuil));
+        }
+
+        FirstName = firstName.Trim();
+        LastName = lastName.Trim();
+        Dni = normalizedDni;
+        Cuil = normalizedCuil;
+    }
 }

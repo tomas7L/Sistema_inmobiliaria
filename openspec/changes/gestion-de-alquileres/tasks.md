@@ -1,0 +1,367 @@
+# Tasks: gestion-de-alquileres (the missing rental screens)
+
+Turns `design.md` §11 (twelve slices, S1 to S12) into ordered, checkable work. It does not re-plan the change and does
+not edit `spec.md` or `design.md`. Where slicing or applying exposed a gap, it is listed under **Issues found**.
+
+Vocabulary: **Admin** and **Empleado** are the two roles; the **canon** is a contract's total monthly rent; a **late
+adjustment** applies later than the month it fell due, and the **difference** is what the old canon undercharged in between.
+
+Slice to phase map (one slice = one phase = one PR, S12 splitting per screen): S1 = Phase 1, and so on to S12 = Phase 12.
+
+## What to read (Tomás)
+
+| Read | Skip |
+|---|---|
+| This header, the **Review Workload Forecast**, the **Human Follow-Ups**, **Issues found** and **Deviations** | Everything inside the phases except the **Verification** table at the end of each. The checkboxes are for the assistant and for the second inspection at the start of each session |
+
+## Review Workload Forecast
+
+| Field | Value |
+|---|---|
+| Estimated changed lines | About 5,000 authored (additions + deletions, tests included), design §11 |
+| Review budget | About 400 authored lines per PR, a planning heuristic and not a cap |
+| 400-line budget risk | High: S3, S5, S9, S10 are estimated above it, S12 at about 950 and S1 came in at about 1,620 (see Deviations) |
+| Chained PRs recommended | Yes |
+| Suggested split | One PR per slice; S12 splits per screen |
+| Delivery strategy | auto-chain |
+| Chain strategy | stacked-to-main, as in `ui-de-cobranza` and `gestion-de-usuarios`: each slice PR targets `develop` once the previous one has merged |
+
+Decision needed before apply: No
+Chained PRs recommended: Yes
+Chain strategy: stacked-to-main
+400-line budget risk: High
+
+**Order** (design §11). Each slice is merged before the next starts. S1, S2 and S6 are independent of each other. **S7 needs
+S6.** S3, S4, S5 chain. S8, S9, S10, S11 chain. **S8 needs S4**, since Test 81 ends a contract and creates another. **S10 needs
+S5**, which S10 extends so that cancelling also reverses the new kind. S12 waits for Mateo's mockups.
+
+**Independent verifier.** Every slice whose Risk names an item ends with one: S3, S4, S5, S7, S8, S9, S10, S11. S1, S2, S6 and
+S12 name none.
+
+**Every spec test 1 to 92 is mapped to one phase below**, Test 92's correction half closing in S11 and Test 71 being proven per
+slice and audited at S12.
+
+| Phase | Slice | Spec tests | Requirements | Est. | Migration | Risk |
+|---|---|---|---|---|---|---|
+| 1 | S1 Personas | 1-7 | R1-R3 | ~350 | None | None |
+| 2 | S2 Propiedades | 8, 9 | R4, R5 | ~250 | None | None |
+| 3 | S3 Crear contratos | 10-22, 68, 69 | R6-R8, R21 | ~500 | M1 | Item 2 |
+| 4 | S4 Corregir, avisar, terminar | 23-29, 80 | R9, R10 | ~400 | M2 | Item 1 |
+| 5 | S5 Cancelar y deshacer | 72-79, 89, 90 | R23, R24 | ~450 | M3 | Item 1 |
+| 6 | S6 Índices | 30-34 | R11, R12 | ~300 | M4 | None |
+| 7 | S7 Traer índices | 82-88 | R25 | ~250 | None | Item 6 |
+| 8 | S8 Cláusula y calendario | 35-38, 40, 56, 81 | R13, R17 | ~350 | M5 | Item 1 |
+| 9 | S9 Confirmar ajustes | 39, 41-48 | R14, R15 | ~450 | M6 | Item 1 |
+| 10 | S10 La diferencia | 49-55, 61-67, 92 | R16, R19, R20 | ~450 | M7 | Items 1, 3 |
+| 11 | S11 Correcciones | 57-60, 91 | R18 | ~300 | None | Item 1 |
+| 12 | S12 Pantallas | 70, 71 | R22 | ~950 | None | None |
+
+---
+
+## Phase 1: Personas (S1, PR 1, est. about 350 lines)
+
+**Docker: yes. Supabase: no. Model change: no.** Spec tests: 1 to 7. Requirements 1 to 3, Decisions 28, 29. Design anchors: D18,
+D19, D20, §2.1, §4, §6. Needs: nothing.
+
+- [x] 1.1 **[Second inspection, read-only]** Anchors match: `Party.cs:11-14,42`, `PartyConfiguration.cs:16-24`, `SessionServices.cs:39-45`, `PerCallDueAdjustmentQuery.cs:21-22`. Baseline 1013 passed (Domain 433, Presentation 244, Infrastructure 336), 0 failed, 0 skipped
+- [x] 1.2 **[RED then GREEN, Tests 3, 5, 6]** `PartyIdentifiers` and `PartyDraft`, `PartyDraftRules` in `src/Inmobiliaria.Domain/Parties/`, tests in `tests/Inmobiliaria.Domain.Tests/PartyIdentifiersTests.cs`. Deviation: see below
+- [x] 1.3 **[RED then GREEN, Requirement 3]** `Party.CorrectIdentity` beside `UpdateContactInfo`; `tests/Inmobiliaria.Domain.Tests/PartyTests.cs`, with one test that the constructor and `UpdateContactInfo` behave as before
+- [x] 1.4 **[Domain]** `IPartyRegistry`, `PartyListing`, `PartyResult`, `PartyRefusal` and its one `OperatorText`. Deviation: see below
+- [x] 1.5 **[RED then GREEN, Tests 1 to 7]** `PartyRegistry` and `PartyRegistryErrorMap` in `src/Inmobiliaria.Infrastructure/Persistence/`, `tests/Inmobiliaria.Infrastructure.Tests/PartyRegistryTests.cs`, against `postgres:17.6`, as real Admin and Empleado logins
+- [x] 1.6 **[RED then GREEN, wiring]** `PerCallPartyRegistry`, registered in `SessionServices`; `SessionServicesTests` resolves it for both roles without a connection, one context per call
+- [x] 1.7 **[RED then GREEN, Requirements 1 to 3 on the screen]** `PartiesViewModel`, `PartyRow`, `PendingPartyCorrection`, `PartyChange` in `src/Inmobiliaria.Presentation/Parties/`, `FakePartyRegistry`, `tests/Inmobiliaria.Presentation.Tests/PartiesViewModelTests.cs`. No view: S12
+- [x] 1.8 **[Prove the guards by making them fail]** Recorded below
+- [x] 1.9 **[Differential]** Existing callers of `Party` and `SessionServices` behave as before. Recorded below
+- [x] 1.10 **[Guardrails]** Build, suite, `has-pending-model-changes`. Recorded below
+- [ ] 1.11 **[Handover]** File list, commit Summary and Description, PR title and description to Tomás. No commit by the assistant
+
+### Verification, PR 1 (Docker: yes)
+
+| Command | Expected |
+|---|---|
+| `dotnet build Inmobiliaria.sln --configuration Release` | exit code 0; **Advertencia(s)** and **Errores** both 0. MSB3027 means the app is open |
+| `dotnet test Inmobiliaria.Core.slnf --configuration Release` (Docker up) | exit code 0; 0 failed; 0 skipped; passed = baseline + new tests |
+| `dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure` | exit code 0, no pending changes |
+
+---
+
+## Phase 2: Propiedades (S2, PR 2, est. about 250 lines)
+
+**Docker: yes. Supabase: no. Model change: no.** Spec tests: 8, 9. Requirements 4, 5. Design anchors: §2.2, §4, §6. Needs: nothing.
+
+- [ ] 2.1 **[Second inspection, read-only]** PR 1 merged intact; `Unit.cs:38`, `PropertyUnit`, `ParkingUnit` as the design cites
+- [ ] 2.2 **[Domain]** `IUnitRegistry`, `UnitListing` (with covering contract's tenant and move-out date), typed refusals with their `OperatorText`
+- [ ] 2.3 **[RED then GREEN, Test 8]** `UnitRegistry.ListAsync`: unavailable when a `contract_units` row joins a contract in `Active` or `PendingTermination`, one query, as a real role
+- [ ] 2.4 **[RED then GREEN, Test 9]** `CreateAsync`, `RelocateAsync`; identical-address warning compared as folded text in memory
+- [ ] 2.5 **[RED then GREEN, wiring]** `PerCallUnitRegistry`, `SessionServicesTests`
+- [ ] 2.6 **[RED then GREEN]** `UnitsViewModel`, fake port, tests in Presentation.Tests. No view: S12
+- [ ] 2.7 **[Guardrails and handover]** as 1.8, 1.10 and 1.11
+
+### Verification, PR 2 (Docker: yes)
+
+Same three commands as PR 1.
+
+---
+
+## Phase 3: Crear contratos (S3, PR 3, est. about 500 lines)
+
+**Docker: yes. Supabase: M1 to the test database, then production, with the preflight query first (H.3, H.4). Model change: yes, M1 in
+this PR.** Spec tests: 10 to 22, 68, 69. Requirements 6, 7, 8, 21. Design anchors: D17, D18, D19, §2.3, §4, §10 F2, §12 M1. **Risk: item 2 (who may
+set a cutover).** Needs: nothing in this change; starts the S3-S4-S5 chain.
+
+- [ ] 3.1 **[Second inspection, read-only]** `Contract.cs:119-169,227-247`, `ContractPartyConfiguration.cs:21`, `20261023131755_HardenCutoverDateToAdmin.cs:18-28`, `CutoverTriggerTests.cs:162` as the design cites
+- [ ] 3.2 **[RED then GREEN]** `ContractDraft`, `ContractDraftRules.Check`, `CheckCutoverBounds` extracted from `CheckCutoverDate`; start-on-the-1st rule in the rules only (spec F9), Domain.Tests
+- [ ] 3.3 **[Model and M1]** `ContractParty.RemovedAt`, query filter (D13), `AddContractPartyRemovalAndGuards`: `removed_at`, `ux_contract_parties_one_tenant`, `contracts_cutover_insert_guard`
+- [ ] 3.4 **[RED then GREEN, Tests 68, 69; Finding F2]** Rewrite `CutoverTriggerTests.AnEmpleadoInsertsAContractWithADate_AndCannotChangeIt` to expect `contracts_cutover_insert_admin_only`; move its "cannot change it" half to a contract inserted as superuser. As real login roles
+- [ ] 3.5 **[RED then GREEN, Tests 10 to 22]** `IContractRegistry` create, list, detail: one `SaveChangesAsync` in a transaction, availability checked inside it, rate suggestion from the lessor's latest `StartDate` with a rate
+- [ ] 3.6 **[RED then GREEN, wiring]** `PerCallContractRegistry`, `SessionServicesTests`
+- [ ] 3.7 **[RED then GREEN]** `ContractFormViewModel`, the cutover section offered only to an Admin, the database still deciding. No view: S12
+- [ ] 3.8 **[Prove the guards by making them fail]** Tenant index, cutover INSERT trigger
+- [ ] 3.9 **[Guardrails and handover]** as 1.10 and 1.11, `has-pending-model-changes` proving the model matches M1
+- [ ] 3.10 **[Independent verifier]** Item 2. Reads the whole spec, runs probes in a fresh scratch copy
+
+### Verification, PR 3 (Docker: yes)
+
+Same three commands as PR 1, then the independent verifier.
+
+---
+
+## Phase 4: Corregir, avisar, terminar (S4, PR 4, est. about 400 lines)
+
+**Docker: yes. Supabase: M2 (H.3). Model change: yes, M2 in this PR.** Spec tests: 23 to 29, 80. Requirements 9, 10. Design anchors: D12, D13, D14, D16, §2.3, §4, §10 F1, §12
+M2. **Risk: item 1 (changes stored contract terms).** Needs: S3.
+
+- [ ] 4.1 **[Second inspection, read-only]** PR 3 merged intact; `Contract.cs:26-27,49,184,363,414-445`, `ContractConfiguration.cs:51-52,61-65`, `20261014204601_AddFeePlanCutoverAndLedgerConstraints.cs:130-151`
+- [ ] 4.2 **[RED then GREEN]** `Contract.Correct`, `SetHonorariosPercentage`, `RemoveParty`, `AssignParty` restoring a removed row; `StartDate`, `NominalEndDate`, `DueDay` to `private set`; `ContractLifecycleRules`. `has-pending-model-changes` proves the setters change no model
+- [ ] 4.3 **[M2]** `AddContractEventsAndTermsLock`: `contract_events` with stamp, append-only and explicit `GRANT SELECT, INSERT`; `contracts_terms_lock` raising `contracts_terms_locked`
+- [ ] 4.4 **[RED then GREEN, Tests 23 to 29]** Port and adapter: correct (raw `UPDATE`s for units and shares, Finding F1), rate, notice, end, typed refusals, as real roles
+- [ ] 4.5 **[RED then GREEN, Test 80]** A codeudor removed leaves a trace; neither role holds DELETE; the query filter is pinned
+- [ ] 4.6 **[RED then GREEN]** `ContractDetailViewModel`: detail, notice, end, each opening a summary. No view: S12
+- [ ] 4.7 **[Prove the guards by making them fail]** Terms lock, `contract_events` append-only
+- [ ] 4.8 **[Guardrails and handover]** as 1.10 and 1.11
+- [ ] 4.9 **[Independent verifier]** Item 1
+
+### Verification, PR 4 (Docker: yes)
+
+Same three commands as PR 1, then the independent verifier.
+
+---
+
+## Phase 5: Cancelar y deshacer (S5, PR 5, est. about 450 lines)
+
+**Docker: yes. Supabase: M3 (H.3). Model change: yes, M3 in this PR.** Spec tests: 72 to 79, 89, 90. Requirements 23, 24. Design anchors: D9, D10, D11, D12, §2.3 to §2.5, §12 M3.
+**Risk: item 1 (erases debt, irreversibly).** Needs: S4. **From M3 on, every PC at the agency updates together** (design §12).
+
+- [ ] 5.1 **[Second inspection, read-only]** PR 4 merged intact; `VoidingPlanner.cs:128-149`, `AccrualSchedule.cs:31,46`, `AccountDirectory.cs:38-41,68-84`, `GoLiveSetup.cs:48-50`, `AccountMaterialiser.cs:150`
+- [ ] 5.2 **[Model and M3]** `EndReason.LoadedByMistake`, `ck_contracts_end_reason` widened; `End` newly throws on it
+- [ ] 5.3 **[RED then GREEN]** `CollectionRules.VoidingWindowOf` extracted, `VoidingPlanner` calling it with its tests unchanged (D11)
+- [ ] 5.4 **[RED then GREEN]** `AccrualSchedule.IsCancelled`; Test 73 must fail if the end date alone governs accrual
+- [ ] 5.5 **[RED then GREEN, Tests 72, 75, 76, 77, 90]** `ContractCancellation.Plan`, adapter: account lock, reload, plan again, compare; corrections, contract update and event in one transaction, as each role
+- [ ] 5.6 **[RED then GREEN, Test 74]** Picker (`AccountDirectory`) and go-live (`GoLiveSetup`) exclude a cancelled contract; worklist, availability, mora, recibos as design §2.5
+- [ ] 5.7 **[RED then GREEN, Tests 78, 79]** `Contract.UndoNotice`, `UndoEnd`, `Cancel`, refusals
+- [ ] 5.8 **[RED then GREEN, Test 89]** "Cargado por error" not offered when ending normally; view-model
+- [ ] 5.9 **[Prove the guards by making them fail]** Accrual guard, voiding block
+- [ ] 5.10 **[Guardrails and handover]** as 1.10 and 1.11
+- [ ] 5.11 **[Independent verifier]** Item 1
+
+### Verification, PR 5 (Docker: yes)
+
+Same three commands as PR 1, then the independent verifier.
+
+---
+
+## Phase 6: Índices (S6, PR 6, est. about 300 lines)
+
+**Docker: yes. Supabase: M4 (H.3). Model change: no; M4 is data only, and still ships in this PR.** Spec tests: 30 to 34. Requirements 11, 12. Design anchors: D23,
+§4, §6, §12 M4. Needs: nothing.
+
+- [ ] 6.1 **[Second inspection, read-only]** Latest merge intact; `EconomicIndexConfiguration.cs:34-37`, `IndexValue.cs:32`, `RentAdjustmentIndexValue.cs:15-20`
+- [ ] 6.2 **[M4]** `SeedEconomicIndices`, raw `INSERT ... WHERE NOT EXISTS`, `Down` removing nothing
+- [ ] 6.3 **[RED then GREEN, Test 30]** Exactly one IPC, RIPTE and ICL on an empty database and on one already holding "ICL"
+- [ ] 6.4 **[RED then GREEN, Tests 32, 33]** `IndexEntryRules` in Domain: future month, non-positive level, more than six decimals, plausibility warning (D23)
+- [ ] 6.5 **[RED then GREEN, Tests 32 to 34]** `IIndexRegistry` (a duplicate refused, a far level storing nothing until confirmed, a typed value clearing the missing-index entry), adapter, per-call wrapper: list, add, correct, affected adjustments
+- [ ] 6.6 **[RED then GREEN, Test 31]** `IndexLevelParser` (strict `1.915.878,76`, invariant), view-model. No view: S12
+- [ ] 6.7 **[Guardrails and handover]** as 1.8, 1.10 and 1.11
+
+### Verification, PR 6 (Docker: yes)
+
+Same three commands as PR 1.
+
+---
+
+## Phase 7: Traer índices (S7, PR 7, est. about 250 lines)
+
+**Docker: yes. Supabase: no. Model change: no. Network: one manual query first, and one press of each button at the end.** Spec tests: 82 to 88. Requirement 25. Design anchors: D21,
+D22, §5. **Risk: item 6 (no test sees the live API).** Needs: **S6**, because the button stores through `IIndexRegistry`.
+
+- [ ] 7.1 **[First step, manual]** One query of the exact IPC combination, untested so far (design §5): `start_date` with `limit` and `format=json`
+- [ ] 7.2 **[Domain]** `IIndexValueSource`, `IndexFetch` (`Found`, `NotPublishedYet`, `Unreachable`, `SourceFailed`), `Supports`
+- [ ] 7.3 **[RED then GREEN, Tests 82, 84, 85, 86]** `IndexSources/*`, ICL and IPC, with a fake `HttpMessageHandler` replaying design §5's shapes, malformed ones included. Nothing touches the network
+- [ ] 7.4 **[RED then GREEN]** `IndexSourceSettings`, `appsettings.json` section `IndexSources`, 10-second timeout; the credential guard stays unaffected
+- [ ] 7.5 **[RED then GREEN, Tests 83, 87, 88]** Button logic in the view-model: same checks and table as typed, a differing stored level shown beside the source's, RIPTE offering no button, nothing requested unless pressed
+- [ ] 7.6 **[Guardrails and handover]** as 1.8, 1.10 and 1.11
+- [ ] 7.7 **[Independent verifier]** Item 6, plus H.6, one manual press of each button against the live source
+
+### Verification, PR 7 (Docker: yes)
+
+Same three commands as PR 1, then the independent verifier.
+
+---
+
+## Phase 8: Cláusula y calendario (S8, PR 8, est. about 350 lines)
+
+**Docker: yes. Supabase: M5 (H.3). Model change: yes, M5 in this PR.** Spec tests: 35 to 38, 40, 56, 81. Requirements 13, 17. Design anchors: D3, D15, §3.5, §12 M5. **Risk: item 1 (decides when
+rent moves).** Needs: **S4**, since Test 81 ends a contract and creates another.
+
+- [ ] 8.1 **[Second inspection, read-only]** `AdjustmentSchedule.cs:12-24`, `DueAdjustmentQuery.cs:31,44-49,71,86-88`, `AdjustmentWarning.cs:14-32`, `20260924202549_AddUsersAndRoles.cs:159`
+- [ ] 8.2 **[Model and M5]** `AddClauseWindowOffset`: `window_offset_months`, default 1, check 0 to 3; `app_replace_clause_indices`; clause lock
+- [ ] 8.3 **[RED then GREEN, Tests 35 to 38]** Window `end = due − K`, `base = end − N`; existing clauses read as today; a clause cannot change after a confirmed adjustment, through the function, as each role
+- [ ] 8.4 **[RED then GREEN, Test 56]** `AdjustmentSchedule.NextDueDate` gains the cutover; existing calls unchanged
+- [ ] 8.5 **[RED then GREEN, Test 40]** `DueAdjustmentQuery`: `Active` or `PendingTermination`, `IndexValues`, the desk's warning following it (replaces `ui-de-cobranza/design.md:578`)
+- [ ] 8.6 **[RED then GREEN, Test 81]** An agreed new deal goes through
+- [ ] 8.7 **[Prove the guards by making them fail]** Clause lock, the function's refusal
+- [ ] 8.8 **[Guardrails and handover]** as 1.10 and 1.11
+- [ ] 8.9 **[Independent verifier]** Item 1
+
+### Verification, PR 8 (Docker: yes)
+
+Same three commands as PR 1, then the independent verifier.
+
+---
+
+## Phase 9: Confirmar ajustes (S9, PR 9, est. about 450 lines)
+
+**Docker: yes. Supabase: M6, with the preflight query first (H.3, H.4). Model change: yes, M6 in this PR.** Spec tests: 39, 41 to 48. Requirements 14, 15. Design anchors: D1, D2, D8, D18, §3.1, §3.2, §3.4, §12 M6.
+**Risk: item 1 (what is charged).** Needs: S8.
+
+- [ ] 9.1 **[Second inspection, read-only]** `AccrualSchedule.cs:198-226`, `RentAdjustment.cs:80-112`, `Contract.cs:315-330`, `ContractAccount.cs:449-452`
+- [ ] 9.2 **[Model and M6]** `AddAdjustmentAppliesFrom`: `applies_from`, first-of-month check, both unique indexes
+- [ ] 9.3 **[RED then GREEN, Tests 45, 46, 48]** `CanonFor` prices from `applies_from`. **Test 45 must be seen failing on today's `CanonFor`.** `ContractAdjustmentLateConfirmationTests` unchanged
+- [ ] 9.4 **[RED then GREEN, Tests 44, 47]** `AdjustmentTiming`, `Contract.ConfirmAdjustment` refusals
+- [ ] 9.5 **[RED then GREEN, Tests 39, 41 to 43]** `IAdjustmentDesk` preview, confirm, history; account lock, summary rebuilt and compared (`PreviewStale`, `CorrectsLatest`); two operators at once
+- [ ] 9.6 **[RED then GREEN]** `AdjustmentsViewModel`: worklist, summary, the post-confirmation notice reminder. No view: S12
+- [ ] 9.7 **[Prove the guards by making them fail]** Both unique indexes
+- [ ] 9.8 **[Guardrails and handover]** as 1.10 and 1.11
+- [ ] 9.9 **[Independent verifier]** Item 1
+
+### Verification, PR 9 (Docker: yes)
+
+Same three commands as PR 1, then the independent verifier.
+
+---
+
+## Phase 10: La diferencia (S10, PR 10, est. about 450 lines)
+
+**Docker: yes. Supabase: M7 (H.3). Model change: yes, M7 in this PR.** Spec tests: 49 to 55, 61 to 67, 92. Requirements 16, 19, 20. Design anchors: D4, D5, D6, D7, §3.3, §3.6, §10 F4, F5, F8, §12 M7.
+**Risk: item 1 (what is owed), item 3 (`PeriodNet` consumers).** Needs: S9, and **S5**, which this slice extends so that cancelling also reverses the new kind.
+
+- [ ] 10.1 **[Second inspection, read-only]** Design §3.6's table against the code: `ContractAccount.cs:226,248-259,278,296-314,391-394,449-452`, `CollectionPlanner.cs:331-333,394-397,415-421`, `ReciboBuilder.cs:27-45,68,105-111`
+- [ ] 10.2 **[Model and M7]** `MovementKind.AdjustmentDifference`, `ReciboLineKind.AdjustmentDifference`; `AddAdjustmentDifference`: both kind checks, `ck_account_movements_period_required`, a sign check, `difference_amount`, `difference_movement_id` with its unique index
+- [ ] 10.3 **[RED then GREEN, Test 52]** `DifferenceNet`, recargo base subtracting it. **Test 52 must be seen failing if the new kind joins the recargo base**
+- [ ] 10.4 **[RED then GREEN, Tests 49 to 51, 53 to 55]** `AdjustmentDifference.Regular`, the choice defaulting to no, D6's links; no double counting
+- [ ] 10.5 **[RED then GREEN, Tests 61 to 64]** Ledger: sign, raw update refused, balance on its date, ended contract, voiding leaves it owed
+- [ ] 10.6 **[RED then GREEN, Tests 65 to 67]** Planner and recibo: `FiguresFor`, `MovementsToWrite`, `ReciboLedgerFigures`, `HonorariosBase`, line kind, labels, preview, `DeskTexts.cs:19`
+- [ ] 10.7 **[RED then GREEN, beyond the spec's Tests]** `AmountOwedForPayment` leaves out a charge whose period has not begun (design F8), one test
+- [ ] 10.8 **[RED then GREEN, Test 92, cancellation half]** `ContractCancellation` reverses the new kind; no credit on any date
+- [ ] 10.9 **[Prove the guards by making them fail]** Sign check, recargo base
+- [ ] 10.10 **[Guardrails and handover]** as 1.10 and 1.11
+- [ ] 10.11 **[Independent verifier]** Items 1 and 3
+
+### Verification, PR 10 (Docker: yes)
+
+Same three commands as PR 1, then the independent verifier.
+
+---
+
+## Phase 11: Correcciones (S11, PR 11, est. about 300 lines)
+
+**Docker: yes. Supabase: no. Model change: no.** Spec tests: 57 to 60, 91, and Test 92's correction half. Requirement 18. Design anchors: §3.3, §3.4. **Risk: item 1.** Needs: S10.
+
+- [ ] 11.1 **[Second inspection, read-only]** PR 10 merged intact; `RentAdjustmentIndexValue.cs:6-11`, `LedgerDating.cs:41-42`
+- [ ] 11.2 **[RED then GREEN, Test 91]** `AdjustmentDifference.ForCorrection`, the chain formula: 330,000 in the spec's example; a paid one offers no new charge
+- [ ] 11.3 **[RED then GREEN, Tests 57 to 60]** `IAdjustmentDesk` `PreviewCorrectionAsync`, `ConfirmCorrectionAsync`, from a corrected index and from the history; appended, reusing the corrected row's `EffectiveDate`
+- [ ] 11.4 **[RED then GREEN, Test 92, correction half]** Reversing an unpaid charge leaves no credit on any date
+- [ ] 11.5 **[Guardrails and handover]** as 1.8, 1.10 and 1.11
+- [ ] 11.6 **[Independent verifier]** Item 1
+
+### Verification, PR 11 (Docker: yes)
+
+Same three commands as PR 1, then the independent verifier.
+
+---
+
+## Phase 12: Pantallas (S12, est. about 950 lines, splits per screen)
+
+**Docker: yes for the full suite. Supabase: no (the live smoke is H.7). Model change: no.** Spec tests: 70, 71. Requirement 22. Design anchors: §6, §7. **Waits for Mateo's mockups** (spec P8, P11). If he runs long, Tomás may choose
+plain views for some screens and restyle them later (proposal §7).
+
+- [ ] 12.1 **[Second inspection, read-only]** `NavigationEntry.cs:4-11`, `ShellViewModel.cs:48-52`, `ShellViewModelTests.cs:42,56`, `App.xaml.cs:148-183`, `MainWindow.xaml.cs:18-36`
+- [ ] 12.2 **[RED then GREEN, Test 70]** `NavigationTarget` gains `Parties`, `Units`, `Contracts`, `Indices`, `Adjustments`; added **before** the Admin block, so Usuarios stays Admin-only
+- [ ] 12.3 **[Desktop]** Theme dictionary and the five views, one PR per screen; build only
+- [ ] 12.4 **[Audit, Test 71]** Every refusal in this spec has its own operator text, none reaching the generic error
+- [ ] 12.5 **[Specs]** Merge the deltas into `openspec/specs/` on archiving, as before
+- [ ] 12.6 **[Guardrails and handover]** as 1.10 and 1.11
+
+### Verification, PR 12 and its siblings
+
+Same three commands as PR 1.
+
+---
+
+## Human Follow-Ups (Tomás)
+
+| # | When | What |
+|---|---|---|
+| H.1 | Before each slice | Docker running. A skipped Testcontainers test is an unrun test |
+| H.2 | Before anything touching the live database | Supabase restored if paused. Only Tomás connects; the assistant never handles the password |
+| H.3 | With S3, S4, S5, S6, S8, S9, S10 | **Apply the slice's migration to the test database, smoke-test it, then to production, before installing a version that needs it** (design §12, D25). M1 `AddContractPartyRemovalAndGuards` (S3), M2 `AddContractEventsAndTermsLock` (S4), M3 `AddLoadedByMistakeEndReason` (S5), M4 `SeedEconomicIndices` (S6), M5 `AddClauseWindowOffset` (S8), M6 `AddAdjustmentAppliesFrom` (S9), M7 `AddAdjustmentDifference` (S10) |
+| H.4 | **Before M1 and before M6, on production, expecting no rows** | The two preflight queries below. M1 fails if a contract has two tenants; M6 fails on duplicate Regular rows |
+| H.5 | From M3 on | **Every PC at the agency updates together**: once a version writes a new enum value, an older version cannot read that row (design §12) |
+| H.6 | S7 | One manual press of each button (ICL, IPC) against the live source |
+| H.7 | After S12 | Live smoke of the five screens on the test Supabase, restored first |
+| H.8 | When Nicolás answers | Questions N1 to N4 below. None blocks anything: N1 and N2 change only form suggestions and which day the ICL button asks for, each a small edit |
+
+**Preflight queries (H.4):**
+
+```sql
+SELECT contract_id FROM contract_parties WHERE role = 'Tenant' GROUP BY 1 HAVING count(*) > 1;
+SELECT contract_id, effective_date FROM rent_adjustments WHERE kind = 'Regular' GROUP BY 1, 2 HAVING count(*) > 1;
+```
+
+**Questions for Nicolás (`spec.md`, "Questions"):**
+
+- **N1.** On a contract adjusted by IPC on 1 July, which is the last month you use? (June, May?) And on RIPTE and ICL?
+- **N2.** For ICL, do you compare the 1st of the month with the 1st of the month?
+- **N3.** Do you have any tenant or owner that is a company?
+- **N4.** Which address do you send from, and from which program? Input for the notices change, not this one.
+
+## Issues found
+
+1. **`design.md:107` says "§12 gives the check" for dotted identifiers on existing rows, and §12 does not.** Its two queries cover tenants and
+   adjustments. S1 tolerates such rows (search normalizes the stored value, and a correction rewrites it), but a dotted row would not collide with its
+   digits-only twin. Suggested addition to H.4, not in the design: `SELECT id FROM parties WHERE dni ~ '[^0-9]' OR cuil ~ '[^0-9]';`, expecting no rows.
+2. **The spec's Preconditions table names slices S1 to S6 from the proposal** (design F6). The Verification tables here are the current ones.
+3. **Test 71 is split**: proven per slice, audited at S12. **Test 92 is split**: its cancellation half closes in S10, its correction half in S11.
+4. **To fix before S2, from S1's review** (lineage `review-0f581f6b7015ea49`, approved; its findings are non-blocking and left for separate work):
+   - `PartiesViewModel.cs:218-222`, a real defect: confirming a correction writes the form as it stands, not the values shown in the summary. Editing a field after saving does not clear the pending confirmation, so the operator can confirm one thing and store another. Requirement 3 needs what was confirmed to be what is written.
+   - `PartiesViewModel.cs:234-255`: the failure path has no test.
+   - `PartyRegistry.cs:110-117`: searching rows that still hold dots, and partial identifiers, have no test.
+
+## Deviations (recorded beside tasks during apply)
+
+**Phase 1 (S1), applied 2026-11-05.**
+
+- 1.1: baseline 1013 passed, 0 failed, 0 skipped, as measured just before. Anchors matched the design.
+- 1.2: **`NormalizeDni` and `NormalizeCuil` strip dots, dashes and spaces, not "everything but digits"** (design §2.1 says "digits only"). Keeping digits alone would
+  turn "abc" into empty, and empty means absent, so it would be accepted. Anything else stays and `IsValid*` refuses it; what reaches the database is digits only, as the design requires.
+- 1.2, 1.3, 1.5, 1.6, 1.7: **RED order.** The Domain bodies were drafted before the tests, so they were stubbed out to observe RED, then restored. With stubs (identity normalizing, always valid, adapter
+  throwing `NotImplementedException`, empty view-model commands, wrapper unregistered): Domain 34 of 55 selected failed, Presentation 14 of 15, Infrastructure 30 of 33.
+- 1.4: **`PartyRefusal` gains `PartyNotFound`**, beyond design §2.1's six: a correction by an id no longer there would otherwise throw. **`CorrectAsync` also takes `acceptNoIdentifier`**: R3 says R2's checks
+  apply, so removing a person's last identifier warns as creating does.
+- 1.5: a blank search lists everyone, uncapped, in `AccountSearch`'s order. Requirement 1's "list" needs it, since `AccountSearch.Select` finds nothing under 2 characters and stops at 50. `AccountSearch` itself is unchanged.
+- 1.7: "use that person" sets `ChosenParty`; the contract form reads it in S3. It is offered on creating only, since on a correction it has no meaning; the refusal still names the holder there.
+- 1.8: guards, each in a scratch mutation of `PartyRegistry.cs`, restored after: no normalization → 5 red, including Tests 3, 4, 6; `ix_parties_dni` mapped to the wrong refusal → 4 red; holder lookup removed → 3 red, including Test 4; accept flag ignored → 2 red, including Test 6.
+  **Test 7 has no mutation of its own**: this slice writes nothing to `recibos`, and that table is already append-only. It pins the stored `tenant_name` before and after.
+- 1.9: differential. `git diff` on `Party.cs` and `SessionServices.cs` is additions only. The new `PartyTests.TheConstructorAndUpdateContactInfo_BehaveAsBefore`, run unchanged on a copy of the base commit, passes there too. Every existing `SessionServicesTests` assertion is still present and green. `has-pending-model-changes` reports none, so `CorrectIdentity` changed no EF model.
+- 1.10: build 0 warnings, 0 errors; full suite **1109 passed**, 0 failed, 0 skipped (Domain 483, Presentation 259, Infrastructure 367), 96 more than the baseline; `has-pending-model-changes`: no changes. `TIME_WAIT` before the suite: 1006.
+- Size: about 1,620 authored lines against an estimate of about 350, about 730 of production code, of which 326 are the view-model, and about 890 of tests. Not split: one behaviour with its tests. **This is a warning for the forecast of later slices, whose estimates may be as low.**
