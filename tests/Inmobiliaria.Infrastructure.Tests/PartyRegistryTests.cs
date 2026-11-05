@@ -92,12 +92,41 @@ public sealed class PartyRegistryTests
     [InlineData("30-123-456")]
     [InlineData("20-11111111-2")]
     [InlineData("20111111112")]
+    [InlineData("123.456")]
+    [InlineData("11111111-2")]
     public async Task SearchByFormattedIdentifier_FindsThePerson(string text)
     {
         Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
         await using var world = await WorldAsync();
         var juan = await SavedAsync(Registry(world).CreateAsync(new PartyDraft("Juan", "Pérez", "30123456", JuanCuil), false));
         await SavedAsync(Registry(world).CreateAsync(new PartyDraft("Ana", "Gómez", "28111222"), false));
+
+        var found = await Registry(world).SearchAsync(text);
+
+        Assert.Equal(juan.Id, Assert.Single(found).Id);
+    }
+
+    /// <summary>Rows from before identifiers were normalized may still hold dots, and are found however the search is written.</summary>
+    [SkippableTheory]
+    [InlineData("30.123.456")]
+    [InlineData("30123456")]
+    [InlineData("123456")]
+    [InlineData("20-11111111-2")]
+    [InlineData("20111111112")]
+    public async Task SearchByIdentifier_FindsARowThatStillHoldsDots(string text)
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+        await using var world = await WorldAsync();
+        var juan = await SavedAsync(Registry(world).CreateAsync(new PartyDraft("Juan", "Pérez", "30123456", JuanCuil), false));
+        await SavedAsync(Registry(world).CreateAsync(new PartyDraft("Ana", "Gómez", "28111222"), false));
+
+        await using (var connection = await ReciboTestSupport.OpenAsync(world.Database.Context))
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "UPDATE parties SET dni = '30.123.456', cuil = '20-11111111-2' WHERE id = @id";
+            command.Parameters.AddWithValue("id", juan.Id);
+            Assert.Equal(1, await command.ExecuteNonQueryAsync());
+        }
 
         var found = await Registry(world).SearchAsync(text);
 

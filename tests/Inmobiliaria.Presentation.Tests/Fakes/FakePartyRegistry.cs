@@ -14,6 +14,9 @@ internal sealed class FakePartyRegistry : IPartyRegistry
 
     public Func<Guid, PartyDraft, bool, PartyResult>? OnCorrect { get; set; }
 
+    /// <summary>When set, reading the list fails with this, as a dropped connection would.</summary>
+    public Exception? SearchFailure { get; set; }
+
     public List<string?> Searches { get; } = [];
 
     public List<(PartyDraft Draft, bool Accepted)> Created { get; } = [];
@@ -23,6 +26,11 @@ internal sealed class FakePartyRegistry : IPartyRegistry
     public Task<IReadOnlyList<PartyListing>> SearchAsync(string? text, CancellationToken ct = default)
     {
         Searches.Add(text);
+        if (SearchFailure is { } failure)
+        {
+            throw failure;
+        }
+
         return Task.FromResult<IReadOnlyList<PartyListing>>(Persons.ToList());
     }
 

@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-05, con el design de `gestion-de-alquileres` mergeado en el PR #90 y S1 esperando el commit de Tomás_
+_Última actualización: 2026-11-05, con S1 mergeado en el PR #91 y las correcciones de su revisión esperando el commit de Tomás_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -13,9 +13,8 @@ _Última actualización: 2026-11-05, con el design de `gestion-de-alquileres` me
 
 ## Próximos pasos
 
-1. **Tomás commitea S1 (Personas), abre el PR y mergea.** Está aprobado por la revisión de gentle-ai.
-2. **Corregir lo que dejó esa revisión** (`tasks.md`, Issues found, punto 4), con un defecto real al confirmar una corrección, antes de S2.
-3. **Seguir con S2 (Propiedades).** No espera a Nicolás ni a Mateo.
+1. **Tomás commitea las correcciones de la revisión de S1, abre el PR y mergea** (`tasks.md`, Issues found, punto 4).
+2. **Seguir con S2 (Propiedades).** No espera a Nicolás ni a Mateo.
 
 ## Pendientes / bloqueos
 
@@ -74,7 +73,7 @@ dotnet test Inmobiliaria.Core.slnf --configuration Release
 dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure
 ```
 
-Esperado: **1109 pasados, 0 fallas, 0 omitidos**, build sin advertencias y el modelo en sintonía con
+Esperado: **1128 pasados, 0 fallas, 0 omitidos**, build sin advertencias y el modelo en sintonía con
 `20261025005832_FixClearMustChangePasswordIdentity`. Si el build de Desktop falla con MSB3027, la aplicación está
 abierta y tiene tomadas sus DLL: cerrarla.
 
