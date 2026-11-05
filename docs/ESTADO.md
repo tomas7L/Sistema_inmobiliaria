@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-05, con S1 mergeado en el PR #91 y las correcciones de su revisión esperando el commit de Tomás_
+_Última actualización: 2026-11-05, con las correcciones de S1 mergeadas en el PR #92 y S2 esperando el commit de Tomás_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -13,8 +13,8 @@ _Última actualización: 2026-11-05, con S1 mergeado en el PR #91 y las correcci
 
 ## Próximos pasos
 
-1. **Tomás commitea las correcciones de la revisión de S1, abre el PR y mergea** (`tasks.md`, Issues found, punto 4).
-2. **Seguir con S2 (Propiedades).** No espera a Nicolás ni a Mateo.
+1. **Tomás commitea S2 (Propiedades), abre el PR y mergea.**
+2. **Seguir con S3 (Crear contratos).** Trae la primera migración y un verificador independiente.
 
 ## Pendientes / bloqueos
 
@@ -73,7 +73,7 @@ dotnet test Inmobiliaria.Core.slnf --configuration Release
 dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure
 ```
 
-Esperado: **1128 pasados, 0 fallas, 0 omitidos**, build sin advertencias y el modelo en sintonía con
+Esperado: **1179 pasados, 0 fallas, 0 omitidos**, build sin advertencias y el modelo en sintonía con
 `20261025005832_FixClearMustChangePasswordIdentity`. Si el build de Desktop falla con MSB3027, la aplicación está
 abierta y tiene tomadas sus DLL: cerrarla.
 

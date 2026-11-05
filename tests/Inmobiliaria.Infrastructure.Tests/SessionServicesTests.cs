@@ -5,6 +5,7 @@ using Inmobiliaria.Domain.Collection;
 using Inmobiliaria.Domain.GoLive;
 using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Domain.Parties;
+using Inmobiliaria.Domain.Units;
 using Inmobiliaria.Infrastructure.Access;
 using Inmobiliaria.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -92,6 +93,7 @@ public sealed class SessionServicesTests
         Assert.IsAssignableFrom<IAccountDirectory>(provider.GetRequiredService<IAccountDirectory>());
         Assert.IsAssignableFrom<IReciboReader>(provider.GetRequiredService<IReciboReader>());
         Assert.IsAssignableFrom<IPartyRegistry>(provider.GetRequiredService<IPartyRegistry>());
+        Assert.IsAssignableFrom<IUnitRegistry>(provider.GetRequiredService<IUnitRegistry>());
         Assert.IsAssignableFrom<IAgencyClock>(provider.GetRequiredService<IAgencyClock>());
         Assert.Equal(role, provider.GetRequiredService<IUserSession>().Role);
         Assert.Empty(factory.Created);
@@ -146,6 +148,7 @@ public sealed class SessionServicesTests
         Assert.NotNull(provider.GetRequiredService<IAccountDirectory>());
         Assert.NotNull(provider.GetRequiredService<IReciboReader>());
         Assert.NotNull(provider.GetRequiredService<IPartyRegistry>());
+        Assert.NotNull(provider.GetRequiredService<IUnitRegistry>());
         Assert.NotNull(provider.GetRequiredService<IAgencyClock>());
     }
 
@@ -221,6 +224,23 @@ public sealed class SessionServicesTests
         await Assert.ThrowsAsync<ConnectionRefusedException>(() => parties.SearchAsync("perez"));
         await Assert.ThrowsAsync<ConnectionRefusedException>(() => parties.CreateAsync(draft, false));
         await Assert.ThrowsAsync<ConnectionRefusedException>(() => parties.CorrectAsync(Guid.NewGuid(), draft, false));
+
+        Assert.Equal(3, factory.Created.Count);
+        Assert.Equal(3, factory.Created.Distinct().Count());
+        Assert.All(factory.Created, context => Assert.Throws<ObjectDisposedException>(() => context.ChangeTracker));
+    }
+
+    [Fact]
+    public async Task TheUnitWrapper_AlsoObtainsOneDisposedContextPerCall()
+    {
+        var factory = new SpySessionFactory();
+        using var provider = Collect(factory, UserRole.Empleado, ValidSettings()).BuildServiceProvider();
+        var units = provider.GetRequiredService<IUnitRegistry>();
+        var draft = new UnitDraft("Alem", "1258", "Sunchales", "Santa Fe", "2322");
+
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => units.ListAsync());
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => units.CreateAsync(UnitType.Property, draft, false));
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => units.RelocateAsync(Guid.NewGuid(), draft, false));
 
         Assert.Equal(3, factory.Created.Count);
         Assert.Equal(3, factory.Created.Distinct().Count());
