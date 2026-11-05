@@ -3,6 +3,7 @@ using Inmobiliaria.Domain.Accounts;
 using Inmobiliaria.Domain.Collection;
 using Inmobiliaria.Domain.GoLive;
 using Inmobiliaria.Domain.Leasing;
+using Inmobiliaria.Domain.Parties;
 using Inmobiliaria.Infrastructure.Persistence;
 using Inmobiliaria.Infrastructure.Persistence.PerCall;
 using Microsoft.Extensions.DependencyInjection;
@@ -43,6 +44,7 @@ public static class SessionServices
         services.AddSingleton<IAccountDirectory>(provider =>
             new PerCallAccountDirectory(factory, provider.GetRequiredService<IAgencyClock>()));
         services.AddSingleton<IReciboReader>(_ => new PerCallReciboReader(factory));
+        services.AddSingleton<IPartyRegistry>(_ => new PerCallPartyRegistry(factory));
 
         if (recargo.Terms is { } terms)
         {
