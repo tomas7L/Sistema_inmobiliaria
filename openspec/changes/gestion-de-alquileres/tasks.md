@@ -20,7 +20,7 @@ Slice to phase map (one slice = one phase = one PR, S12 splitting per screen): S
 |---|---|
 | Estimated changed lines | About 5,000 authored (additions + deletions, tests included), design §11 |
 | Review budget | About 400 authored lines per PR, a planning heuristic and not a cap |
-| 400-line budget risk | High: S3, S5, S9, S10 are estimated above it, S12 at about 950 and S1 came in at about 1,620 (see Deviations) |
+| 400-line budget risk | High: S3, S5, S9, S10 are estimated above it, S12 at about 950, S1 came in at about 1,620 and S2 at about 1,410 (see Deviations) |
 | Chained PRs recommended | Yes |
 | Suggested split | One PR per slice; S12 splits per screen |
 | Delivery strategy | auto-chain |
@@ -89,13 +89,13 @@ D19, D20, §2.1, §4, §6. Needs: nothing.
 
 **Docker: yes. Supabase: no. Model change: no.** Spec tests: 8, 9. Requirements 4, 5. Design anchors: §2.2, §4, §6. Needs: nothing.
 
-- [ ] 2.1 **[Second inspection, read-only]** PR 1 merged intact; `Unit.cs:38`, `PropertyUnit`, `ParkingUnit` as the design cites
-- [ ] 2.2 **[Domain]** `IUnitRegistry`, `UnitListing` (with covering contract's tenant and move-out date), typed refusals with their `OperatorText`
-- [ ] 2.3 **[RED then GREEN, Test 8]** `UnitRegistry.ListAsync`: unavailable when a `contract_units` row joins a contract in `Active` or `PendingTermination`, one query, as a real role
-- [ ] 2.4 **[RED then GREEN, Test 9]** `CreateAsync`, `RelocateAsync`; identical-address warning compared as folded text in memory
-- [ ] 2.5 **[RED then GREEN, wiring]** `PerCallUnitRegistry`, `SessionServicesTests`
-- [ ] 2.6 **[RED then GREEN]** `UnitsViewModel`, fake port, tests in Presentation.Tests. No view: S12
-- [ ] 2.7 **[Guardrails and handover]** as 1.8, 1.10 and 1.11
+- [x] 2.1 **[Second inspection, read-only]** PR 1 merged intact; `Unit.cs:38`, `PropertyUnit`, `ParkingUnit` as the design cites
+- [x] 2.2 **[Domain]** `IUnitRegistry`, `UnitListing` (with covering contract's tenant and move-out date), typed refusals with their `OperatorText`
+- [x] 2.3 **[RED then GREEN, Test 8]** `UnitRegistry.ListAsync`: unavailable when a `contract_units` row joins a contract in `Active` or `PendingTermination`, one query, as a real role
+- [x] 2.4 **[RED then GREEN, Test 9]** `CreateAsync`, `RelocateAsync`; identical-address warning compared as folded text in memory
+- [x] 2.5 **[RED then GREEN, wiring]** `PerCallUnitRegistry`, `SessionServicesTests`
+- [x] 2.6 **[RED then GREEN]** `UnitsViewModel`, fake port, tests in Presentation.Tests. No view: S12
+- [x] 2.7 **[Guardrails and handover]** as 1.8, 1.10 and 1.11
 
 ### Verification, PR 2 (Docker: yes)
 
@@ -365,3 +365,14 @@ SELECT contract_id, effective_date FROM rent_adjustments WHERE kind = 'Regular' 
 - 1.9: differential. `git diff` on `Party.cs` and `SessionServices.cs` is additions only. The new `PartyTests.TheConstructorAndUpdateContactInfo_BehaveAsBefore`, run unchanged on a copy of the base commit, passes there too. Every existing `SessionServicesTests` assertion is still present and green. `has-pending-model-changes` reports none, so `CorrectIdentity` changed no EF model.
 - 1.10: build 0 warnings, 0 errors; full suite **1109 passed**, 0 failed, 0 skipped (Domain 483, Presentation 259, Infrastructure 367), 96 more than the baseline; `has-pending-model-changes`: no changes. `TIME_WAIT` before the suite: 1006.
 - Size: about 1,620 authored lines against an estimate of about 350, about 730 of production code, of which 326 are the view-model, and about 890 of tests. Not split: one behaviour with its tests. **This is a warning for the forecast of later slices, whose estimates may be as low.**
+
+**Phase 2 (S2), applied 2026-11-05.**
+
+- 2.1: PR 1 and its review follow-up (#91, #92) merged intact; `Unit.cs:38`, `PropertyUnit`, `ParkingUnit` as the design cites. Baseline 1128 passed, 0 failed, 0 skipped.
+- 2.2: **`UnitDraft` and `UnitDraftRules` added**, not named by the design, following `PartyDraft`: the address a form typed, trimmed, with its one rule as a value rather than the `Address` constructor's exception.
+- 2.2, 2.3: **`UnitListing.Covering` holds status, tenant and move-out date.** Spec Decision 30 lets a successor start while the previous contract waits for its move-out, so two contracts can cover one unit: the `Active` one is reported, since that is what a new contract is refused for. The status is there because S3 needs it to tell a refusal from a warning.
+- 2.2 to 2.6: **RED order.** Port and form rule were drafted first, with the adapter throwing `NotImplementedException` and the view-model's write path stubbed: Presentation 18 of 21 selected failed, Infrastructure 22 of 22. Domain 8 of 8 passed at once, so its rule was proven by mutation below.
+- 2.4: The warning also applies when correcting, excluding the unit's own address, since the requirement says "an identical existing address". All seven parts are compared, folded: another floor or apartment is another unit.
+- 2.6: Editing any field, or choosing another type, withdraws the warning, the rule S1's review follow-up established. No confirmation on correcting an address: the spec asks for none.
+- 2.7: **Guards proven by making them fail**, each restored after: `PendingTermination` no longer covering failed its test; the pending contract reported before the active one failed its test; exact text instead of folded failed 3; a postal code no longer required failed 1.
+- 2.7: Build 0 warnings, suite 1179 passed, 0 failed, 0 skipped, `has-pending-model-changes` clean. **About 1,410 lines against an estimate of 250**, nearly all tests, like S1. The list is `UnitRegistryTests.TheList_IsOneQuery`, pinned by counting commands.
