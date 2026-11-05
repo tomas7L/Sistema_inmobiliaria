@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-05, con las correcciones de S1 mergeadas en el PR #92 y S2 esperando el commit de Tomás_
+_Última actualización: 2026-11-05, con S2 mergeado en el PR #93 y S3 esperando el commit de Tomás_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -13,8 +13,9 @@ _Última actualización: 2026-11-05, con las correcciones de S1 mergeadas en el 
 
 ## Próximos pasos
 
-1. **Tomás commitea S2 (Propiedades), abre el PR y mergea.**
-2. **Seguir con S3 (Crear contratos).** Trae la primera migración y un verificador independiente.
+1. **Tomás commitea S3 (Crear contratos), abre el PR y mergea.**
+2. **Tomás corre las consultas previas (H.4) y aplica M1**: primero en la base de PRUEBA, después en producción (`tasks.md`, H.3).
+3. **Seguir con S4 (Corregir, avisar, terminar).** Trae M2 y un verificador independiente.
 
 ## Pendientes / bloqueos
 
@@ -55,7 +56,7 @@ _Última actualización: 2026-11-05, con las correcciones de S1 mergeadas en el 
 | | |
 |---|---|
 | **Docker** | **Sí** para programar cada entrega (Testcontainers `postgres:17.6`) |
-| **Supabase** | No hasta S3 (primera migración); la base de PRUEBA se pausa sola, y solo Tomás se conecta |
+| **Supabase** | **Sí** para aplicar M1, y M2 con S4; la base de PRUEBA se pausa sola, y solo Tomás se conecta |
 
 ## Para retomar
 
@@ -73,8 +74,8 @@ dotnet test Inmobiliaria.Core.slnf --configuration Release
 dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure
 ```
 
-Esperado: **1179 pasados, 0 fallas, 0 omitidos**, build sin advertencias y el modelo en sintonía con
-`20261025005832_FixClearMustChangePasswordIdentity`. Si el build de Desktop falla con MSB3027, la aplicación está
+Esperado: **1395 pasados, 0 fallas, 0 omitidos**, build sin advertencias y el modelo en sintonía con
+`20261105220213_AddContractPartyRemovalAndGuards`. Si el build de Desktop falla con MSB3027, la aplicación está
 abierta y tiene tomadas sus DLL: cerrarla.
 
 **Leer la salida por el contador de errores o el código de salida, nunca por un patrón.** En esta

@@ -13,6 +13,9 @@ public sealed class ContractParty
     public Guid PartyId { get; }
     public PartyRole Role { get; }
 
+    /// <summary>When the party was taken off the contract, or null while they are on it (gestion-de-alquileres design D13). Ordinary reads never see a removed row.</summary>
+    public DateTimeOffset? RemovedAt { get; private set; }
+
     public ContractParty(Guid contractId, Guid partyId, PartyRole role)
     {
         ContractId = contractId;

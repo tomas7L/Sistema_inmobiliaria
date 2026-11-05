@@ -94,6 +94,7 @@ public sealed class SessionServicesTests
         Assert.IsAssignableFrom<IReciboReader>(provider.GetRequiredService<IReciboReader>());
         Assert.IsAssignableFrom<IPartyRegistry>(provider.GetRequiredService<IPartyRegistry>());
         Assert.IsAssignableFrom<IUnitRegistry>(provider.GetRequiredService<IUnitRegistry>());
+        Assert.IsAssignableFrom<IContractRegistry>(provider.GetRequiredService<IContractRegistry>());
         Assert.IsAssignableFrom<IAgencyClock>(provider.GetRequiredService<IAgencyClock>());
         Assert.Equal(role, provider.GetRequiredService<IUserSession>().Role);
         Assert.Empty(factory.Created);
@@ -149,6 +150,7 @@ public sealed class SessionServicesTests
         Assert.NotNull(provider.GetRequiredService<IReciboReader>());
         Assert.NotNull(provider.GetRequiredService<IPartyRegistry>());
         Assert.NotNull(provider.GetRequiredService<IUnitRegistry>());
+        Assert.NotNull(provider.GetRequiredService<IContractRegistry>());
         Assert.NotNull(provider.GetRequiredService<IAgencyClock>());
     }
 
@@ -246,6 +248,34 @@ public sealed class SessionServicesTests
         Assert.Equal(3, factory.Created.Distinct().Count());
         Assert.All(factory.Created, context => Assert.Throws<ObjectDisposedException>(() => context.ChangeTracker));
     }
+
+    [Fact]
+    public async Task TheContractWrapper_AlsoObtainsOneDisposedContextPerCall()
+    {
+        var factory = new SpySessionFactory();
+        using var provider = Collect(factory, UserRole.Empleado, ValidSettings()).BuildServiceProvider();
+        var contracts = provider.GetRequiredService<IContractRegistry>();
+
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => contracts.ListAsync(null, null));
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => contracts.DetailAsync(Guid.NewGuid()));
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => contracts.SuggestRateAsync(Guid.NewGuid()));
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => contracts.CreateAsync(ValidContractDraft(), false));
+
+        Assert.Equal(4, factory.Created.Count);
+        Assert.Equal(4, factory.Created.Distinct().Count());
+        Assert.All(factory.Created, context => Assert.Throws<ObjectDisposedException>(() => context.ChangeTracker));
+    }
+
+    private static ContractDraft ValidContractDraft() => new()
+    {
+        TenantId = Guid.NewGuid(),
+        LessorIds = [Guid.NewGuid()],
+        Shares = [new UnitShare(Guid.NewGuid(), 100m)],
+        StartDate = new AgencyClock().Today.AddDays(1 - new AgencyClock().Today.Day).AddMonths(1),
+        NominalEndDate = new AgencyClock().Today.AddYears(2),
+        MonthlyRent = 100_000m,
+        HonorariosPercentage = 8m,
+    };
 
     [Fact]
     public async Task TheReaderWrapper_AlsoObtainsOneDisposedContextPerCall()

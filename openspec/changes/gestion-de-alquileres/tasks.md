@@ -20,7 +20,7 @@ Slice to phase map (one slice = one phase = one PR, S12 splitting per screen): S
 |---|---|
 | Estimated changed lines | About 5,000 authored (additions + deletions, tests included), design §11 |
 | Review budget | About 400 authored lines per PR, a planning heuristic and not a cap |
-| 400-line budget risk | High: S3, S5, S9, S10 are estimated above it, S12 at about 950, S1 came in at about 1,620 and S2 at about 1,410 (see Deviations) |
+| 400-line budget risk | High: S3, S5, S9, S10 are estimated above it, S12 at about 950, S1 came in at about 1,620, S2 at about 1,410 and S3 at about 4,250, 3,100 of them tests (see Deviations) |
 | Chained PRs recommended | Yes |
 | Suggested split | One PR per slice; S12 splits per screen |
 | Delivery strategy | auto-chain |
@@ -109,16 +109,16 @@ Same three commands as PR 1.
 this PR.** Spec tests: 10 to 22, 68, 69. Requirements 6, 7, 8, 21. Design anchors: D17, D18, D19, §2.3, §4, §10 F2, §12 M1. **Risk: item 2 (who may
 set a cutover).** Needs: nothing in this change; starts the S3-S4-S5 chain.
 
-- [ ] 3.1 **[Second inspection, read-only]** `Contract.cs:119-169,227-247`, `ContractPartyConfiguration.cs:21`, `20261023131755_HardenCutoverDateToAdmin.cs:18-28`, `CutoverTriggerTests.cs:162` as the design cites
-- [ ] 3.2 **[RED then GREEN]** `ContractDraft`, `ContractDraftRules.Check`, `CheckCutoverBounds` extracted from `CheckCutoverDate`; start-on-the-1st rule in the rules only (spec F9), Domain.Tests
-- [ ] 3.3 **[Model and M1]** `ContractParty.RemovedAt`, query filter (D13), `AddContractPartyRemovalAndGuards`: `removed_at`, `ux_contract_parties_one_tenant`, `contracts_cutover_insert_guard`
-- [ ] 3.4 **[RED then GREEN, Tests 68, 69; Finding F2]** Rewrite `CutoverTriggerTests.AnEmpleadoInsertsAContractWithADate_AndCannotChangeIt` to expect `contracts_cutover_insert_admin_only`; move its "cannot change it" half to a contract inserted as superuser. As real login roles
-- [ ] 3.5 **[RED then GREEN, Tests 10 to 22]** `IContractRegistry` create, list, detail: one `SaveChangesAsync` in a transaction, availability checked inside it, rate suggestion from the lessor's latest `StartDate` with a rate
-- [ ] 3.6 **[RED then GREEN, wiring]** `PerCallContractRegistry`, `SessionServicesTests`
-- [ ] 3.7 **[RED then GREEN]** `ContractFormViewModel`, the cutover section offered only to an Admin, the database still deciding. No view: S12
-- [ ] 3.8 **[Prove the guards by making them fail]** Tenant index, cutover INSERT trigger
-- [ ] 3.9 **[Guardrails and handover]** as 1.10 and 1.11, `has-pending-model-changes` proving the model matches M1
-- [ ] 3.10 **[Independent verifier]** Item 2. Reads the whole spec, runs probes in a fresh scratch copy
+- [x] 3.1 **[Second inspection, read-only]** `Contract.cs:119-169,227-247`, `ContractPartyConfiguration.cs:21`, `20261023131755_HardenCutoverDateToAdmin.cs:18-28`, `CutoverTriggerTests.cs:162` as the design cites
+- [x] 3.2 **[RED then GREEN]** `ContractDraft`, `ContractDraftRules.Check`, `CheckCutoverBounds` extracted from `CheckCutoverDate`; start-on-the-1st rule in the rules only (spec F9), Domain.Tests
+- [x] 3.3 **[Model and M1]** `ContractParty.RemovedAt`, query filter (D13), `AddContractPartyRemovalAndGuards`: `removed_at`, `ux_contract_parties_one_tenant`, `contracts_cutover_insert_guard`
+- [x] 3.4 **[RED then GREEN, Tests 68, 69; Finding F2]** Rewrite `CutoverTriggerTests.AnEmpleadoInsertsAContractWithADate_AndCannotChangeIt` to expect `contracts_cutover_insert_admin_only`; move its "cannot change it" half to a contract inserted as superuser. As real login roles
+- [x] 3.5 **[RED then GREEN, Tests 10 to 22]** `IContractRegistry` create, list, detail: one `SaveChangesAsync` in a transaction, availability checked inside it, rate suggestion from the lessor's latest `StartDate` with a rate
+- [x] 3.6 **[RED then GREEN, wiring]** `PerCallContractRegistry`, `SessionServicesTests`
+- [x] 3.7 **[RED then GREEN]** `ContractFormViewModel`, the cutover section offered only to an Admin, the database still deciding. No view: S12
+- [x] 3.8 **[Prove the guards by making them fail]** Tenant index, cutover INSERT trigger
+- [x] 3.9 **[Guardrails and handover]** as 1.10 and 1.11, `has-pending-model-changes` proving the model matches M1
+- [x] 3.10 **[Independent verifier]** Item 2. Reads the whole spec, runs probes in a fresh scratch copy
 
 ### Verification, PR 3 (Docker: yes)
 
@@ -326,6 +326,8 @@ Same three commands as PR 1.
 ```sql
 SELECT contract_id FROM contract_parties WHERE role = 'Tenant' GROUP BY 1 HAVING count(*) > 1;
 SELECT contract_id, effective_date FROM rent_adjustments WHERE kind = 'Regular' GROUP BY 1, 2 HAVING count(*) > 1;
+-- Before M1, expecting false: no Empleado login may create objects, which the older cutover UPDATE trigger relies on.
+SELECT has_schema_privilege('inmobiliaria_empleado', 'public', 'CREATE');
 ```
 
 **Questions for Nicolás (`spec.md`, "Questions"):**
@@ -346,6 +348,12 @@ SELECT contract_id, effective_date FROM rent_adjustments WHERE kind = 'Regular' 
    - `PartiesViewModel.cs:218-222`, a real defect: confirming a correction writes the form as it stands, not the values shown in the summary. Editing a field after saving does not clear the pending confirmation, so the operator can confirm one thing and store another. Requirement 3 needs what was confirmed to be what is written.
    - `PartiesViewModel.cs:234-255`: the failure path has no test.
    - `PartyRegistry.cs:110-117`: searching rows that still hold dots, and partial identifiers, have no test.
+
+5. **From S3's verifier, for S4:** an Empleado can set `contract_parties.removed_at` by raw SQL and then insert another tenant, with no trace until `contract_events` exists (S4). The index still refuses a second live tenant. This is the raw gap spec F6 accepted.
+6. **The older cutover UPDATE trigger does not qualify `pg_has_role`** (`20261023131755_HardenCutoverDateToAdmin.cs`), so it relies on no login holding CREATE on a schema. None does on the test database; H.4 now checks production. Left as it is: it predates this change.
+7. **Small wording left as it is:** a unit repeated in the shares gets the "sumar 100%" text, which S12's picker should make unreachable. `UnitListing.AddressText` writes "depto" where the recibo's `DescribeUnit` writes "dpto"; contract screens use the recibo's, except the unit-being-vacated warning, which reuses the unit listing.
+
+8. **From S3's review, for S12:** `PartiesViewModel` and `UnitsViewModel` apply a reply to whatever the form holds by then, as `ContractFormViewModel` did before its fix. An edit made while a save is out can be cleared, or a warning accepted for values it did not describe. S12's views should make the form read-only while busy, or those two get the same edit counter.
 
 ## Deviations (recorded beside tasks during apply)
 
@@ -376,3 +384,21 @@ SELECT contract_id, effective_date FROM rent_adjustments WHERE kind = 'Regular' 
 - 2.6: Editing any field, or choosing another type, withdraws the warning, the rule S1's review follow-up established. No confirmation on correcting an address: the spec asks for none.
 - 2.7: **Guards proven by making them fail**, each restored after: `PendingTermination` no longer covering failed its test; the pending contract reported before the active one failed its test; exact text instead of folded failed 3; a postal code no longer required failed 1.
 - 2.7: Build 0 warnings, suite 1179 passed, 0 failed, 0 skipped, `has-pending-model-changes` clean. **About 1,410 lines against an estimate of 250**, nearly all tests, like S1. The list is `UnitRegistryTests.TheList_IsOneQuery`, pinned by counting commands.
+
+**Phase 3 (S3), applied 2026-11-05.**
+
+- 3.1: PR #93 merged intact; every anchor matched. Baseline 1179 passed, 0 failed, 0 skipped.
+- 3.2: **`Contract`'s constructor does not validate the cutover** (design §2.3 says it does through `CheckCutoverBounds`). It has no `today`, and Domain has no clock, so it cannot. The bounds are one method, used by `CheckCutoverDate` and by `ContractDraftRules`; the constructor is unchanged.
+- 3.2: **`RentSplit.FromAmounts` added**, not named by the design, for the conversion spec R7 asks for: the residue goes to the largest share, ties to the lowest id, like `RentSplit.Equal`.
+- 3.3: **The new function names `pg_catalog.pg_has_role`** (design D17 says "the same test"). The verifier showed a login holding CREATE could shadow the unqualified name. See Issues found, 6.
+- 3.5: **The units are locked (`FOR UPDATE`, in id order) before their availability is read.** The design says the check runs inside the transaction, which alone would not stop two operators letting one unit at once (spec Decision 30). Removing the lock fails `TwoOperatorsOnOneUnit_TheSecondIsRefused`. Availability reuses `UnitRegistry.ListAsync`.
+- 3.5: A cutover date warns of nothing about the first due date, since a cutover carries those months. A rate or fee with more decimals than its column, or too large for it, is refused rather than rounded by the database. A person repeated as lessor or codeudor becomes one row.
+- 3.5, 3.7: **Warnings are accepted together with one flag** (`acceptWarnings`), and editing anything on the form withdraws them, as on Personas and Propiedades. Accepting never gets past a refusal.
+- 3.7: **`ContractsViewModel` added**, not named by the tasks: spec R6 needs the list and the past-end flag, and no other slice owns them. The detail view-model stays in S4 (4.6), as planned.
+- 3.2, 3.5, 3.7: **RED order.** Trigger and index tests failed before M1 (4 of 11). The port's tests failed against an adapter throwing `NotImplementedException` (26 of 26). The rules and the form were drafted first, then stubbed to observe RED, then restored: Domain 23 of 33, Presentation 29 of 33.
+- 3.8: **Guards proven by making them fail:** no trigger or index (before M1, and again by the verifier: 4 of 36), no unit lock (1), an empty error map (1), and each of the verifier's findings below failing before its fix.
+- 3.9: Build 0 warnings, suite 1395 passed, 0 failed, 0 skipped, `has-pending-model-changes` clean against `AddContractPartyRemovalAndGuards`.
+- 3.10: **Independent verifier: every requirement and test PASS, no blockers.** An Empleado got no cutover date stored by any route tried: insert, multi-row, `MERGE`, `COPY`, role switching or trigger evasion. Not verified: `PerCallContractRegistry` against a real login, the view, and Supabase. **Fixed from its advisories:** a 29-digit share threw out of the form with no message; with no canon, typed amounts blamed the shares. Its 114 test cases are committed as `ContractCreationAdversarialTests`, `ContractCreationRoleTests`, `ContractFormAdversarialTests` and `ContractDraftAdversarialTests`, less one that passed only while a known gap stays open.
+- 3.10: **The gentle-ai review saw the code, the migration and the two edited test files, not the nine new test files**, because the whole change exceeds its context budget. Those files ship in the same commit and carry most of the 1395 tests stated here: `ContractDraftRulesTests`, `ContractDraftAdversarialTests`, `ContractPartyGuardTests`, `ContractRegistryTests`, `ContractCreationAdversarialTests`, `ContractCreationRoleTests`, `ContractFormViewModelTests`, `ContractFormAdversarialTests`, `FakeContractRegistry`. The suite and the independent verifier cover them; the review does not.
+- 3.10: **gentle-ai review `review-96ad9cc3ff60c910` ended `escalated`, with no approval.** Its one CRITICAL finding, `R3-missing-s3-tests`, says the test files are absent, which follows from leaving them out to fit the budget; recording that in this file did not satisfy its validator, and adding them exceeds the 200-line correction budget. Three lenses ran: risk, resilience, reliability.
+- 3.10: **Fixed from its warnings, after it closed, so not reviewed by it:** the result is read before committing, so a failed read writes nothing (`AFailureReadingTheResult_LeavesNothing`); an edit made while a save is out discards the warnings that come back and is kept when the contract is written (`AnEditWhileSaving_*`). The three tests failed before the fix. **Accepted:** `R1-removed-at-untraced` is Issues found 5, spec F6.

@@ -55,6 +55,15 @@ public sealed class CutoverTriggerTests
         return connection;
     }
 
+    private static Task<int> InsertContractAsync(NpgsqlConnection connection, Guid contractId, DateOnly? cutover) =>
+        ReciboTestSupport.ExecAsync(
+            connection,
+            """
+            INSERT INTO contracts (id, start_date, nominal_end_date, monthly_rent, honorarios_percentage, status, due_day, cutover_date)
+            VALUES (@id, DATE '2025-01-01', DATE '2026-12-31', 450000, 8, 'Active', 5, @cutover)
+            """,
+            ("id", contractId), ("cutover", (object?)cutover ?? DBNull.Value));
+
     private static Task<int> SetCutoverAsync(NpgsqlConnection connection, Guid contractId, DateOnly date) =>
         ReciboTestSupport.ExecAsync(
             connection,
@@ -154,12 +163,9 @@ public sealed class CutoverTriggerTests
         Assert.Null(await StoredCutoverAsync(superuser, contractId));
     }
 
-    /// <summary>
-    /// Spec test 38, the named limit: an Empleado can insert a contract that carries a cutover date, and
-    /// is then refused when changing it.
-    /// </summary>
+    /// <summary>gestion-de-alquileres spec Test 68: an Empleado's raw insert with a cutover date is refused and leaves nothing.</summary>
     [SkippableFact]
-    public async Task AnEmpleadoInsertsAContractWithADate_AndCannotChangeIt()
+    public async Task AnEmpleadoCannotInsertAContractWithADate()
     {
         Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
 
@@ -167,14 +173,49 @@ public sealed class CutoverTriggerTests
         await using var empleado = await OpenAsAsync(superuser, "inmobiliaria_empleado");
         var contractId = Guid.NewGuid();
 
-        await ReciboTestSupport.ExecAsync(
-            empleado,
-            """
-            INSERT INTO contracts (id, start_date, nominal_end_date, monthly_rent, honorarios_percentage, status, due_day, cutover_date)
-            VALUES (@id, DATE '2025-01-01', DATE '2026-12-31', 450000, 8, 'Active', 5, DATE '2026-06-30')
-            """,
-            ("id", contractId));
-        Assert.Equal(new DateOnly(2026, 6, 30), await StoredCutoverAsync(superuser, contractId));
+        var refused = await ReciboTestSupport.RefusedAsync(() =>
+            InsertContractAsync(empleado, contractId, new DateOnly(2026, 6, 30)));
+
+        Assert.Equal(RaiseException, refused.SqlState);
+        Assert.Equal("contracts_cutover_insert_admin_only", refused.ConstraintName);
+        await using var connection = await ReciboTestSupport.OpenAsync(superuser);
+        Assert.Equal(0L, await ReciboTestSupport.ScalarAsync<long>(
+            connection, "SELECT count(*) FROM contracts WHERE id = @id", ("id", contractId)));
+    }
+
+    /// <summary>gestion-de-alquileres spec Test 68: an Empleado's insert with no date and an Admin's with one both succeed.</summary>
+    [SkippableFact]
+    public async Task BothOrdinaryInserts_Succeed()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var superuser = _fixture.CreateDbContext();
+        await using var empleado = await OpenAsAsync(superuser, "inmobiliaria_empleado");
+        await using var admin = await OpenAsAsync(superuser, "inmobiliaria_admin");
+        var withoutDate = Guid.NewGuid();
+        var withDate = Guid.NewGuid();
+
+        await InsertContractAsync(empleado, withoutDate, null);
+        await InsertContractAsync(admin, withDate, new DateOnly(2026, 6, 30));
+
+        Assert.Null(await StoredCutoverAsync(superuser, withoutDate));
+        Assert.Equal(new DateOnly(2026, 6, 30), await StoredCutoverAsync(superuser, withDate));
+    }
+
+    /// <summary>
+    /// gestion-de-alquileres spec Test 69 and Finding F2: updates keep behaving as before. An Empleado cannot change a date
+    /// that is already there, now on a contract the superuser inserted, since an Empleado can no longer insert one.
+    /// </summary>
+    [SkippableFact]
+    public async Task AnEmpleadoCannotChangeADate_ThatIsAlreadyThere()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var superuser = _fixture.CreateDbContext();
+        await using var empleado = await OpenAsAsync(superuser, "inmobiliaria_empleado");
+        await using var connection = await ReciboTestSupport.OpenAsync(superuser);
+        var contractId = Guid.NewGuid();
+        await InsertContractAsync(connection, contractId, new DateOnly(2026, 6, 30));
 
         var refused = await ReciboTestSupport.RefusedAsync(() =>
             SetCutoverAsync(empleado, contractId, new DateOnly(2026, 5, 31)));
