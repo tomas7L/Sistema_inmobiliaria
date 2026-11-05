@@ -35,6 +35,14 @@ commit — there is nothing to wait for.
 
 For every document, say **exactly what to read and what to skip**.
 
+**A spec or design also gets a reading extract, every time, without being asked:**
+`lectura-<spec|design>-<change>.md` at the repository root, local only (`lectura-*.md` is in `.git/info/exclude`). A spec runs to
+about 900 lines and repeats what he has already read, so the extract holds only what he must read, **transcribed word for word**
+from the document and never rewritten, plus short commentary in Spanish saying why each part matters and what was left out. Of a
+requirement, the whole text; of its scenarios, the title only. If the document changes before he approves it, regenerate the
+extract. The earlier `lectura-*.md` files show the format. Only for specs and designs: for a proposal, tasks or anything else, just
+say in the reply what to read and skip.
+
 ### Two inspections, looking for different things
 
 1. **On handover** — does it do what the spec says? Tests, build, scope, nothing extra.
