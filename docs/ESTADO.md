@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-04, con `gestion-de-usuarios` archivado y el PR #87 trabado en GitHub_
+_Última actualización: 2026-11-05, con la spec de `gestion-de-alquileres` aprobada por Tomás_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -8,25 +8,27 @@ _Última actualización: 2026-11-04, con `gestion-de-usuarios` archivado y el PR
 
 ## En qué estamos
 
-**No hay change activo.** El último archivado está en `openspec/changes/archive/2026-11-04-gestion-de-usuarios/`
-(pendientes en `archive-report.md`, "Follow-ups Carried Over"; el login sin red de esa lista ya se resolvió en #86).
-Hallazgo a explorar, en Engram: `discovery/missing-contract-and-adjustment-screens`.
+**Change activo: `gestion-de-alquileres`**, en `openspec/changes/gestion-de-alquileres/`. Tiene `exploration.md`, `proposal.md`
+y `spec.md`; todavía no tiene design ni `tasks.md`. La spec cambió cosas de la propuesta: leer sus Findings.
 
 ## Próximos pasos
 
-1. **Reiniciar Claude Code**: la actualización de engram desconectó su MCP de la sesión anterior.
-2. **Destrabar el PR #87** (`docs: record how to recognize port exhaustion in test runs`) y mergearlo. La corrida
-   `41861554205` quedó colgada en GitHub con todos sus pasos terminados y bien; la `41864392486` estaba en cola.
-3. **Tomás le manda el mensaje a Nicolás el jueves 2026-11-05 temprano.** El texto final está en Engram:
-   `mensaje-nicolas/excel`.
-4. **Exploración de solo lectura** de las pantallas que faltan (contratos, personas, propiedades, ajustes de alquiler)
-   y después una propuesta. Tomás la pidió para después de comer; la carga inicial depende de lo que conteste Nicolás.
+1. **Tomás mergea el PR de la spec** y avisa.
+2. **Escribir el design** de `gestion-de-alquileres`. No espera a Nicolás.
 
 ## Pendientes / bloqueos
 
-- **Falta decidir cómo se cargan los contratos.** El plan era importarlos del Excel (Engram:
-  `decisions/carga-inicial-own-change`), pero `openspec/domain/respuestas-del-dueno.md`, punto 9, lo describe solo como la
-  deuda de cada inquilino, y por inquilino, no por contrato.
+- **Esperando a Nicolás:** respondió el 2026-11-05 que está complicado y quiere verlo cuando esté más tranquilo, en unas 2 semanas.
+  Lo que queda para esa reunión: la copia del Excel, si no llega antes, y el logo en vector. Nada de este change lo espera.
+- **Para preguntarle a Nicolás en la reunión:** las preguntas N1 a N4 de `spec.md`. N1 y N2 (qué meses y qué día usa en cada índice)
+  confirman valores que la spec dejó supuestos.
+- **Falta decidir cómo se cargan los contratos anteriores al sistema en cantidad.** Depende de lo que traiga el Excel:
+  `openspec/domain/respuestas-del-dueno.md`, punto 9, y Engram `decisions/carga-inicial-own-change`.
+- **Mateo diseña las pantallas por su cuenta**, sin fecha acordada. La lógica no lo espera. Su maqueta se revisa antes de
+  mergear: el repo es público y no pueden entrar datos reales.
+- **`C:\Users\buffa\Downloads\Del Lago Alquileres-PantallasPrueba.html` tiene datos reales de inquilinos:** nunca publicarlo ni
+  commitearlo. La que se le pasa a Mateo es `C:\Users\buffa\Downloads\Del Lago Maqueta Estilo D.html`, con datos ficticios y una
+  copia centrada del logo que Nicolás no aprobó.
 - **Antes de entregar:** comprobar una vez en producción los rechazos de login. Producción es
   `bwiqgfhokolndygqkchp`, `aws-0-sa-east-1`.
 - **El registro de errores de la versión en producción puede contener contraseñas** de antes de #81 (design F5). Conviene
@@ -46,15 +48,14 @@ Hallazgo a explorar, en Engram: `discovery/missing-contract-and-adjustment-scree
   Logo original en `C:\Users\buffa\Downloads\LogoDelLago.jpg`; el del repo es `src/Inmobiliaria.Desktop/Assets/agency-logo.png`.
 - **La impresora no la toma la PC nueva de Tomás** (drivers de Windows, no del sistema).
 - **Defecto conocido, no arreglado:** comentario de `src/Inmobiliaria.Domain/Leasing/RentAdjustment.cs:76`.
-- **La rama `ramateo`** sigue muy atrás de `develop`, con un stash viejo.
 - **Imagen de Docker sobrante:** `mcr.microsoft.com/dotnet/sdk:10.0`, se puede borrar.
 
 ## Precondiciones del próximo paso
 
 | | |
 |---|---|
-| **Docker** | No para la exploración; **sí** cuando se programe algo (Testcontainers `postgres:17.6`) |
-| **Supabase** | No para la exploración; la base de PRUEBA se pausa sola, y solo Tomás se conecta |
+| **Docker** | No para el design; **sí** cuando se programe algo (Testcontainers `postgres:17.6`) |
+| **Supabase** | No para el design; la base de PRUEBA se pausa sola, y solo Tomás se conecta |
 
 ## Para retomar
 
@@ -63,7 +64,6 @@ Hallazgo a explorar, en Engram: `discovery/missing-contract-and-adjustment-scree
 git fetch --all && git status --porcelain
 git rev-list --left-right --count HEAD...origin/develop
 git diff --stat HEAD origin/develop
-gh pr view 87 --json state,mergeStateStatus
 
 # La suite completa, con Docker PRENDIDO
 dotnet build Inmobiliaria.sln --configuration Release
@@ -85,9 +85,10 @@ máquina dotnet responde en español ("Superado", "Con error", "Omitido").
 | Para qué | Dónde |
 |---|---|
 | Cómo trabajamos | `CLAUDE.md` (raíz) |
-| Las pantallas que existen | `src/Inmobiliaria.Presentation/Shell/ShellViewModel.cs`, `NavigationEntry.cs` |
-| Reglas de lo que falta | `openspec/specs/lease-contract`, `party-registry`, `unit-registry`, `economic-index`, `rent-adjustment` |
-| Lo que dijo el dueño | `openspec/domain/respuestas-del-dueno.md` (punto 9, el Excel) |
+| Qué se va a construir | `openspec/changes/gestion-de-alquileres/spec.md` y `proposal.md` |
+| Qué existe y qué falta | `openspec/changes/gestion-de-alquileres/exploration.md` |
+| Reglas de lo que falta | `openspec/specs/lease-contract`, `party-registry`, `unit-registry`, `economic-index`, `rent-adjustment`, `contract-account` |
+| Lo que dijo el dueño | `openspec/domain/respuestas-del-dueno.md` |
 | Formato de spec a seguir | `openspec/changes/archive/2026-11-04-gestion-de-usuarios/spec.md` |
 
 ### Herramientas
