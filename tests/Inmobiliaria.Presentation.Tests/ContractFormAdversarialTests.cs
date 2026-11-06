@@ -1,3 +1,4 @@
+using System.Globalization;
 using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Domain.Parties;
 using Inmobiliaria.Domain.Shared;
@@ -44,20 +45,37 @@ public class ContractFormAdversarialTests
         Assert.NotNull(viewModel.RefusalMessage);
     }
 
+    /// <summary>Too large for a decimal: the form refuses it itself and the port is never called.</summary>
+    [Fact]
+    public async Task ACanonTooLargeToBeANumber_IsRefusedByTheForm()
+    {
+        var port = new FakeContractRegistry();
+        var viewModel = await FilledAsync(port);
+        viewModel.MonthlyRentText = "99999999999999999999999999999999999";
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal(ContractRefusal.RentNotWholePositive.OperatorText(), viewModel.RefusalMessage);
+        Assert.Empty(port.Created);
+    }
+
+    /// <summary>Whatever parses is the port's to judge, so the form sends it as typed. The expected value is invariant text.</summary>
     [Theory]
-    [InlineData("99999999999999999999999999999999999")]
-    [InlineData("79228162514264337593543950335")]
-    [InlineData("1,123456789012345678901234567890123")]
-    [InlineData("-1")]
-    [InlineData("0")]
-    [InlineData("1.000.000.000.000")]
-    public async Task OddCanons_DoNotThrowOutOfTheCommand(string typed)
+    [InlineData("79228162514264337593543950335", "79228162514264337593543950335")]
+    [InlineData("1,123456789012345678901234567890123", "1.1234567890123456789012345679")]
+    [InlineData("-1", "-1")]
+    [InlineData("0", "0")]
+    [InlineData("1.000.000.000.000", "1000000000000")]
+    public async Task OddCanonsThatParse_ReachThePortAsTyped(string typed, string expected)
     {
         var port = new FakeContractRegistry();
         var viewModel = await FilledAsync(port);
         viewModel.MonthlyRentText = typed;
 
         await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal(decimal.Parse(expected, CultureInfo.InvariantCulture), Assert.Single(port.Created).Draft.MonthlyRent);
+        Assert.Null(viewModel.RefusalMessage);
     }
 
     [Fact]

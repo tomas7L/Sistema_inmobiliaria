@@ -355,6 +355,15 @@ SELECT has_schema_privilege('inmobiliaria_empleado', 'public', 'CREATE');
 
 8. **From S3's review, for S12:** `PartiesViewModel` and `UnitsViewModel` apply a reply to whatever the form holds by then, as `ContractFormViewModel` did before its fix. An edit made while a save is out can be cleared, or a warning accepted for values it did not describe. S12's views should make the form read-only while busy, or those two get the same edit counter.
 
+9. **To fix before S4, from the review of S3's tests** (lineage `review-00412cafc6e4a762`, approved on a scratch clone holding only the nine new test files; its findings are non-blocking):
+   - `ContractFormAdversarialTests.cs:54-61`: `OddCanons_DoNotThrowOutOfTheCommand` asserts nothing, and the runner would catch a throw anyway. Pin the refusal or the port call for each input.
+   - `ContractFormViewModelTests.cs:133-162`: warning withdrawal skips end date, due day, cutover, lessors, fee plan, clause and `SharesAsAmounts`.
+   - `ContractCreationRoleTests.cs:160-164`: `PeriodOfOnlyAccrualAsync` does not prove the accrual is the only one. Assert the count.
+   - `ContractCreationAdversarialTests.cs:491` and `ContractCreationRoleTests.cs:100`: both accept any exception. Assert the probe's failure and the two-tenant violation.
+   - `ContractCreationRoleTests.cs:203`: `AClauseOnADiscontinuedIndex_DoesNotThrow` accepts any outcome. Pin it.
+
+   **Done 2026-11-06, tests only, before S4.** Each strengthened assertion was seen failing against a temporary mutation, then restored. The suite is now 1404 (nine new withdrawal cases). **Pinned as today's behavior, not as a decision:** `AClauseOnADiscontinuedIndex_IsWritten`, because creation checks only that the index exists and no spec rule covers it. A discontinued index with no successor would surface later, when `IndexResolver` returns `Unresolved`.
+
 ## Deviations (recorded beside tasks during apply)
 
 **Phase 1 (S1), applied 2026-11-05.**
@@ -402,3 +411,4 @@ SELECT has_schema_privilege('inmobiliaria_empleado', 'public', 'CREATE');
 - 3.10: **The gentle-ai review saw the code, the migration and the two edited test files, not the nine new test files**, because the whole change exceeds its context budget. Those files ship in the same commit and carry most of the 1395 tests stated here: `ContractDraftRulesTests`, `ContractDraftAdversarialTests`, `ContractPartyGuardTests`, `ContractRegistryTests`, `ContractCreationAdversarialTests`, `ContractCreationRoleTests`, `ContractFormViewModelTests`, `ContractFormAdversarialTests`, `FakeContractRegistry`. The suite and the independent verifier cover them; the review does not.
 - 3.10: **gentle-ai review `review-96ad9cc3ff60c910` ended `escalated`, with no approval.** Its one CRITICAL finding, `R3-missing-s3-tests`, says the test files are absent, which follows from leaving them out to fit the budget; recording that in this file did not satisfy its validator, and adding them exceeds the 200-line correction budget. Three lenses ran: risk, resilience, reliability.
 - 3.10: **Fixed from its warnings, after it closed, so not reviewed by it:** the result is read before committing, so a failed read writes nothing (`AFailureReadingTheResult_LeavesNothing`); an edit made while a save is out discards the warnings that come back and is kept when the contract is written (`AnEditWhileSaving_*`). The three tests failed before the fix. **Accepted:** `R1-removed-at-untraced` is Issues found 5, spec F6.
+- 3.9: **M1 applied by Tomás on 2026-11-05**, to the test database and then production, after the H.4 queries came back clean. On both, the trigger, the index and the column were each confirmed present. Smoke test on the test database: the app opened and the desk found the fictitious contract.
