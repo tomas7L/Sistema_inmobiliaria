@@ -60,6 +60,9 @@ public sealed class InmobiliariaDbContext : DbContext
     public DbSet<Dictionary<string, object>> ReciboAnnulments => Set<Dictionary<string, object>>(ReciboAnnulmentConfiguration.EntityName);
     public DbSet<Dictionary<string, object>> ReciboNumbering => Set<Dictionary<string, object>>(ReciboNumberingConfiguration.EntityName);
 
+    /// <summary>Who did what to a contract that its row cannot hold (gestion-de-alquileres design D12). A property bag, like the recibo tables.</summary>
+    public DbSet<Dictionary<string, object>> ContractEvents => Set<Dictionary<string, object>>(ContractEventConfiguration.EntityName);
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         // Applied here, not only at the call site that builds the options, so the
@@ -79,6 +82,7 @@ public sealed class InmobiliariaDbContext : DbContext
         ReciboLineConfiguration.Apply(modelBuilder);
         ReciboAnnulmentConfiguration.Apply(modelBuilder);
         ReciboNumberingConfiguration.Apply(modelBuilder);
+        ContractEventConfiguration.Apply(modelBuilder);
 
         ApplyApplicationSuppliedKeys(modelBuilder);
     }

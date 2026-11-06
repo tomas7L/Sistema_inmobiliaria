@@ -22,4 +22,8 @@ public sealed class ContractParty
         PartyId = partyId;
         Role = role;
     }
+
+    internal void MarkRemoved(DateTimeOffset at) => RemovedAt = at;
+
+    internal void Restore() => RemovedAt = null;
 }

@@ -727,6 +727,55 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("contract_events", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("contract_id");
+
+                    b.Property<string>("Detail")
+                        .HasColumnType("text")
+                        .HasColumnName("detail");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("text")
+                        .HasColumnName("reason");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("recorded_at");
+
+                    b.Property<string>("RecordedBy")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("name")
+                        .HasColumnName("recorded_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_contract_events");
+
+                    b.HasIndex("ContractId")
+                        .HasDatabaseName("ix_contract_events_contract");
+
+                    b.ToTable("contract_events", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_contract_events_kind", "kind IN ('Cancelled','NoticeUndone','EndUndone','PartyRemoved')");
+
+                            t.HasCheckConstraint("ck_contract_events_reason_not_blank", "kind = 'PartyRemoved' OR (reason IS NOT NULL AND reason ~ '\\S')");
+                        });
+                });
+
             modelBuilder.Entity("recibo_annulments", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1146,6 +1195,16 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
                         .HasForeignKey("RecargoMovementId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_collections_account_movements_recargo_movement_id");
+                });
+
+            modelBuilder.Entity("contract_events", b =>
+                {
+                    b.HasOne("Inmobiliaria.Domain.Leasing.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_contract_events_contracts_contract_id");
                 });
 
             modelBuilder.Entity("recibo_annulments", b =>

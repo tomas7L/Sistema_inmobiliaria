@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-06, con S3 mergeado en el PR #94 y M1 aplicada en PRUEBA y producción_
+_Última actualización: 2026-11-06, con S4 escrita y verificada, sin commitear; M1 aplicada en PRUEBA y producción, M2 todavía no_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -13,8 +13,9 @@ _Última actualización: 2026-11-06, con S3 mergeado en el PR #94 y M1 aplicada 
 
 ## Próximos pasos
 
-1. **Tomás commitea los refuerzos de tests** (`tasks.md`, Issues found, punto 9), abre el PR de `ramatomy`, que también lleva `0e77590`, y mergea.
-2. **Seguir con S4 (Corregir, avisar, terminar).** Trae M2 y un verificador independiente.
+1. **Tomás commitea S4, abre el PR de `ramatomy` y mergea.** Trae M2.
+2. **Tomás aplica M2** (`20261106150156_AddContractEventsAndTermsLock`) en PRUEBA y después en producción, antes de instalar una versión que la necesite.
+3. **Seguir con S5 (Cancelar y deshacer).** Trae M3 y un verificador independiente. Antes, leer los Advisories de `tasks.md`, Phase 4, punto 4.9.
 
 ## Pendientes / bloqueos
 
@@ -54,8 +55,8 @@ _Última actualización: 2026-11-06, con S3 mergeado en el PR #94 y M1 aplicada 
 
 | | |
 |---|---|
-| **Docker** | **Sí** para S4 (Testcontainers `postgres:17.6`) |
-| **Supabase** | **Sí** para aplicar M2 al terminar S4; las bases se pausan solas, y solo Tomás se conecta |
+| **Docker** | **Sí** para S5 (Testcontainers `postgres:17.6`) |
+| **Supabase** | **Sí** para aplicar M2 ahora, y M3 al terminar S5; las bases se pausan solas, y solo Tomás se conecta |
 | **Límite diario** | Tomás pasa el porcentaje al arrancar; el verificador y la revisión de gentle-ai son lo más caro |
 
 ## Para retomar
@@ -74,8 +75,8 @@ dotnet test Inmobiliaria.Core.slnf --configuration Release
 dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure
 ```
 
-Esperado: **1404 pasados, 0 fallas, 0 omitidos**, build sin advertencias y el modelo en sintonía con
-`20261105220213_AddContractPartyRemovalAndGuards`. Si el build de Desktop falla con MSB3027, la aplicación está
+Esperado: **1556 pasados, 0 fallas, 0 omitidos**, build sin advertencias y el modelo en sintonía con
+`20261106150156_AddContractEventsAndTermsLock`. Si el build de Desktop falla con MSB3027, la aplicación está
 abierta y tiene tomadas sus DLL: cerrarla.
 
 **Aplicar una migración** (Tomás, en una ventana de PowerShell aparte, nunca con `!`): `tasks.md` H.3 y H.4; variable `INMOBILIARIA_DB` con
@@ -103,4 +104,4 @@ y después `gentle-ai sync`), engram **3.6.2** (backup en `~/.engram/backup-2026
 `postgres:17.6`, `gh` 2.102.0 en `C:\Program Files\GitHub CLI\gh.exe`, logueado como `tomas7L`. En la herramienta Bash, las
 ediciones de C# van con scripts de Python escritos al scratchpad: los heredocs se rompen con los apóstrofes. Para
 `docker exec` desde Git Bash, `MSYS_NO_PATHCONV=1`. La revisión de gentle-ai necesita `--untracked-scope=select`, el hash del
-inventario y un `--intended-untracked` por cada archivo nuevo.
+inventario y un `--intended-untracked` por cada archivo nuevo. Un slice grande no entra entero: se revisa en un clon temporal, primero el código sin tests ni documentos y después los tests encima (`tasks.md`, Phase 4, punto 4.9).

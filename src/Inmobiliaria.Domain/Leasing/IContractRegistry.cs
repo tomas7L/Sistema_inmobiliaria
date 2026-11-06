@@ -3,8 +3,8 @@ using Inmobiliaria.Domain.Parties;
 namespace Inmobiliaria.Domain.Leasing;
 
 /// <summary>
-/// What the contract screens do with contracts (gestion-de-alquileres spec Requirements 6 to 8, design §4): list them, read
-/// one, create one with its account, and suggest a rate. Anything an operator can cause comes back as a
+/// What the contract screens do with contracts (gestion-de-alquileres spec Requirements 6 to 10, design §4): list them, read
+/// one, create one with its account, suggest a rate, correct one, record notice and end. Anything an operator can cause comes back as a
 /// <see cref="ContractRefusal"/> or a warning, never as an exception.
 /// </summary>
 public interface IContractRegistry
@@ -23,6 +23,66 @@ public interface IContractRegistry
 
     /// <summary>The rate of this lessor's contract with the latest start date that carries one, or null (spec Requirement 7).</summary>
     Task<decimal?> SuggestRateAsync(Guid lessorId, CancellationToken ct = default);
+
+    /// <summary>Replaces the terms, parties and units of a contract with no movement, in one transaction, or nothing (spec Requirement 9).</summary>
+    /// <param name="contractId">The contract.</param>
+    /// <param name="correction">What it should say from now on.</param>
+    /// <param name="acceptWarnings">The operator saw the warnings and wants to proceed. Never overrides a refusal.</param>
+    /// <param name="ct">Cancels the write.</param>
+    Task<ContractResult> CorrectAsync(Guid contractId, ContractCorrection correction, bool acceptWarnings, CancellationToken ct = default);
+
+    /// <summary>Enters or changes the honorarios rate, at any time.</summary>
+    Task<ContractResult> SetRateAsync(Guid contractId, decimal rate, CancellationToken ct = default);
+
+    /// <summary>Makes these people the contract's codeudores, at any time: whoever left stays on record, with a trace (spec Decision 33).</summary>
+    Task<ContractResult> SetCodebtorsAsync(Guid contractId, IReadOnlyList<Guid> codebtorIds, CancellationToken ct = default);
+
+    /// <summary>Records notice, moving an <c>Active</c> contract to <c>PendingTermination</c>.</summary>
+    Task<ContractResult> GiveNoticeAsync(Guid contractId, DateOnly noticeDate, DateOnly moveOutDate, CancellationToken ct = default);
+
+    /// <summary>What ending would mean, for the summary the operator reads first. Writes nothing.</summary>
+    Task<ContractEndSummary> SummarizeEndAsync(Guid contractId, EndReason? reason, DateOnly endDate, CancellationToken ct = default);
+
+    /// <summary>Ends a contract. Debt does not block it, and stays collectable (spec Requirement 10).</summary>
+    Task<ContractResult> EndAsync(Guid contractId, EndReason? reason, DateOnly endDate, CancellationToken ct = default);
+}
+
+/// <summary>
+/// What a contract should say after a correction. Everything here is replaced. A unit missing from <see cref="Shares"/> is replaced by
+/// one that is new there; adding or dropping a unit is not a correction (spec Requirement 9, design D14).
+/// </summary>
+public sealed record ContractCorrection
+{
+    public Guid? TenantId { get; init; }
+
+    public IReadOnlyList<Guid> LessorIds { get; init; } = [];
+
+    public IReadOnlyList<UnitShare> Shares { get; init; } = [];
+
+    public DateOnly? StartDate { get; init; }
+
+    public DateOnly? NominalEndDate { get; init; }
+
+    public decimal? MonthlyRent { get; init; }
+
+    public int DueDay { get; init; } = Contract.DefaultDueDay;
+
+    public decimal? FeePlanAmount { get; init; }
+
+    public int? FeePlanInstalments { get; init; }
+}
+
+/// <param name="Refusal">Why it cannot be ended, or null.</param>
+/// <param name="LedgerBalance">Every movement on the account, whatever its date, with what ending leaves due.</param>
+/// <param name="AmountOwed">That balance plus recargo: what the desk asks for. Null when the recargo settings are invalid: the desk is closed then, and no figure is guessed.</param>
+/// <param name="PeriodsAlreadyWritten">Periods on the ledger due after the end date. They stay there, and the operator is told.</param>
+public sealed record ContractEndSummary(
+    ContractRefusal? Refusal,
+    decimal LedgerBalance,
+    decimal? AmountOwed,
+    IReadOnlyList<DateOnly> PeriodsAlreadyWritten)
+{
+    public static ContractEndSummary Refused(ContractRefusal refusal) => new(refusal, 0m, null, []);
 }
 
 /// <param name="Id">The contract.</param>
@@ -99,6 +159,23 @@ public enum ContractRefusal
     PartyNotFound,
     UnitNotFound,
     IndexNotFound,
+    ContractNotFound,
+
+    /// <summary>The account holds a movement, so the data that made it can only be replaced by cancelling (spec Requirement 9).</summary>
+    AccountHasMovements,
+
+    /// <summary>An adjustment was confirmed from the terms this would change.</summary>
+    AdjustmentConfirmed,
+    ContractEnded,
+
+    /// <summary>A unit can be replaced, not added or dropped (spec Requirement 9, design D14).</summary>
+    UnitCountChanged,
+    NoticeNeedsActive,
+    NoticeAfterToday,
+    MoveOutBeforeNotice,
+    EndReasonMissing,
+    EndAfterToday,
+    EndBeforeContractStart,
 }
 
 public enum ContractWarningKind
@@ -164,6 +241,17 @@ public static class ContractRefusalText
         ContractRefusal.PartyNotFound => "Una de las personas elegidas ya no existe. Actualice la lista.",
         ContractRefusal.UnitNotFound => "Una de las unidades elegidas ya no existe. Actualice la lista.",
         ContractRefusal.IndexNotFound => "Uno de los índices elegidos ya no existe. Actualice la lista.",
+        ContractRefusal.ContractNotFound => "Ese contrato ya no existe. Actualice la lista.",
+        ContractRefusal.AccountHasMovements => "Este contrato ya tiene movimientos en su cuenta y estos datos no se pueden corregir. Si están mal, hay que cancelar el contrato y cargarlo de nuevo.",
+        ContractRefusal.AdjustmentConfirmed => "Este contrato ya tiene un ajuste confirmado y estos datos no se pueden corregir. Si están mal, hay que cancelar el contrato y cargarlo de nuevo.",
+        ContractRefusal.ContractEnded => "Este contrato ya está terminado.",
+        ContractRefusal.UnitCountChanged => "Una unidad se puede reemplazar, pero no sumar ni sacar. Para eso, hay que cancelar el contrato y cargarlo de nuevo.",
+        ContractRefusal.NoticeNeedsActive => "Solo se puede avisar la rescisión de un contrato activo.",
+        ContractRefusal.NoticeAfterToday => "La fecha del aviso no puede ser posterior a hoy.",
+        ContractRefusal.MoveOutBeforeNotice => "La fecha de desocupación no puede ser anterior a la del aviso.",
+        ContractRefusal.EndReasonMissing => "Elija el motivo por el que termina el contrato.",
+        ContractRefusal.EndAfterToday => "La fecha de fin no puede ser posterior a hoy.",
+        ContractRefusal.EndBeforeContractStart => "La fecha de fin no puede ser anterior al inicio del contrato.",
         _ => throw new ArgumentOutOfRangeException(nameof(refusal), refusal, "A refusal without operator text."),
     };
 

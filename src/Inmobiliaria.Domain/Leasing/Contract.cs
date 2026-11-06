@@ -23,8 +23,8 @@ public sealed class Contract
     private short? _contractualFeeInstalments;
 
     public Guid Id { get; }
-    public DateOnly StartDate { get; }
-    public DateOnly NominalEndDate { get; }
+    public DateOnly StartDate { get; private set; }
+    public DateOnly NominalEndDate { get; private set; }
     public DateOnly? NoticeGivenDate { get; private set; }
     public DateOnly? PlannedMoveOutDate { get; private set; }
     public DateOnly? ActualEndDate { get; private set; }
@@ -40,13 +40,10 @@ public sealed class Contract
     /// claimed it did (design Decision 9). Every mora figure in the system is measured from it,
     /// so a hard-coded 10 would have put a business term the parties sign into the source.
     ///
-    /// Deliberately get-only. A settable property is mapped by EF convention the moment it is
-    /// added, which puts the model out of step with the last migration and makes every
-    /// Testcontainers test fail before it runs its first assertion. A get-only property enters
-    /// the model only when a configuration names it — the way <see cref="StartDate"/> does —
-    /// which is what lets the column and its migration ship together in one change.
+    /// Changes only through <see cref="Correct"/>. The configuration names it, as it does
+    /// <see cref="StartDate"/>, so the private setter leaves the model as it was.
     /// </summary>
-    public int DueDay { get; } = DefaultDueDay;
+    public int DueDay { get; private set; } = DefaultDueDay;
 
     /// <summary>
     /// The agency's standard due day. A default, never a rule: the owner can set another one per
@@ -97,7 +94,13 @@ public sealed class Contract
     /// </summary>
     public AdjustmentClause? AdjustmentClause { get; private set; }
 
-    public IReadOnlyCollection<ContractParty> Parties => _parties;
+
+    /// <summary>
+    /// Who is on the contract. A write loads removed rows too, so that assigning the same person again can restore theirs;
+    /// nobody reads them from here (gestion-de-alquileres design D13).
+    /// </summary>
+    public IReadOnlyCollection<ContractParty> Parties => _parties.Where(p => p.RemovedAt is null).ToList();
+
     public IReadOnlyCollection<ContractUnit> Units => _units;
     public IReadOnlyCollection<RentAdjustment> Adjustments => _adjustments;
 
@@ -336,24 +339,122 @@ public sealed class Contract
     /// <summary>
     /// Assigns <paramref name="party"/> to this contract under <paramref name="role"/>.
     /// Enforces exactly one Tenant and rejects a duplicate Party+Role pair. Lessor and
-    /// Codebtor have no upper bound.
+    /// Codebtor have no upper bound. A person removed earlier from the same role gets their row
+    /// back, because the key is (contract, party, role) and a second row could never be written.
     /// </summary>
     public void AssignParty(Party party, PartyRole role)
     {
         ArgumentNullException.ThrowIfNull(party);
 
-        if (_parties.Any(p => p.PartyId == party.Id && p.Role == role))
+        var existing = _parties.FirstOrDefault(p => p.PartyId == party.Id && p.Role == role);
+        if (existing is { RemovedAt: null })
         {
             throw new InvalidOperationException(
                 $"Party '{party.Id}' is already assigned as {role} on this contract.");
         }
 
-        if (role == PartyRole.Tenant && _parties.Any(p => p.Role == PartyRole.Tenant))
+        if (role == PartyRole.Tenant && _parties.Any(p => p.Role == PartyRole.Tenant && p.RemovedAt is null))
         {
             throw new InvalidOperationException("A contract can have exactly one Tenant.");
         }
 
+        if (existing is not null)
+        {
+            existing.Restore();
+            return;
+        }
+
         _parties.Add(new ContractParty(Id, party.Id, role));
+    }
+
+    /// <summary>
+    /// Takes a person off the contract, leaving the row (gestion-de-alquileres spec Decision 33, design D13): a codeudor at
+    /// any time, a tenant or lessor only with no movement, and never the last tenant or lessor unless the caller is about
+    /// to assign a replacement in the same operation.
+    /// </summary>
+    public void RemoveParty(Guid partyId, PartyRole role, ContractAccount account, DateTimeOffset at, bool replacementFollows = false)
+    {
+        RequireOwnAccount(account);
+
+        var row = _parties.FirstOrDefault(p => p.PartyId == partyId && p.Role == role && p.RemovedAt is null)
+            ?? throw new InvalidOperationException($"Party '{partyId}' is not assigned as {role} on this contract.");
+
+        if (role != PartyRole.Codebtor)
+        {
+            if (account.Movements.Count > 0)
+            {
+                throw new InvalidOperationException($"A {role} cannot be removed once the account holds a movement.");
+            }
+
+            if (!replacementFollows && _parties.Count(p => p.Role == role && p.RemovedAt is null) == 1)
+            {
+                throw new InvalidOperationException($"The last {role} cannot be removed without a replacement.");
+            }
+        }
+
+        row.MarkRemoved(at);
+    }
+
+    /// <summary>
+    /// Corrects the terms of a contract nobody has acted on yet (gestion-de-alquileres spec Requirement 9): refused once the
+    /// account holds a movement, as <see cref="ChangeContractualFeePlan"/> is, once an adjustment was confirmed, since it
+    /// prices from the canon this would change, and once the contract ended. The form's rules are
+    /// <see cref="ContractDraftRules"/>; these are the ones no caller may get past.
+    /// </summary>
+    public void Correct(
+        DateOnly startDate,
+        DateOnly nominalEndDate,
+        decimal monthlyRent,
+        int dueDay,
+        ContractualFeePlan? plan,
+        ContractAccount account)
+    {
+        RequireOwnAccount(account);
+
+        if (account.Movements.Count > 0)
+        {
+            throw new InvalidOperationException("The terms cannot change once the account holds a movement.");
+        }
+
+        if (_adjustments.Count > 0)
+        {
+            throw new InvalidOperationException("The terms cannot change once an adjustment was confirmed.");
+        }
+
+        if (Status == ContractStatus.Ended)
+        {
+            throw new InvalidOperationException("The terms of an ended contract cannot change.");
+        }
+
+        if (dueDay is < 1 or > 31)
+        {
+            throw new ArgumentException("A due day must be a day of the month, between 1 and 31.", nameof(dueDay));
+        }
+
+        if (nominalEndDate < startDate)
+        {
+            throw new ArgumentException("Nominal end date cannot precede the start date.", nameof(nominalEndDate));
+        }
+
+        ChangeMonthlyRent(monthlyRent);
+        StartDate = startDate;
+        NominalEndDate = nominalEndDate;
+        DueDay = dueDay;
+        StoreFeePlan(plan);
+    }
+
+    /// <summary>
+    /// Enters or changes the honorarios rate, at any time (gestion-de-alquileres spec Requirement 9). Not nullable: an entered
+    /// rate cannot go back to "not entered". An issued recibo keeps what it printed, since it stores its own lines.
+    /// </summary>
+    public void SetHonorariosPercentage(decimal rate)
+    {
+        if (rate is < 0m or > 100m)
+        {
+            throw new ArgumentException("Honorarios percentage must be between 0 and 100.", nameof(rate));
+        }
+
+        HonorariosPercentage = rate;
     }
 
     /// <summary>
