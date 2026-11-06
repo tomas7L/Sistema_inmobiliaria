@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-06, con S5 escrita y verificada, sin commitear; M2 aplicada en PRUEBA y producción, M3 todavía no_
+_Última actualización: 2026-11-06, con S5 mergeada en el PR #97 y los roles por persona sin commitear; M2 aplicada en PRUEBA y producción, M3 todavía no_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -13,7 +13,7 @@ _Última actualización: 2026-11-06, con S5 escrita y verificada, sin commitear;
 
 ## Próximos pasos
 
-1. **Tomás commitea S5, abre el PR de `ramatomy` y mergea.** Trae M3.
+1. **Tomás commitea los roles por persona (`tasks.md`, al final de Deviations), abre el PR de `ramatomy` y mergea.** No trae migración.
 2. **Tomás aplica M3** (`20261106193800_AddLoadedByMistakeEndReason`) en PRUEBA y después en producción. **Desde M3, todas las PC de la inmobiliaria se actualizan juntas** (`tasks.md`, H.5).
 3. **Seguir con S6 (Índices).** Trae M4; no lleva verificador. Antes, leer los Advisories de `tasks.md`, Phase 5, punto 5.11.
 
@@ -75,7 +75,7 @@ dotnet test Inmobiliaria.Core.slnf --configuration Release
 dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure
 ```
 
-Esperado: **1659 pasados, 0 fallas, 0 omitidos**, build sin advertencias y el modelo en sintonía con
+Esperado: **1665 pasados, 0 fallas, 0 omitidos**, build sin advertencias y el modelo en sintonía con
 `20261106193800_AddLoadedByMistakeEndReason`. Si el build de Desktop falla con MSB3027, la aplicación está
 abierta y tiene tomadas sus DLL: cerrarla.
 

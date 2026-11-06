@@ -31,6 +31,24 @@ public sealed record PartyListing(
     string? PhoneNumber,
     string? Domicile)
 {
+    /// <summary>The roles this person holds on contracts in force, without repeats, in the enum's order. Filled by a search, and empty on what a write returns.</summary>
+    public IReadOnlyList<PartyRole> ActiveRoles { get; init; } = [];
+
+    /// <summary>A record compares a list by reference, so two identical listings would read as different without this.</summary>
+    public bool Equals(PartyListing? other) =>
+        other is not null
+        && Id == other.Id
+        && FirstName == other.FirstName
+        && LastName == other.LastName
+        && Dni == other.Dni
+        && Cuil == other.Cuil
+        && Email == other.Email
+        && PhoneNumber == other.PhoneNumber
+        && Domicile == other.Domicile
+        && ActiveRoles.SequenceEqual(other.ActiveRoles);
+
+    public override int GetHashCode() => HashCode.Combine(Id, FirstName, LastName, Dni, Cuil, Email, PhoneNumber, Domicile);
+
     public string FullName => $"{FirstName} {LastName}";
 
     /// <summary>A person with neither identifier shows a warning (spec Decision 28).</summary>

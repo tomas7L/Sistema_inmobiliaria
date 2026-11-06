@@ -1,3 +1,4 @@
+using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Domain.Parties;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -28,7 +29,19 @@ public sealed class PartyRegistry : IPartyRegistry
             ? persons.OrderBy(p => AccountSearch.Fold(SortKey(p)), StringComparer.Ordinal).ThenBy(TieBreak, StringComparer.Ordinal).ToList()
             : AccountSearch.Select(persons, SearchTerm(text), SearchFields, SortKey, TieBreak);
 
-        return found.Select(PartyListing.Of).ToList();
+        // One query for every listing. A removed party never reads here: the query filter hides the row (design D13).
+        var inForce = await (
+                from role in _context.ContractParties
+                join contract in _context.Contracts on role.ContractId equals contract.Id
+                where contract.Status == ContractStatus.Active || contract.Status == ContractStatus.PendingTermination
+                select new { role.PartyId, role.Role })
+            .Distinct()
+            .ToListAsync(ct);
+        var roles = inForce.ToLookup(r => r.PartyId, r => r.Role);
+
+        return found
+            .Select(p => PartyListing.Of(p) with { ActiveRoles = roles[p.Id].Order().ToList() })
+            .ToList();
     }
 
     public async Task<PartyResult> CreateAsync(PartyDraft draft, bool acceptNoIdentifier, CancellationToken ct = default)
