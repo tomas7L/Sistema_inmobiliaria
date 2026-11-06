@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-05, con S2 mergeado en el PR #93 y S3 esperando el commit de Tomás_
+_Última actualización: 2026-11-05, con S3 mergeado en el PR #94, sus tests revisados y M1 aplicada en PRUEBA y producción_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -13,9 +13,8 @@ _Última actualización: 2026-11-05, con S2 mergeado en el PR #93 y S3 esperando
 
 ## Próximos pasos
 
-1. **Tomás commitea S3 (Crear contratos), abre el PR y mergea.**
-2. **Tomás corre las consultas previas (H.4) y aplica M1**: primero en la base de PRUEBA, después en producción (`tasks.md`, H.3).
-3. **Seguir con S4 (Corregir, avisar, terminar).** Trae M2 y un verificador independiente.
+1. **Reforzar los tests que marcó la revisión** (`tasks.md`, Issues found, punto 9), antes de S4.
+2. **Seguir con S4 (Corregir, avisar, terminar).** Trae M2 y un verificador independiente.
 
 ## Pendientes / bloqueos
 
