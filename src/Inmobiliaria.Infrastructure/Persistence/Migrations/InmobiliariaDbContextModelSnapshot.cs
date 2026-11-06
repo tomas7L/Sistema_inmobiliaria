@@ -776,6 +776,46 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("index_value_corrections", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("IndexValueId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("index_value_id");
+
+                    b.Property<decimal>("NewLevel")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)")
+                        .HasColumnName("new_level");
+
+                    b.Property<decimal>("PreviousLevel")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)")
+                        .HasColumnName("previous_level");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("recorded_at");
+
+                    b.Property<string>("RecordedBy")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("name")
+                        .HasColumnName("recorded_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_index_value_corrections");
+
+                    b.HasIndex("IndexValueId")
+                        .HasDatabaseName("ix_index_value_corrections_index_value");
+
+                    b.ToTable("index_value_corrections", (string)null);
+                });
+
             modelBuilder.Entity("recibo_annulments", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1205,6 +1245,16 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_contract_events_contracts_contract_id");
+                });
+
+            modelBuilder.Entity("index_value_corrections", b =>
+                {
+                    b.HasOne("Inmobiliaria.Domain.Indices.IndexValue", null)
+                        .WithMany()
+                        .HasForeignKey("IndexValueId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_index_value_corrections_index_values_index_value_id");
                 });
 
             modelBuilder.Entity("recibo_annulments", b =>

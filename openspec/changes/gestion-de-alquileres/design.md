@@ -55,6 +55,7 @@ S10 may each find a few more tests to adjust.
 | D23 | **The plausibility warning fires beyond 25% per month elapsed since the nearest earlier value.** Real movement seen was 1.7% to 3.6% a month, so it catches a slipped digit and not a small typo | **Weak** on the number |
 | D24 | **Eleven logic slices, then views.** Each is mergeable alone, because nothing reaches an operator until its view exists; every slice whose Risk names an item gets an independent verifier: S3, S4, S5, S7, S8, S9, S10 and S11 | Medium |
 | D25 | **Migrations are additive and applied before the new version is installed.** The installed version keeps working against the new schema, since nothing it reads is removed | Strong |
+| D26 | **A database trigger writes `index_value_corrections`, not the port.** The trigger reads the level it really overwrote, even when two people correct at once, and no code path can skip it. Inserting runs as the logged-in role, as on `contract_events`, so both roles hold `INSERT`: someone using a database client with their own login could add a false row, under their own name only. Answers spec Decision 42 | Medium |
 
 ## Table of Contents
 
@@ -252,7 +253,7 @@ Each is registered in `SessionServices.cs:39-45` with a `PerCall*` wrapper, exce
 
 **Seed (R11).** Raw `INSERT ... SELECT gen_random_uuid(), name WHERE NOT EXISTS (... name = ... AND discontinued_from IS NULL)`, respecting `ix_economic_indices_name_active` (`EconomicIndexConfiguration.cs:34-37`). `HasData` would conflict with the row already on the test database. `Down` removes nothing, because values may reference the rows.
 
-**Index values.** `IndexEntryRules` **(new)**, Domain: refuses a future month and non-positive level, and computes the plausibility warning (D23). More than six decimals is refused, since the column is `numeric(18,6)`. `IndexValue.Correct` (`IndexValue.cs:32`) is reused. Affected adjustments are `rent_adjustment_index_values` rows where `resolved_index_id` matches and `base_period` or `end_period` is the period (`RentAdjustmentIndexValue.cs:15-20`), with the old level.
+**Index values.** `IndexEntryRules` **(new)**, Domain: refuses a future month and non-positive level, and computes the plausibility warning (D23). More than six decimals is refused, since the column is `numeric(18,6)`. `IndexValue.Correct` (`IndexValue.cs:32`) is reused. `AFTER UPDATE OF level` on `index_values`, `WHEN` the level really differs, inserts into `index_value_corrections` (`id`, `index_value_id`, `previous_level`, `new_level`, `recorded_by`, `recorded_at`): stamped by `stamp_contract_event`, append-only by `reject_recibo_table_mutation`, `GRANT SELECT, INSERT` to both roles (D26). Affected adjustments are `rent_adjustment_index_values` rows where `resolved_index_id` matches and `base_period` or `end_period` is the period (`RentAdjustmentIndexValue.cs:15-20`), with the old level.
 
 ## 5. The index source button
 
@@ -335,7 +336,7 @@ Advisory, about 400 authored lines per slice. Each is merged before the next sta
 | **S3 Crear contratos** | Rules, `IContractRegistry` create, list, detail; tenant index; cutover INSERT rule; `CutoverTriggerTests` rewrite | 10-22, 68, 69 | ~500 | M1 | Item 2 (who may set a cutover): verifier |
 | **S4 Corregir, avisar, terminar** | `Correct`, rate, notice, end, codeudor removal, `contract_events`, terms lock | 23-29, 80 | ~400 | M2 | Item 1 (changes stored contract terms): verifier |
 | **S5 Cancelar y deshacer** | `LoadedByMistake`, accrual guard, `ContractCancellation`, shared voiding window, undo, picker and go-live exclusion | 72-79, 89, 90 | ~450 | M3 | Item 1 (erases debt, irreversibly): verifier |
-| **S6 Índices** | Seed, `IIndexRegistry`, rules, parser, view-model | 30-34 | ~300 | M4 | None |
+| **S6 Índices** | Seed, correction record, `IIndexRegistry`, rules, parser, view-model | 30-34, 94, 95 | ~700 | M4, M4b | None |
 | **S7 Traer índices** | `IIndexValueSource`, two adapters, settings, button logic | 82-88 | ~250 | None | Item 6 (no test sees the live API): verifier, plus one manual press of each button against the live source |
 | **S8 Cláusula y calendario** | Offset, window, cutover calendar, `PendingTermination`, clause correction | 35-38, 40, 56, 81 | ~350 | M5 | Item 1 (decides when rent moves): verifier |
 | **S9 Confirmar ajustes** | `applies_from`, `CanonFor`, `AdjustmentTiming`, `IAdjustmentDesk`, double-confirmation indexes, summary, history | 39, 41-48 | ~450 | M6 | Item 1 (what is charged): verifier |
@@ -361,6 +362,7 @@ All additive. A model change and its migration ship in one PR. Each is applied t
 | M2 | `AddContractEventsAndTermsLock` | S4 | Yes | `contract_events` with stamp and append-only; `contracts_terms_lock` | None |
 | M3 | `AddLoadedByMistakeEndReason` | S5 | Yes | Widens `ck_contracts_end_reason` | None |
 | M4 | `SeedEconomicIndices` | S6 | No | Adds missing IPC, RIPTE, ICL | Adds up to three catalog rows |
+| M4b | `AddIndexValueCorrections` | S6 | Yes | `index_value_corrections`, with stamp, append-only and the trigger on `index_values` (D26) | None |
 | M5 | `AddClauseWindowOffset` | S8 | Yes | `window_offset_months`, default 1, check 0 to 3; `app_replace_clause_indices`; clause lock | Existing clauses read 1, today's window |
 | M6 | `AddAdjustmentAppliesFrom` | S9 | Yes | `applies_from`, with first-of-month check; both unique indexes | None rewritten. **Fails on duplicate Regular rows** |
 | M7 | `AddAdjustmentDifference` | S10 | Yes | Widens both kind checks and `ck_account_movements_period_required`; adds a sign check; `difference_amount`, `difference_movement_id` with a unique index | None |

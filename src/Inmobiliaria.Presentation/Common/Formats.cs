@@ -16,6 +16,12 @@ public static class Formats
     /// <summary>A signed amount, whole pesos when it has no cents.</summary>
     public static string Money(decimal amount) => amount.ToString("#,##0.##", Agency);
 
+    /// <summary>An index level, with up to the six decimals the column keeps: "1.915.878,76".</summary>
+    public static string Level(decimal level) => level.ToString("#,##0.######", Agency);
+
+    /// <summary>A month: "08/2026".</summary>
+    public static string Period(Domain.Indices.IndexPeriod period) => Period(new DateOnly(period.Year, period.Month, 1));
+
     public static string Date(DateOnly date) => date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
 
     /// <summary>A month: "10/2026".</summary>

@@ -172,16 +172,17 @@ Same three commands as PR 1, then the independent verifier.
 
 ## Phase 6: Índices (S6, PR 6, est. about 300 lines)
 
-**Docker: yes. Supabase: M4 (H.3). Model change: no; M4 is data only, and still ships in this PR.** Spec tests: 30 to 34. Requirements 11, 12. Design anchors: D23,
-§4, §6, §12 M4. Needs: nothing.
+**Docker: yes. Supabase: M4 and M4b (H.3). Model change: yes, M4b; M4 is data only. Both ship in this PR.** Spec tests: 30 to 34, 94, 95. Requirements 11, 12. Design anchors: D23,
+D26, §4, §6, §12 M4 and M4b. Needs: nothing.
 
-- [ ] 6.1 **[Second inspection, read-only]** Latest merge intact; `EconomicIndexConfiguration.cs:34-37`, `IndexValue.cs:32`, `RentAdjustmentIndexValue.cs:15-20`
-- [ ] 6.2 **[M4]** `SeedEconomicIndices`, raw `INSERT ... WHERE NOT EXISTS`, `Down` removing nothing
-- [ ] 6.3 **[RED then GREEN, Test 30]** Exactly one IPC, RIPTE and ICL on an empty database and on one already holding "ICL"
-- [ ] 6.4 **[RED then GREEN, Tests 32, 33]** `IndexEntryRules` in Domain: future month, non-positive level, more than six decimals, plausibility warning (D23)
-- [ ] 6.5 **[RED then GREEN, Tests 32 to 34]** `IIndexRegistry` (a duplicate refused, a far level storing nothing until confirmed, a typed value clearing the missing-index entry), adapter, per-call wrapper: list, add, correct, affected adjustments
-- [ ] 6.6 **[RED then GREEN, Test 31]** `IndexLevelParser` (strict `1.915.878,76`, invariant), view-model. No view: S12
-- [ ] 6.7 **[Guardrails and handover]** as 1.8, 1.10 and 1.11
+- [x] 6.1 **[Second inspection, read-only]** Latest merge intact; `EconomicIndexConfiguration.cs:34-37`, `IndexValue.cs:32`, `RentAdjustmentIndexValue.cs:15-20`
+- [x] 6.2 **[M4]** `SeedEconomicIndices`, raw `INSERT ... WHERE NOT EXISTS`, `Down` removing nothing
+- [x] 6.3 **[RED then GREEN, Test 30]** Exactly one IPC, RIPTE and ICL on an empty database and on one already holding "ICL"
+- [x] 6.4 **[RED then GREEN, Tests 32, 33]** `IndexEntryRules` in Domain: future month, non-positive level, more than six decimals, plausibility warning (D23)
+- [x] 6.5 **[RED then GREEN, Tests 32 to 34]** `IIndexRegistry` (a duplicate refused, a far level storing nothing until confirmed, a typed value clearing the missing-index entry), adapter, per-call wrapper: list, add, correct, affected adjustments
+- [x] 6.5b **[M4b, RED then GREEN, Tests 94, 95]** `AddIndexValueCorrections`: table, stamp, append-only, trigger; the port reads the records. Added on 2026-11-06, spec Decision 42
+- [x] 6.6 **[RED then GREEN, Test 31]** `IndexLevelParser` (strict `1.915.878,76`, invariant), view-model. No view: S12
+- [x] 6.7 **[Guardrails and handover]** as 1.8, 1.10 and 1.11
 
 ### Verification, PR 6 (Docker: yes)
 
@@ -482,3 +483,16 @@ SELECT has_schema_privilege('inmobiliaria_empleado', 'public', 'CREATE');
 - 5.5: **Spec scenario "A contract with unpaid months is cancelled" reworded, approved by Tomás on 2026-11-06.** It said both accruals stay on the ledger, which holds only for an account already read. It now says that of accruals already written, and that a month not yet written stays unwritten while the summary counts it. The code did not change.
 
 **Added after S5, 2026-11-06: each person's roles (spec Requirement 1, Test 93).** Asked for by Mateo's mockup, approved by Tomás. `PartyListing.ActiveRoles` is filled by a search, from one query over contracts `Active` or `PendingTermination`, with the query filter hiding removed parties. `PartyRow.RolesText` is the column, and `PartiesViewModel.RoleFilter` the filter, working on what the search brought so choosing one asks the database nothing. No model change, no migration. What a write returns carries no roles: the screen reads again after every action. RED: the tests failed against empty members. **A regression caught by the existing suite, fixed at its root:** `PartyListing` is a record, which compares a list by reference, so two identical listings stopped being equal (`Correcting_WritesEveryField_...`). It now compares roles by content. That run also measured sockets during the suite: 4,519 `TIME_WAIT` before, peak 5,030, and no `SocketException`. **Risk: none, read-only.** No independent verifier, as S1 and S2.
+- 5.10: **M3 applied by Tomás on 2026-11-06**, to the test database and then production. On both, the widened check and the history row were confirmed. No smoke test: it only allows one more value in a check. **The agency's installed version does not write that value, but from the next install on every PC updates together (H.5).**
+
+**S6 written, 2026-11-06, with the correction record Tomás asked for (spec Decision 42, design D26).**
+- 6.1: Second inspection: the branch's tree is identical to `origin/develop`, and the three anchors still match. S6's classes did not exist yet.
+- 6.2, 6.5b: **M4 is `20261106220915_SeedEconomicIndices`, M4b is `20261106221123_AddIndexValueCorrections`.** M4b is a new migration, not in the original plan, and it makes S6 a model change. Both still to be applied (H.3).
+- 6.5: **Deviation:** a correction lists affected adjustments as those whose copy differs from the new level, not those holding the previous one. After two corrections a copy can hold neither, and it still needs correcting; a copy that already matches does not.
+- 6.5: **A level with thirteen whole digits is refused too** (`LevelTooLarge`), beyond the design's list: `numeric(18,6)` would overflow into the generic error, which Test 71 forbids.
+- 6.5: **A far level warns on a correction as well as on a new value.** Saving the level already stored writes nothing, and does not warn.
+- 6.6: **The form asks to confirm every correction:** it shows the old and new level and who is affected before writing. A far level adds its second confirmation after that. No view: S12, and **Mateo's mockup needs a place for the record** (spec Requirement 12).
+- 6.7: **RED observed:** Test 30 failed with `Expected 1, Actual 0`, and Tests 94 and 95 with `42P01: relation "index_value_corrections" does not exist`. The rules and the parser only as a compile failure, so the rules rest on the mutations below.
+- 6.7: **Full suite: 1768 passed, 0 failed, 0 skipped** (1665 + 103). Build: 0 warnings. `has-pending-model-changes`: none. `TIME_WAIT` went from 561 to 5,064 with no socket failure.
+- 6.7: **Nine mutations, each caught by the test meant to:** no `WHEN`, no append-only, no stamp, Empleado without `INSERT`, swapped levels, the seed ignoring what exists, every copy affected, far correction unchecked, the race reaching the generic error. Two first attempts proved nothing, `BEFORE TRUNCATE ... FOR EACH ROW` breaking the migration and `if (false)` not compiling, so they were redone.
+- 6.7: **Risk: none, held at medium.** Item 2 was weighed, since M4b adds a grant and a guard: they are on a new table, change no existing permission, and are proven with real logins and by mutation. Assessment: `medium`, `review_due: false`, `under_budget`, so neither the verifier nor the gentle-ai review ran.
