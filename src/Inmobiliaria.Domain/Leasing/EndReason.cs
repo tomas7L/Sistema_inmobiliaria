@@ -6,5 +6,8 @@ public enum EndReason
     Expiry,
     EarlyTerminationByTenant,
     TerminationForCause,
-    MutualAgreement
+    MutualAgreement,
+
+    /// <summary>"Cargado por error". Only <see cref="Contract.Cancel"/> sets it, and the schedule then produces nothing (gestion-de-alquileres design D9).</summary>
+    LoadedByMistake,
 }

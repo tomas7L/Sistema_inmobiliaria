@@ -65,7 +65,8 @@ public sealed class AccountDirectory : IAccountDirectory
                 .Select(p => CollectionDesk.DescribeParty(parties[p.PartyId]))
                 .Order(StringComparer.Ordinal));
 
-        var listings = accounts.Select(a =>
+        // A contract loaded by mistake is not offered for collection; one that ended for any other reason stays, since it can owe.
+        var listings = accounts.Where(a => contracts[a.ContractId].EndReason != Domain.Leasing.EndReason.LoadedByMistake).Select(a =>
         {
             var contract = contracts[a.ContractId];
             return new AccountListing(

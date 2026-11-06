@@ -125,12 +125,13 @@ public static class VoidingPlanner
             return Refused(VoidingRefusal.AlreadyAnnulled);
         }
 
-        if (age > CollectionRules.VoidingAdminWindowDays)
+        var window = CollectionRules.VoidingWindowOf(age);
+        if (window == VoidingWindow.Closed)
         {
             return Refused(VoidingRefusal.WindowClosed);
         }
 
-        if (age > CollectionRules.VoidingFreeWindowDays && actingRole != UserRole.Admin)
+        if (window == VoidingWindow.AdminOnly && actingRole != UserRole.Admin)
         {
             return Refused(VoidingRefusal.AdminOnly);
         }

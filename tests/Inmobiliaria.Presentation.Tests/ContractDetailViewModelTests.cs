@@ -281,6 +281,194 @@ public class ContractDetailViewModelTests
         Assert.True(told > toldWhenItStarted, "The button was not told the write finished.");
     }
 
+    /// <summary>Spec Test 89: "Cargado por error" belongs to cancelling, and an ordinary end never offers it.</summary>
+    [Fact]
+    public void LoadedByMistake_IsNotOfferedWhenEnding()
+    {
+        var viewModel = New(new FakeContractRegistry());
+
+        Assert.DoesNotContain(EndReason.LoadedByMistake, viewModel.EndReasons);
+        Assert.Equal(Enum.GetValues<EndReason>().Length - 1, viewModel.EndReasons.Count);
+    }
+
+    /// <summary>Spec Requirement 23: the summary names the tenant, the units and the exact amount, and nothing is written until it is confirmed.</summary>
+    [Fact]
+    public async Task ReviewingACancellation_NamesWhoWhatAndHowMuch_AndWritesNothing()
+    {
+        var port = new FakeContractRegistry();
+        var viewModel = New(port);
+        viewModel.ChangeReason = "Inquilino equivocado";
+
+        await viewModel.ReviewCancelCommand.ExecuteAsync(null);
+
+        var pending = Assert.IsType<PendingCancel>(viewModel.PendingChange);
+        Assert.Contains("Pérez, Juan", pending.Summary, StringComparison.Ordinal);
+        Assert.Contains("Alem 1258", pending.Summary, StringComparison.Ordinal);
+        Assert.Contains("900.000", pending.Summary, StringComparison.Ordinal);
+        Assert.Null(pending.RetainedLine);
+        Assert.Equal("SummarizeCancel", Assert.Single(port.Calls)[0]);
+    }
+
+    /// <summary>The port compares what the operator read with what it would write, so the summary itself has to go back.</summary>
+    [Fact]
+    public async Task ConfirmingACancellation_SendsTheReasonAndTheSummaryRead_AndReadsAgain()
+    {
+        var port = new FakeContractRegistry { Detail = Detail(ContractStatus.Ended) };
+        var viewModel = New(port);
+        viewModel.ChangeReason = "Inquilino equivocado";
+        await viewModel.ReviewCancelCommand.ExecuteAsync(null);
+
+        await viewModel.ConfirmCommand.ExecuteAsync(null);
+
+        Assert.Equal<object?>(["Cancel", ContractId, "Inquilino equivocado", port.CancelSummary], port.Calls[^1]);
+        Assert.False(viewModel.IsSummaryOpen);
+        Assert.Equal(ContractStatus.Ended, viewModel.Detail!.Status);
+    }
+
+    /// <summary>Spec Test 76 and Test 90 on the screen: the refusal names the recibos, and says when only an Admin can void them.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ABlockedCancellation_NamesTheRecibos(bool admin)
+    {
+        var port = new FakeContractRegistry
+        {
+            CancelSummary = new ContractCancellationSummary(ContractRefusal.PaymentMustBeVoidedFirst, string.Empty, string.Empty, 0m, [31001, 31002], admin, 0m, [], string.Empty),
+        };
+        var viewModel = New(port);
+        viewModel.ChangeReason = "Error";
+
+        await viewModel.ReviewCancelCommand.ExecuteAsync(null);
+
+        Assert.Contains("31001, 31002", viewModel.RefusalMessage, StringComparison.Ordinal);
+        Assert.Equal(admin, viewModel.RefusalMessage!.Contains("Admin", StringComparison.Ordinal));
+        Assert.False(viewModel.IsSummaryOpen);
+    }
+
+    /// <summary>The refusal raised on confirming names the recibos too: the port's own text wins over the generic one.</summary>
+    [Fact]
+    public async Task ABlockedConfirm_ShowsThePortsText()
+    {
+        var port = new FakeContractRegistry
+        {
+            OnChange = () => ContractResult.Refused(ContractRefusal.PaymentMustBeVoidedFirst) with { RefusalText = "Primero hay que anular los recibos 31001, 31002." },
+        };
+        var viewModel = New(port);
+        viewModel.ChangeReason = "Error";
+        await viewModel.ReviewCancelCommand.ExecuteAsync(null);
+
+        await viewModel.ConfirmCommand.ExecuteAsync(null);
+
+        Assert.Contains("31001, 31002", viewModel.RefusalMessage, StringComparison.Ordinal);
+    }
+
+    /// <summary>Spec Decision 36: money past the voiding window stays with its recibos, and the summary says it is returned by hand.</summary>
+    [Fact]
+    public async Task TheCancelSummary_SaysRetainedMoneyIsReturnedByHand()
+    {
+        var port = new FakeContractRegistry
+        {
+            CancelSummary = new ContractCancellationSummary(null, "Pérez, Juan", "Alem 1258", 450_000m, [], false, 300_000m, [31001, 31002], "plan"),
+        };
+        var viewModel = New(port);
+        viewModel.ChangeReason = "Error";
+
+        await viewModel.ReviewCancelCommand.ExecuteAsync(null);
+
+        var line = Assert.IsType<PendingCancel>(viewModel.PendingChange).RetainedLine;
+        Assert.Contains("31001, 31002", line, StringComparison.Ordinal);
+        Assert.Contains("300.000", line, StringComparison.Ordinal);
+        Assert.Contains("a mano", line, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task EditingTheReason_ClosesTheSummary()
+    {
+        var viewModel = New(new FakeContractRegistry());
+        viewModel.ChangeReason = "Error";
+        await viewModel.ReviewCancelCommand.ExecuteAsync(null);
+        Assert.True(viewModel.IsSummaryOpen);
+
+        viewModel.ChangeReason = "Otro motivo";
+
+        Assert.False(viewModel.IsSummaryOpen);
+        Assert.False(viewModel.ConfirmCommand.CanExecute(null));
+    }
+
+    /// <summary>Spec Requirement 24: undoing asks for a reason and is preceded by a summary.</summary>
+    [Fact]
+    public async Task UndoingANotice_NeedsAReason_ThenConfirms_AndReadsAgain()
+    {
+        var port = new FakeContractRegistry { Detail = Detail(ContractStatus.PendingTermination) };
+        var viewModel = New(port);
+        await viewModel.LoadCommand.ExecuteAsync(null);
+        viewModel.ChangeReason = "  ";
+
+        viewModel.ReviewUndoNoticeCommand.Execute(null);
+
+        Assert.Equal(ContractRefusal.ReasonMissing.OperatorText(), viewModel.RefusalMessage);
+        Assert.False(viewModel.IsSummaryOpen);
+
+        viewModel.ChangeReason = "Otro contrato";
+        viewModel.ReviewUndoNoticeCommand.Execute(null);
+        Assert.IsType<PendingUndoNotice>(viewModel.PendingChange);
+        Assert.Empty(port.Calls);
+        port.Detail = Detail(ContractStatus.Active);
+
+        await viewModel.ConfirmCommand.ExecuteAsync(null);
+
+        Assert.Equal<object?>(["UndoNotice", ContractId, "Otro contrato"], Assert.Single(port.Calls));
+        Assert.False(viewModel.IsSummaryOpen);
+        Assert.Equal(ContractStatus.Active, viewModel.Detail!.Status);
+    }
+
+    /// <summary>Spec Requirement 24: periods between the end and the undo accrue as usual, with the summary naming them.</summary>
+    [Fact]
+    public async Task UndoingAnEnd_NamesThePeriodsThatWillAccrue_ThenConfirms()
+    {
+        var port = new FakeContractRegistry
+        {
+            UndoEndSummary = new ContractUndoEndSummary(null, null, [new DateOnly(2026, 10, 1), new DateOnly(2026, 11, 1)]),
+        };
+        var viewModel = New(port);
+        viewModel.ChangeReason = "Terminado por error";
+
+        await viewModel.ReviewUndoEndCommand.ExecuteAsync(null);
+
+        var pending = Assert.IsType<PendingUndoEnd>(viewModel.PendingChange);
+        Assert.Contains("10/2026, 11/2026", pending.Summary, StringComparison.Ordinal);
+
+        await viewModel.ConfirmCommand.ExecuteAsync(null);
+
+        Assert.Equal<object?>(["UndoEnd", ContractId, "Terminado por error"], port.Calls[^1]);
+    }
+
+    [Fact]
+    public async Task AnUndoBlockedByAUnitLetAgain_NamesTheTenant_AndOpensNoSummary()
+    {
+        var port = new FakeContractRegistry
+        {
+            UndoEndSummary = new ContractUndoEndSummary(ContractRefusal.UnitCoveredByAnotherContract, "Gómez, Ana", []),
+        };
+        var viewModel = New(port);
+        viewModel.ChangeReason = "Error";
+
+        await viewModel.ReviewUndoEndCommand.ExecuteAsync(null);
+
+        Assert.Contains("Gómez, Ana", viewModel.RefusalMessage, StringComparison.Ordinal);
+        Assert.False(viewModel.IsSummaryOpen);
+    }
+
+    /// <summary>Spec Requirement 23: it stays readable, marked as cancelled, and an ordinary end reads as ended.</summary>
+    [Fact]
+    public void TheList_MarksACancelledContract()
+    {
+        var ended = FakeContractRegistry.Saved with { Status = ContractStatus.Ended };
+
+        Assert.Equal("Cancelado por error de carga", new ContractRow(ended with { IsCancelled = true }).StatusText);
+        Assert.NotEqual("Cancelado por error de carga", new ContractRow(ended).StatusText);
+    }
+
     /// <summary>Test 71: every refusal reaches the operator in words.</summary>
     [Fact]
     public void EveryRefusal_HasOperatorText()

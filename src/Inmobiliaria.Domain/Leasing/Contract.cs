@@ -539,6 +539,11 @@ public sealed class Contract
             throw new InvalidOperationException("An end reason is required to end a contract.");
         }
 
+        if (reason == Leasing.EndReason.LoadedByMistake)
+        {
+            throw new InvalidOperationException("Only cancelling a contract can end it as loaded by mistake.");
+        }
+
         if (Status == ContractStatus.Ended)
         {
             throw new InvalidOperationException("Contract is already Ended.");
@@ -547,5 +552,55 @@ public sealed class Contract
         ActualEndDate = actualEndDate;
         EndReason = reason;
         Status = ContractStatus.Ended;
+    }
+
+    /// <summary>
+    /// Ends a contract loaded by mistake, from any state, replacing an earlier reason and keeping an earlier end date (gestion-de-alquileres
+    /// spec Requirement 23). Final. Reversing what is owed is <see cref="Collection.ContractCancellation"/>'s.
+    /// </summary>
+    public void Cancel(DateOnly today)
+    {
+        if (EndReason == Leasing.EndReason.LoadedByMistake)
+        {
+            throw new InvalidOperationException("Contract is already cancelled.");
+        }
+
+        ActualEndDate = ActualEndDate is { } ended && ended < today ? ended : today;
+        EndReason = Leasing.EndReason.LoadedByMistake;
+        Status = ContractStatus.Ended;
+    }
+
+    /// <summary>Takes back a notice recorded by mistake (spec Requirement 24): <c>Active</c> again, with both dates empty.</summary>
+    public void UndoNotice()
+    {
+        if (Status != ContractStatus.PendingTermination)
+        {
+            throw new InvalidOperationException($"There is no notice to undo; current state is {Status}.");
+        }
+
+        NoticeGivenDate = null;
+        PlannedMoveOutDate = null;
+        Status = ContractStatus.Active;
+    }
+
+    /// <summary>
+    /// Takes back an end recorded by mistake (spec Requirement 24): back to the state it would otherwise hold, with end date and reason
+    /// empty. Never for a cancelled contract, since cancelling is final.
+    /// </summary>
+    public void UndoEnd()
+    {
+        if (Status != ContractStatus.Ended)
+        {
+            throw new InvalidOperationException($"There is no end to undo; current state is {Status}.");
+        }
+
+        if (EndReason == Leasing.EndReason.LoadedByMistake)
+        {
+            throw new InvalidOperationException("A cancelled contract cannot be brought back.");
+        }
+
+        ActualEndDate = null;
+        EndReason = null;
+        Status = NoticeGivenDate is null ? ContractStatus.Active : ContractStatus.PendingTermination;
     }
 }

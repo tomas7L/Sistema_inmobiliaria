@@ -55,4 +55,19 @@ internal sealed class PerCallContractRegistry : IContractRegistry
 
     public Task<ContractResult> EndAsync(Guid contractId, EndReason? reason, DateOnly endDate, CancellationToken ct = default) =>
         PerCall.RunAsync(_factory, context => Over(context).EndAsync(contractId, reason, endDate, ct));
+
+    public Task<ContractCancellationSummary> SummarizeCancelAsync(Guid contractId, string? reason, CancellationToken ct = default) =>
+        PerCall.RunAsync(_factory, context => Over(context).SummarizeCancelAsync(contractId, reason, ct));
+
+    public Task<ContractResult> CancelAsync(Guid contractId, string? reason, ContractCancellationSummary shown, CancellationToken ct = default) =>
+        PerCall.RunAsync(_factory, context => Over(context).CancelAsync(contractId, reason, shown, ct));
+
+    public Task<ContractResult> UndoNoticeAsync(Guid contractId, string? reason, CancellationToken ct = default) =>
+        PerCall.RunAsync(_factory, context => Over(context).UndoNoticeAsync(contractId, reason, ct));
+
+    public Task<ContractUndoEndSummary> SummarizeUndoEndAsync(Guid contractId, string? reason, CancellationToken ct = default) =>
+        PerCall.RunAsync(_factory, context => Over(context).SummarizeUndoEndAsync(contractId, reason, ct));
+
+    public Task<ContractResult> UndoEndAsync(Guid contractId, string? reason, CancellationToken ct = default) =>
+        PerCall.RunAsync(_factory, context => Over(context).UndoEndAsync(contractId, reason, ct));
 }

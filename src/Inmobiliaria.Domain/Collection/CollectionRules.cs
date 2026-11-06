@@ -24,4 +24,28 @@ public static class CollectionRules
     /// that, nobody (spec Decision 45; weak, a stand-in for "until the period is liquidated to the owner").
     /// </summary>
     public const int VoidingAdminWindowDays = 30;
+
+    /// <summary>Who may still void a payment recorded this many days ago. One function, for voiding and for cancelling (gestion-de-alquileres design D11).</summary>
+    public static VoidingWindow VoidingWindowOf(int ageInDays)
+    {
+        if (ageInDays > VoidingAdminWindowDays)
+        {
+            return VoidingWindow.Closed;
+        }
+
+        return ageInDays > VoidingFreeWindowDays ? VoidingWindow.AdminOnly : VoidingWindow.Free;
+    }
+}
+
+/// <summary>Who may still void a payment.</summary>
+public enum VoidingWindow
+{
+    /// <summary>Either role.</summary>
+    Free,
+
+    /// <summary>An Admin only.</summary>
+    AdminOnly,
+
+    /// <summary>Nobody.</summary>
+    Closed,
 }

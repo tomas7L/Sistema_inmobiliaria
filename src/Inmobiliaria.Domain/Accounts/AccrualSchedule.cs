@@ -17,11 +17,27 @@ public sealed record AccrualPeriod(DateOnly Period, DateOnly DueDate, decimal Ca
 public static class AccrualSchedule
 {
     /// <summary>
+    /// A contract loaded by mistake was never owed anything, so it charges nothing at all, unwritten earlier periods included. Its
+    /// end date alone would still produce every period due before it (gestion-de-alquileres design D9, spec Test 73).
+    /// </summary>
+    public static bool IsCancelled(Contract contract)
+    {
+        ArgumentNullException.ThrowIfNull(contract);
+
+        return contract.EndReason == EndReason.LoadedByMistake;
+    }
+
+    /// <summary>
     /// Every period that has fallen due on or before <paramref name="asOf"/>, oldest first.
     /// </summary>
     public static IReadOnlyList<AccrualPeriod> PeriodsDue(Contract contract, DateOnly asOf)
     {
         ArgumentNullException.ThrowIfNull(contract);
+
+        if (IsCancelled(contract))
+        {
+            return [];
+        }
 
         var periods = new List<AccrualPeriod>();
         var period = FirstOfMonth(contract.StartDate);
@@ -66,6 +82,11 @@ public static class AccrualSchedule
     public static IReadOnlyList<AccrualPeriod> PeriodsBegun(Contract contract, DateOnly asOf)
     {
         ArgumentNullException.ThrowIfNull(contract);
+
+        if (IsCancelled(contract))
+        {
+            return [];
+        }
 
         var periods = new List<AccrualPeriod>();
         var period = FirstOfMonth(contract.StartDate);
@@ -160,6 +181,7 @@ public static class AccrualSchedule
     /// while the contract existed, and no later than the day it actually ended.
     /// </summary>
     private static bool IsScheduled(Contract contract, DateOnly dueDate) =>
+        !IsCancelled(contract) &&
         dueDate >= contract.StartDate &&
         (contract.ActualEndDate is not { } ended || dueDate <= ended);
 

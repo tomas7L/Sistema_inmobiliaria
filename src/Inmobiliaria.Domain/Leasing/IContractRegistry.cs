@@ -45,7 +45,71 @@ public interface IContractRegistry
 
     /// <summary>Ends a contract. Debt does not block it, and stays collectable (spec Requirement 10).</summary>
     Task<ContractResult> EndAsync(Guid contractId, EndReason? reason, DateOnly endDate, CancellationToken ct = default);
+
+    /// <summary>What cancelling would mean, for the summary the operator reads first. Writes nothing (spec Requirement 23).</summary>
+    Task<ContractCancellationSummary> SummarizeCancelAsync(Guid contractId, string? reason, CancellationToken ct = default);
+
+    /// <summary>Cancels a contract loaded by mistake, in one transaction, or nothing. Final. Refused when what the summary said no longer holds.</summary>
+    /// <param name="contractId">The contract.</param>
+    /// <param name="reason">Why, in the operator's words.</param>
+    /// <param name="shown">The summary the operator confirmed.</param>
+    /// <param name="ct">Cancels the write.</param>
+    Task<ContractResult> CancelAsync(Guid contractId, string? reason, ContractCancellationSummary shown, CancellationToken ct = default);
+
+    /// <summary>Takes back a notice recorded by mistake (spec Requirement 24).</summary>
+    Task<ContractResult> UndoNoticeAsync(Guid contractId, string? reason, CancellationToken ct = default);
+
+    /// <summary>What undoing an end would mean, for the summary the operator reads first. Writes nothing (spec Requirement 24).</summary>
+    Task<ContractUndoEndSummary> SummarizeUndoEndAsync(Guid contractId, string? reason, CancellationToken ct = default);
+
+    /// <summary>Takes back an end recorded by mistake (spec Requirement 24). The months in between accrue as usual when the account is next read.</summary>
+    Task<ContractResult> UndoEndAsync(Guid contractId, string? reason, CancellationToken ct = default);
 }
+
+/// <param name="Refusal">Why it cannot be cancelled, or null.</param>
+/// <param name="Tenants">Who rents it, as the desk shows them.</param>
+/// <param name="Units">What it covers, as the desk shows it.</param>
+/// <param name="AmountStoppedBeingOwed">What the desk would ask for today, unwritten periods and recargo included; without recargo when its settings are invalid.</param>
+/// <param name="RecibosToVoid">On a voidable payment, the recibos to void first.</param>
+/// <param name="OnlyAnAdminCanVoid">Whether voiding them needs an Admin.</param>
+/// <param name="RetainedAmount">Money past the voiding window, which stays with its recibos and is returned by hand (spec Decision 36).</param>
+/// <param name="RetainedRecibos">The recibos of that money.</param>
+/// <param name="Fingerprint">The corrections this summary stands for, compared on cancelling so that what is written is what was read.</param>
+public sealed record ContractCancellationSummary(
+    ContractRefusal? Refusal,
+    string Tenants,
+    string Units,
+    decimal AmountStoppedBeingOwed,
+    IReadOnlyList<int> RecibosToVoid,
+    bool OnlyAnAdminCanVoid,
+    decimal RetainedAmount,
+    IReadOnlyList<int> RetainedRecibos,
+    string Fingerprint)
+{
+    public static ContractCancellationSummary Refused(ContractRefusal refusal) => new(refusal, string.Empty, string.Empty, 0m, [], false, 0m, [], string.Empty);
+
+    /// <summary>The refusal in the operator's words, naming the recibos to void and whether an Admin has to, or null.</summary>
+    public string? RefusalText => Refusal switch
+    {
+        null => null,
+        ContractRefusal.PaymentMustBeVoidedFirst =>
+            $"Primero hay que anular los recibos {string.Join(", ", RecibosToVoid)}."
+            + (OnlyAnAdminCanVoid ? $" Los de más de {Collection.CollectionRules.VoidingFreeWindowDays} días solo los puede anular un Admin." : string.Empty),
+        { } refusal => refusal.OperatorText(),
+    };
+}
+
+/// <param name="Refusal">Why it cannot be undone, or null.</param>
+/// <param name="CurrentTenant">Who now rents its unit, on <see cref="ContractRefusal.UnitCoveredByAnotherContract"/>.</param>
+/// <param name="PeriodsToAccrue">Periods that fell due and were not written while it was ended: they accrue as usual, and the operator is told.</param>
+public sealed record ContractUndoEndSummary(ContractRefusal? Refusal, string? CurrentTenant, IReadOnlyList<DateOnly> PeriodsToAccrue);
+
+/// <param name="Kind">What happened.</param>
+/// <param name="Reason">Why, in the operator's words.</param>
+/// <param name="Detail">What was undone, the amount reversed or the party.</param>
+/// <param name="RecordedBy">The database's record of who did it.</param>
+/// <param name="RecordedAt">The database's record of when.</param>
+public sealed record ContractEventLine(ContractEventKind Kind, string? Reason, string? Detail, string RecordedBy, DateTimeOffset RecordedAt);
 
 /// <summary>
 /// What a contract should say after a correction. Everything here is replaced. A unit missing from <see cref="Shares"/> is replaced by
@@ -93,6 +157,7 @@ public sealed record ContractEndSummary(
 /// <param name="StartDate">When it starts.</param>
 /// <param name="NominalEndDate">When it says it ends.</param>
 /// <param name="IsPastEnd">Not ended and past its nominal end date: flagged, never ended by this.</param>
+/// <param name="IsCancelled">Ended as loaded by mistake (spec Requirement 23): stays readable, marked.</param>
 public sealed record ContractListing(
     Guid Id,
     string Tenants,
@@ -101,7 +166,8 @@ public sealed record ContractListing(
     ContractStatus Status,
     DateOnly StartDate,
     DateOnly NominalEndDate,
-    bool IsPastEnd);
+    bool IsPastEnd,
+    bool IsCancelled = false);
 
 public sealed record ContractPartyLine(Guid PartyId, string Name, PartyRole Role);
 
@@ -129,7 +195,13 @@ public sealed record ContractDetail(
     IReadOnlyList<ContractPartyLine> Parties,
     IReadOnlyList<ContractUnitLine> Units,
     ContractClauseLine? Clause,
-    IReadOnlyList<ContractAdjustmentLine> Adjustments);
+    IReadOnlyList<ContractAdjustmentLine> Adjustments)
+{
+    /// <summary>The reason, who and when of what was cancelled, undone or removed, oldest first.</summary>
+    public IReadOnlyList<ContractEventLine> Events { get; init; } = [];
+
+    public bool IsCancelled => EndReason == Leasing.EndReason.LoadedByMistake;
+}
 
 public enum ContractRefusal
 {
@@ -176,6 +248,22 @@ public enum ContractRefusal
     EndReasonMissing,
     EndAfterToday,
     EndBeforeContractStart,
+
+    /// <summary>"Cargado por error" belongs to cancelling (spec Test 89).</summary>
+    EndReasonNotOffered,
+    ReasonMissing,
+    ContractCancelled,
+
+    /// <summary>A payment can still be voided. <see cref="ContractCancellationSummary.RefusalText"/> names the recibos.</summary>
+    PaymentMustBeVoidedFirst,
+
+    /// <summary>The account changed after the summary was read.</summary>
+    CancellationStale,
+    NoNoticeToUndo,
+    NoEndToUndo,
+
+    /// <summary>Another <c>Active</c> or <c>PendingTermination</c> contract now covers one of its units (spec Requirement 24).</summary>
+    UnitCoveredByAnotherContract,
 }
 
 public enum ContractWarningKind
@@ -201,6 +289,9 @@ public sealed record ContractWarning(ContractWarningKind Kind, DateOnly? Date = 
 /// <param name="CurrentTenant">Who rents the unit, on <see cref="ContractRefusal.UnitUnderActiveContract"/>.</param>
 public sealed record ContractResult(ContractRefusal? Refusal, ContractListing? Contract, IReadOnlyList<ContractWarning> Warnings, string? CurrentTenant)
 {
+    /// <summary>The refusal in words when the port has more to say than <see cref="ContractRefusalText.OperatorText(ContractRefusal, string?)"/>, such as the recibos to void; null otherwise.</summary>
+    public string? RefusalText { get; init; }
+
     public bool Succeeded => Contract is not null;
 
     public static ContractResult Saved(ContractListing contract) => new(null, contract, [], null);
@@ -252,6 +343,14 @@ public static class ContractRefusalText
         ContractRefusal.EndReasonMissing => "Elija el motivo por el que termina el contrato.",
         ContractRefusal.EndAfterToday => "La fecha de fin no puede ser posterior a hoy.",
         ContractRefusal.EndBeforeContractStart => "La fecha de fin no puede ser anterior al inicio del contrato.",
+        ContractRefusal.EndReasonNotOffered => "\"Cargado por error\" no es un motivo de fin. Para eso, cancele el contrato.",
+        ContractRefusal.ReasonMissing => "Escriba el motivo.",
+        ContractRefusal.ContractCancelled => "Este contrato fue cancelado por error de carga y eso no se puede deshacer. Si corresponde, cárguelo de nuevo.",
+        ContractRefusal.PaymentMustBeVoidedFirst => "Este contrato tiene pagos que todavía se pueden anular. Anúlelos primero.",
+        ContractRefusal.CancellationStale => "La cuenta cambió mientras se revisaba. Vuelva a abrir el resumen.",
+        ContractRefusal.NoNoticeToUndo => "Este contrato no tiene un aviso de rescisión para deshacer.",
+        ContractRefusal.NoEndToUndo => "Este contrato no está terminado.",
+        ContractRefusal.UnitCoveredByAnotherContract => $"Una de sus unidades ya está en otro contrato, de {currentTenant ?? "otra persona"}.",
         _ => throw new ArgumentOutOfRangeException(nameof(refusal), refusal, "A refusal without operator text."),
     };
 
