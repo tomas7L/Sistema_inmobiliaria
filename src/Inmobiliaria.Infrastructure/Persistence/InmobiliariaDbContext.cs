@@ -63,6 +63,9 @@ public sealed class InmobiliariaDbContext : DbContext
     /// <summary>Who did what to a contract that its row cannot hold (gestion-de-alquileres design D12). A property bag, like the recibo tables.</summary>
     public DbSet<Dictionary<string, object>> ContractEvents => Set<Dictionary<string, object>>(ContractEventConfiguration.EntityName);
 
+    /// <summary>What every change to an index level overwrote, and who did it (gestion-de-alquileres spec Decision 42). A property bag, written only by the database's own trigger.</summary>
+    public DbSet<Dictionary<string, object>> IndexValueCorrections => Set<Dictionary<string, object>>(IndexValueCorrectionConfiguration.EntityName);
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         // Applied here, not only at the call site that builds the options, so the
@@ -83,6 +86,7 @@ public sealed class InmobiliariaDbContext : DbContext
         ReciboAnnulmentConfiguration.Apply(modelBuilder);
         ReciboNumberingConfiguration.Apply(modelBuilder);
         ContractEventConfiguration.Apply(modelBuilder);
+        IndexValueCorrectionConfiguration.Apply(modelBuilder);
 
         ApplyApplicationSuppliedKeys(modelBuilder);
     }

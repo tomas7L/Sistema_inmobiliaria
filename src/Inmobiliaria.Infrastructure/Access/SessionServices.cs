@@ -2,6 +2,7 @@ using Inmobiliaria.Domain.Access;
 using Inmobiliaria.Domain.Accounts;
 using Inmobiliaria.Domain.Collection;
 using Inmobiliaria.Domain.GoLive;
+using Inmobiliaria.Domain.Indices;
 using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Domain.Parties;
 using Inmobiliaria.Domain.Units;
@@ -47,6 +48,8 @@ public static class SessionServices
         services.AddSingleton<IReciboReader>(_ => new PerCallReciboReader(factory));
         services.AddSingleton<IPartyRegistry>(_ => new PerCallPartyRegistry(factory));
         services.AddSingleton<IUnitRegistry>(_ => new PerCallUnitRegistry(factory));
+        services.AddSingleton<IIndexRegistry>(provider =>
+            new PerCallIndexRegistry(factory, provider.GetRequiredService<IAgencyClock>()));
         services.AddSingleton<IContractRegistry>(provider =>
             new PerCallContractRegistry(factory, provider.GetRequiredService<IAgencyClock>(), recargo.Terms));
 

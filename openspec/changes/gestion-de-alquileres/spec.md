@@ -82,6 +82,7 @@ this spec's.
 | 39 | **An agreement between the parties that departs from the contract adds no new function.** Charging part of a difference, or paying it in instalments: answer no, and type the agreed amount on Otros Conceptos on each recibo. Changing the rent or the calendar: that is a new deal, so the contract ends with the reason "MutualAgreement" and a new one starts on the next 1st, with its old debt still collectable. | SPEC CALL. Tomás asked on 2026-11-05 how they would solve an agreement. Otros Conceptos is signed and already typed (`receipt/spec.md:182-189`), but it stays out of the honorarios base and the ledger, so a promise of later recibos is remembered by the agency, not the system | **Medium**; reopen if these turn out to be frequent |
 | 40 | **A "bring values" button fetches ICL and IPC; RIPTE stays typed.** It proposes the months the worklist is missing, and the operator may name another month. It shows what it found, and nothing is stored until the operator confirms. A failure shows its own message and manual entry keeps working. It never runs on its own, and never overwrites a stored level. | Tomás asked for it, 2026-11-05. Finding F11. Replaces the "fetching automatically" row of `proposal.md` §2 for these two indices. `economic-index/spec.md:39` already says retrieval must fill the same table | **Medium** |
 | 41 | **ICL is stored as its value on the 1st of each month. No free choice of day.** | SPEC CALL. An adjustment reads two values, and adjustments fall on the 1st (`rent-adjustment/spec.md:59`), as do contract starts (Decision P14). The table is shared by every contract, and one day's gap moves a rent: on 500,000, 1 January against 1 July gives 582,511, and 2 January gives 581,917 | **Medium**, until N2 |
+| 42 | **Every change to a stored index level leaves a permanent record: who, when, the previous level and the new one.** The database writes it, so no correction can skip it, and nobody can change or delete it. No written reason is asked for. | Asked for by Tomás on 2026-11-06. A wrong level misprices every contract reading that period, and overwriting it left no way to tell what happened | Medium |
 
 ### Findings (the code or the world differs from what was assumed)
 
@@ -549,6 +550,10 @@ last offering to correct the existing value. A level far from the nearest earlie
 
 Correcting MUST show the old and new level, and MUST list the confirmed adjustments that used it (Requirement 18).
 
+Every change to a stored level MUST leave a record of who made it, when, the previous level and the new level (Decision 42). The
+database MUST write that record itself, and nobody MUST be able to change or delete one. The form MUST show the corrections of the
+value being corrected.
+
 #### Scenario: RIPTE takes a peso amount
 
 - GIVEN RIPTE for June 2026
@@ -561,6 +566,19 @@ Correcting MUST show the old and new level, and MUST list the confirmed adjustme
 - WHEN 90,000 is typed for the next period
 - THEN a warning MUST appear
 - AND nothing MUST be stored until the operator confirms again
+
+#### Scenario: A correction leaves its record
+
+- GIVEN August's IPC stored at 9,440
+- WHEN an Empleado corrects it to 9,400
+- THEN a record MUST name that Empleado, the moment, 9,440 and 9,400
+- AND neither role MUST be able to change or delete that record
+
+#### Scenario: Saving the same level records nothing
+
+- GIVEN August's IPC stored at 9,440
+- WHEN it is saved again at 9,440
+- THEN no record MUST be written
 
 #### Scenario: A typed value reaches the worklist
 
@@ -1135,3 +1153,5 @@ fail first.
 91. The corrected difference gives 330,000 in the spec's example; a paid one offers no new charge. (R18)
 92. Reversing a charge not yet due leaves no credit on any date, whether by a correction or by a cancellation. (R19, R23)
 93. A search names each person's roles on contracts in force; an ended or cancelled contract and a removed party count for nothing; the list filters by role. (R1)
+94. Correcting a level as a real Admin and as a real Empleado records who, when, the previous and the new level; saving the same level records nothing. (R12)
+95. Neither role can update or delete a correction record, and an insert cannot choose its author. (R12)

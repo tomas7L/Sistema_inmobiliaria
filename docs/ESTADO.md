@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-06, con S5 mergeada en el PR #97 y los roles por persona sin commitear; M2 aplicada en PRUEBA y producción, M3 todavía no_
+_Última actualización: 2026-11-06, con S6 escrita y sin commitear; M4 y M4b todavía sin aplicar_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -13,13 +13,12 @@ _Última actualización: 2026-11-06, con S5 mergeada en el PR #97 y los roles po
 
 ## Próximos pasos
 
-1. **Tomás commitea los roles por persona (`tasks.md`, al final de Deviations), abre el PR de `ramatomy` y mergea.** No trae migración.
-2. **Tomás aplica M3** (`20261106193800_AddLoadedByMistakeEndReason`) en PRUEBA y después en producción. **Desde M3, todas las PC de la inmobiliaria se actualizan juntas** (`tasks.md`, H.5).
-3. **Seguir con S6 (Índices).** Trae M4; no lleva verificador. Antes, leer los Advisories de `tasks.md`, Phase 5, punto 5.11.
+1. **Tomás commitea S6 y abre el PR**, con la enmienda de la spec leída (`lectura-spec-gestion-de-alquileres-decision-42.md`).
+2. **Al mergear, Tomás aplica M4 y M4b** (`tasks.md` H.3), primero en PRUEBA y después en producción. El mismo comando aplica las dos.
+3. **Seguir con S7 (Traer índices):** `tasks.md`, Phase 7. Lleva verificador (item 6) y una prueba manual de cada botón contra la fuente real.
 
 ## Pendientes / bloqueos
 
-- **Confirmar que se cambió la contraseña de `postgres` de PRUEBA:** quedó expuesta en el chat del 2026-11-05. También la de producción, si era la misma.
 - **Precio para la reunión con Nicolás:** sin decidir. Lo discutido está en Engram, sesión del 2026-11-05.
 - **Esperando a Nicolás:** respondió el 2026-11-05 que está complicado y quiere verlo cuando esté más tranquilo, en unas 2 semanas.
   Lo que queda para esa reunión: la copia del Excel, si no llega antes, y el logo en vector. Nada de este change lo espera.
@@ -27,8 +26,11 @@ _Última actualización: 2026-11-06, con S5 mergeada en el PR #97 y los roles po
   confirman valores que la spec dejó supuestos.
 - **Falta decidir cómo se cargan los contratos anteriores al sistema en cantidad.** Depende de lo que traiga el Excel:
   `openspec/domain/respuestas-del-dueno.md`, punto 9, y Engram `decisions/carga-inicial-own-change`.
+- **Al instalar la próxima versión, todas las PC de la inmobiliaria se actualizan juntas** (`tasks.md`, H.5).
+- **`carga-inicial` tiene que rechazar saldos iniciales negativos:** `tasks.md`, Phase 5, punto 5.11.
 - **Mateo diseña las pantallas por su cuenta**, sin fecha acordada. La lógica no lo espera. Su maqueta se revisa antes de
-  mergear: el repo es público y no pueden entrar datos reales.
+  mergear: el repo es público y no pueden entrar datos reales. Sus dudas de Índices y Ajustes ya tienen respuesta en Engram
+  `decisions/mockup-indices-ajustes`; que baje `develop`. **Su pantalla de Índices tiene que mostrar el registro de correcciones** (spec Decisión 42).
 - **`C:\Users\buffa\Downloads\Del Lago Alquileres-PantallasPrueba.html` tiene datos reales de inquilinos:** nunca publicarlo ni
   commitearlo. La que se le pasa a Mateo es `C:\Users\buffa\Downloads\Del Lago Maqueta Estilo D.html`, con datos ficticios y una
   copia centrada del logo que Nicolás no aprobó.
@@ -55,8 +57,8 @@ _Última actualización: 2026-11-06, con S5 mergeada en el PR #97 y los roles po
 
 | | |
 |---|---|
-| **Docker** | **Sí** para S6 (Testcontainers `postgres:17.6`) |
-| **Supabase** | **Sí** para aplicar M3 ahora, y M4 al terminar S6; las bases se pausan solas, y solo Tomás se conecta |
+| **Docker** | **Sí** para S7 (Testcontainers `postgres:17.6`) |
+| **Supabase** | **Sí** para aplicar M4 y M4b; las bases se pausan solas, y solo Tomás se conecta |
 | **Límite diario** | Tomás pasa el porcentaje al arrancar; el verificador y la revisión de gentle-ai son lo más caro |
 
 ## Para retomar
@@ -75,8 +77,8 @@ dotnet test Inmobiliaria.Core.slnf --configuration Release
 dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure
 ```
 
-Esperado: **1665 pasados, 0 fallas, 0 omitidos**, build sin advertencias y el modelo en sintonía con
-`20261106193800_AddLoadedByMistakeEndReason`. Si el build de Desktop falla con MSB3027, la aplicación está
+Esperado: **1768 pasados, 0 fallas, 0 omitidos**, build sin advertencias y el modelo en sintonía con
+`20261106221123_AddIndexValueCorrections`. Si el build de Desktop falla con MSB3027, la aplicación está
 abierta y tiene tomadas sus DLL: cerrarla.
 
 **Aplicar una migración** (Tomás, en una ventana de PowerShell aparte, nunca con `!`): `tasks.md` H.3 y H.4; variable `INMOBILIARIA_DB` con
