@@ -7,23 +7,31 @@ using Npgsql;
 namespace Inmobiliaria.Infrastructure.Persistence;
 
 /// <summary>
-/// <see cref="IContractRegistry"/> over <c>contracts</c> (gestion-de-alquileres spec Requirements 6 to 8, design §4). Creating is
+/// <see cref="IContractRegistry"/> over <c>contracts</c> (gestion-de-alquileres spec Requirements 6 to 10, design §4). Creating is
 /// one <c>SaveChanges</c> inside a transaction, with the units locked before their availability is read, so two operators
 /// cannot both let the same unit. A cutover date is left to the database to refuse: the trigger decides who may set one, not
 /// this class. Searching is done in memory by <see cref="AccountSearch"/>'s rule, as <see cref="AccountDirectory"/> does.
 /// </summary>
-public sealed class ContractRegistry : IContractRegistry
+public sealed partial class ContractRegistry : IContractRegistry
 {
     private readonly InmobiliariaDbContext _context;
     private readonly IAgencyClock _clock;
+    private readonly RecargoTerms? _terms;
 
-    public ContractRegistry(InmobiliariaDbContext context, IAgencyClock clock)
+    /// <param name="context">The session's context.</param>
+    /// <param name="clock">The agency's date.</param>
+    /// <param name="terms">
+    /// The recargo terms, only for the amount an end summary shows. Null when the settings are invalid: that closes the desk,
+    /// and it must not stop anyone ending a contract, so the summary then shows the ledger's balance and no recargo.
+    /// </param>
+    public ContractRegistry(InmobiliariaDbContext context, IAgencyClock clock, RecargoTerms? terms = null)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(clock);
 
         _context = context;
         _clock = clock;
+        _terms = terms;
     }
 
     public async Task<IReadOnlyList<ContractListing>> ListAsync(string? text, ContractStatus? status, CancellationToken ct = default)
@@ -284,6 +292,8 @@ public static class ContractRegistryErrorMap
         (sqlState, constraintName) switch
         {
             ("P0001", "contracts_cutover_insert_admin_only") => ContractRefusal.CutoverAdminOnly,
+            ("P0001", "contracts_terms_locked") => ContractRefusal.AccountHasMovements,
+            ("P0001", "contracts_fee_plan_locked") => ContractRefusal.AccountHasMovements,
             _ => null,
         };
 }

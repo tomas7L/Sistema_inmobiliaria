@@ -332,21 +332,7 @@ public sealed class CollectionDesk : ICollectionDesk
         var receivedOn = request.ReceivedOn ?? today;
 
         // A future received date is refused by the planner; nothing is priced beyond today for it.
-        foreach (var due in AccrualSchedule.PeriodsDue(loaded.Contract, receivedOn < today ? receivedOn : today))
-        {
-            if (loaded.Account.IsChargedFor(due.Period))
-            {
-                continue;
-            }
-
-            loaded.Account.Append(AccountMovement.RentAccrual(Guid.NewGuid(), due.Canon, due.Period, due.DueDate));
-
-            if (AccrualSchedule.InstalmentAmountFor(loaded.Contract, due.Period) is { } fee &&
-                !loaded.Account.HasInstalmentFor(due.Period))
-            {
-                loaded.Account.Append(AccountMovement.ContractualFeeInstalment(Guid.NewGuid(), fee, due.Period, due.DueDate));
-            }
-        }
+        DueAccruals.AppendInMemory(loaded.Account, loaded.Contract, receivedOn < today ? receivedOn : today);
 
         return CollectionPlanner.Plan(loaded.Account, loaded.Contract, _terms, request, today, loaded.Header);
     }

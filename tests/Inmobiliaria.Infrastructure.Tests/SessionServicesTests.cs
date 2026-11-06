@@ -260,9 +260,15 @@ public sealed class SessionServicesTests
         await Assert.ThrowsAsync<ConnectionRefusedException>(() => contracts.DetailAsync(Guid.NewGuid()));
         await Assert.ThrowsAsync<ConnectionRefusedException>(() => contracts.SuggestRateAsync(Guid.NewGuid()));
         await Assert.ThrowsAsync<ConnectionRefusedException>(() => contracts.CreateAsync(ValidContractDraft(), false));
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => contracts.CorrectAsync(Guid.NewGuid(), new ContractCorrection(), false));
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => contracts.SetRateAsync(Guid.NewGuid(), 8m));
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => contracts.SetCodebtorsAsync(Guid.NewGuid(), []));
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => contracts.GiveNoticeAsync(Guid.NewGuid(), new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 1)));
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => contracts.SummarizeEndAsync(Guid.NewGuid(), EndReason.Expiry, new DateOnly(2026, 1, 1)));
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => contracts.EndAsync(Guid.NewGuid(), EndReason.Expiry, new DateOnly(2026, 1, 1)));
 
-        Assert.Equal(4, factory.Created.Count);
-        Assert.Equal(4, factory.Created.Distinct().Count());
+        Assert.Equal(10, factory.Created.Count);
+        Assert.Equal(10, factory.Created.Distinct().Count());
         Assert.All(factory.Created, context => Assert.Throws<ObjectDisposedException>(() => context.ChangeTracker));
     }
 

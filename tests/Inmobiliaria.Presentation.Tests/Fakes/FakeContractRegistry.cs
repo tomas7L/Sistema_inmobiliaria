@@ -30,7 +30,7 @@ internal sealed class FakeContractRegistry : IContractRegistry
         return Task.FromResult<IReadOnlyList<ContractListing>>(Contracts.ToList());
     }
 
-    public Task<ContractDetail?> DetailAsync(Guid contractId, CancellationToken ct = default) => Task.FromResult<ContractDetail?>(null);
+    public Task<ContractDetail?> DetailAsync(Guid contractId, CancellationToken ct = default) => Task.FromResult(Detail);
 
     public async Task<ContractResult> CreateAsync(ContractDraft draft, bool acceptWarnings, CancellationToken ct = default)
     {
@@ -45,4 +45,49 @@ internal sealed class FakeContractRegistry : IContractRegistry
 
     public Task<decimal?> SuggestRateAsync(Guid lessorId, CancellationToken ct = default) =>
         Task.FromResult<decimal?>(Rates.TryGetValue(lessorId, out var rate) ? rate : null);
+
+    /// <summary>What <see cref="DetailAsync"/> answers.</summary>
+    public ContractDetail? Detail { get; set; }
+
+    public Func<ContractResult>? OnChange { get; set; }
+
+    public ContractEndSummary EndSummary { get; set; } = new(null, 0m, 0m, []);
+
+    /// <summary>Each write and summary, as its name followed by its arguments, in order.</summary>
+    public List<object?[]> Calls { get; } = [];
+
+    /// <summary>When set, a write waits for this, so a test can act while it is in flight.</summary>
+    public TaskCompletionSource? ChangeGate { get; set; }
+
+    private async Task<ContractResult> Change(params object?[] call)
+    {
+        Calls.Add(call);
+        if (ChangeGate is { } gate)
+        {
+            await gate.Task;
+        }
+
+        return OnChange?.Invoke() ?? ContractResult.Saved(Saved);
+    }
+
+    public Task<ContractResult> CorrectAsync(Guid contractId, ContractCorrection correction, bool acceptWarnings, CancellationToken ct = default) =>
+        Change("Correct", contractId, correction, acceptWarnings);
+
+    public Task<ContractResult> SetRateAsync(Guid contractId, decimal rate, CancellationToken ct = default) =>
+        Change("SetRate", contractId, rate);
+
+    public Task<ContractResult> SetCodebtorsAsync(Guid contractId, IReadOnlyList<Guid> codebtorIds, CancellationToken ct = default) =>
+        Change("SetCodebtors", contractId, codebtorIds);
+
+    public Task<ContractResult> GiveNoticeAsync(Guid contractId, DateOnly noticeDate, DateOnly moveOutDate, CancellationToken ct = default) =>
+        Change("GiveNotice", contractId, noticeDate, moveOutDate);
+
+    public Task<ContractEndSummary> SummarizeEndAsync(Guid contractId, EndReason? reason, DateOnly endDate, CancellationToken ct = default)
+    {
+        Calls.Add(["SummarizeEnd", contractId, reason, endDate]);
+        return Task.FromResult(EndSummary);
+    }
+
+    public Task<ContractResult> EndAsync(Guid contractId, EndReason? reason, DateOnly endDate, CancellationToken ct = default) =>
+        Change("End", contractId, reason, endDate);
 }

@@ -52,12 +52,21 @@ public static class ContractDraftRules
     private const int AmountPlaces = 2;
 
     /// <summary>The first refusal <paramref name="draft"/> earns, or null when it can be written.</summary>
-    public static ContractRefusal? Check(ContractDraft draft, DateOnly today)
+    /// <param name="draft">The form.</param>
+    /// <param name="today">The agency's date.</param>
+    /// <param name="standingStart">
+    /// On a correction, the start date the contract already has. It is not refused for being in the past or off the 1st: a
+    /// contract that has simply waited a month must stay correctable, and an older one was allowed its date when created.
+    /// </param>
+    public static ContractRefusal? Check(ContractDraft draft, DateOnly today, DateOnly? standingStart = null)
     {
         ArgumentNullException.ThrowIfNull(draft);
 
-        return Parties(draft) ?? Dates(draft, today) ?? Money(draft) ?? Shares(draft) ?? Clause(draft);
+        return Parties(draft) ?? Dates(draft, today, standingStart) ?? Money(draft) ?? Shares(draft) ?? Clause(draft);
     }
+
+    /// <summary>A rate as the form takes it: 0 to 100, with up to two decimals.</summary>
+    public static bool IsValidRate(decimal rate) => rate is >= 0m and <= 100m && rate == decimal.Round(rate, AmountPlaces);
 
     /// <summary>What the operator should see before going ahead, as far as the form alone can tell.</summary>
     public static IReadOnlyList<ContractWarning> Warnings(ContractDraft draft, DateOnly today)
@@ -97,14 +106,14 @@ public static class ContractDraftRules
         return draft.Shares.Count == 0 ? ContractRefusal.UnitMissing : null;
     }
 
-    private static ContractRefusal? Dates(ContractDraft draft, DateOnly today)
+    private static ContractRefusal? Dates(ContractDraft draft, DateOnly today, DateOnly? standingStart)
     {
         if (draft is not { StartDate: { } start, NominalEndDate: { } end })
         {
             return ContractRefusal.DatesMissing;
         }
 
-        if (start.Day != 1)
+        if (start.Day != 1 && start != standingStart)
         {
             return ContractRefusal.StartNotOnTheFirst;
         }
@@ -124,7 +133,7 @@ public static class ContractDraftRules
             };
         }
 
-        return start < new DateOnly(today.Year, today.Month, 1) ? ContractRefusal.StartBeforeCurrentMonth : null;
+        return start < new DateOnly(today.Year, today.Month, 1) && start != standingStart ? ContractRefusal.StartBeforeCurrentMonth : null;
     }
 
     private static ContractRefusal? Money(ContractDraft draft)
@@ -139,7 +148,7 @@ public static class ContractDraftRules
             return ContractRefusal.DueDayOutOfRange;
         }
 
-        if (draft.HonorariosPercentage is { } rate && (rate is < 0m or > 100m || rate != decimal.Round(rate, AmountPlaces)))
+        if (draft.HonorariosPercentage is { } rate && !IsValidRate(rate))
         {
             return ContractRefusal.HonorariosOutOfRange;
         }

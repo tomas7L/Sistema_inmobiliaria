@@ -1,4 +1,5 @@
 using Inmobiliaria.Domain.Accounts;
+using Inmobiliaria.Domain.Leasing;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -139,6 +140,32 @@ public sealed class AccountMaterialiser : IAccountMaterialiser
 
     private static bool IsLostRace(DbUpdateException exception) =>
         exception.InnerException is PostgresException { SqlState: UniqueViolation };
+}
+
+/// <summary>
+/// The periods due as of a date, appended to a loaded account and not saved: the same rule as
+/// <see cref="AccountMaterialiser"/> (rent, and the instalment that rides with it), for whoever has to read a figure
+/// without writing it, or lets a later commit write it.
+/// </summary>
+internal static class DueAccruals
+{
+    public static void AppendInMemory(ContractAccount account, Contract contract, DateOnly asOf)
+    {
+        foreach (var due in AccrualSchedule.PeriodsDue(contract, asOf))
+        {
+            if (account.IsChargedFor(due.Period))
+            {
+                continue;
+            }
+
+            account.Append(AccountMovement.RentAccrual(Guid.NewGuid(), due.Canon, due.Period, due.DueDate));
+
+            if (AccrualSchedule.InstalmentAmountFor(contract, due.Period) is { } fee && !account.HasInstalmentFor(due.Period))
+            {
+                account.Append(AccountMovement.ContractualFeeInstalment(Guid.NewGuid(), fee, due.Period, due.DueDate));
+            }
+        }
+    }
 }
 
 /// <summary>

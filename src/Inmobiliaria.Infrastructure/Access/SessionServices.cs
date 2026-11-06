@@ -48,7 +48,7 @@ public static class SessionServices
         services.AddSingleton<IPartyRegistry>(_ => new PerCallPartyRegistry(factory));
         services.AddSingleton<IUnitRegistry>(_ => new PerCallUnitRegistry(factory));
         services.AddSingleton<IContractRegistry>(provider =>
-            new PerCallContractRegistry(factory, provider.GetRequiredService<IAgencyClock>()));
+            new PerCallContractRegistry(factory, provider.GetRequiredService<IAgencyClock>(), recargo.Terms));
 
         if (recargo.Terms is { } terms)
         {
