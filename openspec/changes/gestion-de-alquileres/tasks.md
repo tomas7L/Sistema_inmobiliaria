@@ -362,6 +362,8 @@ SELECT has_schema_privilege('inmobiliaria_empleado', 'public', 'CREATE');
    - `ContractCreationAdversarialTests.cs:491` and `ContractCreationRoleTests.cs:100`: both accept any exception. Assert the probe's failure and the two-tenant violation.
    - `ContractCreationRoleTests.cs:203`: `AClauseOnADiscontinuedIndex_DoesNotThrow` accepts any outcome. Pin it.
 
+   **Done 2026-11-06, tests only, before S4.** Each strengthened assertion was seen failing against a temporary mutation, then restored. The suite is now 1404 (nine new withdrawal cases). **Pinned as today's behavior, not as a decision:** `AClauseOnADiscontinuedIndex_IsWritten`, because creation checks only that the index exists and no spec rule covers it. A discontinued index with no successor would surface later, when `IndexResolver` returns `Unresolved`.
+
 ## Deviations (recorded beside tasks during apply)
 
 **Phase 1 (S1), applied 2026-11-05.**

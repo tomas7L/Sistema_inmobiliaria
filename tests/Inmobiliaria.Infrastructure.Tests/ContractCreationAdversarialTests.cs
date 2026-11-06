@@ -489,8 +489,9 @@ public sealed class ContractCreationAdversarialTests
         }
 
         await using var context = world.NewContext();
-        await Assert.ThrowsAnyAsync<Exception>(() => new ContractRegistry(context, Clock).CreateAsync(Draft(cast) with { Clause = new ClauseDraft([index], 6) }, false));
+        var failure = await Assert.ThrowsAnyAsync<Exception>(() => new ContractRegistry(context, Clock).CreateAsync(Draft(cast) with { Clause = new ClauseDraft([index], 6) }, false));
 
+        Assert.Equal("probe failure", Assert.IsType<PostgresException>(failure.GetBaseException()).MessageText);
         Assert.Equal(before, await HashAsync(world));
     }
 

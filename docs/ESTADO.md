@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-05, con S3 mergeado en el PR #94, sus tests revisados y M1 aplicada en PRUEBA y producción_
+_Última actualización: 2026-11-06, con S3 mergeado en el PR #94 y M1 aplicada en PRUEBA y producción_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -13,11 +13,13 @@ _Última actualización: 2026-11-05, con S3 mergeado en el PR #94, sus tests rev
 
 ## Próximos pasos
 
-1. **Reforzar los tests que marcó la revisión** (`tasks.md`, Issues found, punto 9), antes de S4.
+1. **Tomás commitea los refuerzos de tests** (`tasks.md`, Issues found, punto 9), abre el PR de `ramatomy`, que también lleva `0e77590`, y mergea.
 2. **Seguir con S4 (Corregir, avisar, terminar).** Trae M2 y un verificador independiente.
 
 ## Pendientes / bloqueos
 
+- **Confirmar que se cambió la contraseña de `postgres` de PRUEBA:** quedó expuesta en el chat del 2026-11-05. También la de producción, si era la misma.
+- **Precio para la reunión con Nicolás:** sin decidir. Lo discutido está en Engram, sesión del 2026-11-05.
 - **Esperando a Nicolás:** respondió el 2026-11-05 que está complicado y quiere verlo cuando esté más tranquilo, en unas 2 semanas.
   Lo que queda para esa reunión: la copia del Excel, si no llega antes, y el logo en vector. Nada de este change lo espera.
 - **Para preguntarle a Nicolás en la reunión:** las preguntas N1 a N4 de `spec.md`. N1 y N2 (qué meses y qué día usa en cada índice)
@@ -35,8 +37,6 @@ _Última actualización: 2026-11-05, con S3 mergeado en el PR #94, sus tests rev
   revisar y borrar `%LOCALAPPDATA%\SistemaInmobiliaria\logs` en la PC de la inmobiliaria al instalar.
 - **Una conexión caída entre el login y la apertura de la ventana principal** todavía cierra la app (`App.xaml.cs:220`).
   Quedó sin tocar: la ventana es muy corta y todavía no hay nada escrito que perder.
-- **gentle-ai sync** dejó sin actualizar 8 agentes (`~/.claude/agents/jd-*` y `review-*`) porque no pudo comprobar de quién
-  son. Sin probar con 4.3.1: la primera revisión dirá si afecta.
 - **`engram doctor`** marca `sync_target_closed_space` y `sync_mutation_required_fields` (102 memorias viejas sin título):
   solo afectarían a la sincronización con la nube, que nunca se configuró.
 - **El `appsettings.json` compilado apunta a la base de PRUEBA** (`chygrzoqmcqpncogeiuz`, `aws-1-sa-east-1`), solo en
@@ -54,8 +54,9 @@ _Última actualización: 2026-11-05, con S3 mergeado en el PR #94, sus tests rev
 
 | | |
 |---|---|
-| **Docker** | **Sí** para programar cada entrega (Testcontainers `postgres:17.6`) |
-| **Supabase** | **Sí** para aplicar M1, y M2 con S4; la base de PRUEBA se pausa sola, y solo Tomás se conecta |
+| **Docker** | **Sí** para S4 (Testcontainers `postgres:17.6`) |
+| **Supabase** | **Sí** para aplicar M2 al terminar S4; las bases se pausan solas, y solo Tomás se conecta |
+| **Límite diario** | Tomás pasa el porcentaje al arrancar; el verificador y la revisión de gentle-ai son lo más caro |
 
 ## Para retomar
 
@@ -73,9 +74,13 @@ dotnet test Inmobiliaria.Core.slnf --configuration Release
 dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure
 ```
 
-Esperado: **1395 pasados, 0 fallas, 0 omitidos**, build sin advertencias y el modelo en sintonía con
+Esperado: **1404 pasados, 0 fallas, 0 omitidos**, build sin advertencias y el modelo en sintonía con
 `20261105220213_AddContractPartyRemovalAndGuards`. Si el build de Desktop falla con MSB3027, la aplicación está
 abierta y tiene tomadas sus DLL: cerrarla.
+
+**Aplicar una migración** (Tomás, en una ventana de PowerShell aparte, nunca con `!`): `tasks.md` H.3 y H.4; variable `INMOBILIARIA_DB` con
+`Host=aws-1-sa-east-1.pooler.supabase.com;Port=5432;Database=postgres;Username=postgres.chygrzoqmcqpncogeiuz;Password=...;SSL Mode=Require` para PRUEBA y
+`aws-0-sa-east-1` con `postgres.bwiqgfhokolndygqkchp` para producción; la contraseña se pide con `Read-Host -AsSecureString`; después `dotnet ef database update -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure`.
 
 **Leer la salida por el contador de errores o el código de salida, nunca por un patrón.** En esta
 máquina dotnet responde en español ("Superado", "Con error", "Omitido").

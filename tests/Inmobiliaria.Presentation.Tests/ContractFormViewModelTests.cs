@@ -138,6 +138,15 @@ public class ContractFormViewModelTests
     [InlineData("codebtor")]
     [InlineData("unit")]
     [InlineData("share")]
+    [InlineData("end")]
+    [InlineData("dueDay")]
+    [InlineData("cutover")]
+    [InlineData("lessor")]
+    [InlineData("feeAmount")]
+    [InlineData("feeInstalments")]
+    [InlineData("clauseInterval")]
+    [InlineData("clauseIndex")]
+    [InlineData("sharesAsAmounts")]
     public async Task EditingAnythingAfterAWarning_WithdrawsIt(string edit)
     {
         var port = new FakeContractRegistry { OnCreate = (_, _) => ContractResult.NeedsAccepting([new ContractWarning(ContractWarningKind.NoHonorarios)]) };
@@ -153,7 +162,17 @@ public class ContractFormViewModelTests
             case "tenant": viewModel.Tenant = Raul; break;
             case "codebtor": viewModel.Codebtors.Add(Raul); break;
             case "unit": viewModel.Units.Add(new ContractFormUnit(Unit("40"))); break;
-            default: viewModel.Units[0].ShareText = "100"; break;
+            case "share": viewModel.Units[0].ShareText = "100"; break;
+            case "end": viewModel.NominalEndDate = new DateOnly(2029, 11, 30); break;
+            case "dueDay": viewModel.DueDayText = "5"; break;
+            case "cutover": viewModel.CutoverDate = new DateOnly(2026, 6, 30); break;
+            case "lessor": viewModel.Lessors.Add(Raul); break;
+            case "feeAmount": viewModel.FeePlanAmountText = "5.000"; break;
+            case "feeInstalments": viewModel.FeePlanInstalmentsText = "6"; break;
+            case "clauseInterval": viewModel.ClauseIntervalText = "6"; break;
+            case "clauseIndex": viewModel.ClauseIndexIds.Add(Guid.NewGuid()); break;
+            case "sharesAsAmounts": viewModel.SharesAsAmounts = true; break;
+            default: throw new ArgumentOutOfRangeException(nameof(edit), edit, "No such edit.");
         }
 
         Assert.False(viewModel.HasWarnings);

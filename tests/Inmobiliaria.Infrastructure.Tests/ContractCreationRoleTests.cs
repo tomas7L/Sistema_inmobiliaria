@@ -97,8 +97,11 @@ public sealed class ContractCreationRoleTests
                 connection, "INSERT INTO contract_parties (contract_id, party_id, role) VALUES (@c, @p, 'Tenant')", ("c", contract), ("p", party));
         }
 
-        await Assert.ThrowsAnyAsync<Exception>(() => migrator.MigrateAsync());
+        var failure = await Assert.ThrowsAnyAsync<Exception>(() => migrator.MigrateAsync());
 
+        var violation = Assert.IsType<PostgresException>(failure.GetBaseException());
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, violation.SqlState);
+        Assert.Equal("ux_contract_parties_one_tenant", violation.ConstraintName);
         Assert.Equal(0L, await ReciboTestSupport.ScalarAsync<long>(
             connection, "SELECT count(*) FROM information_schema.columns WHERE table_name = 'contract_parties' AND column_name = 'removed_at'"));
         Assert.Equal(0L, await ReciboTestSupport.ScalarAsync<long>(
@@ -152,6 +155,7 @@ public sealed class ContractCreationRoleTests
 
         var paid = await DeskWorld.PayAsync(world.NewDesk(), account.Id);
 
+        Assert.Equal(1, await world.CountAsync("SELECT count(*) FROM account_movements WHERE kind = 'RentAccrual'"));
         Assert.Equal(current, await PeriodOfOnlyAccrualAsync(world));
         Assert.Equal(0, await world.CountAsync("SELECT count(*) FROM account_movements WHERE kind = 'ContractualFeeInstalment'"));
         Assert.NotNull(paid);
@@ -163,9 +167,9 @@ public sealed class ContractCreationRoleTests
         return await ReciboTestSupport.ScalarAsync<DateOnly>(c, "SELECT period FROM account_movements WHERE kind = 'RentAccrual'");
     }
 
-    /// <summary>A clause on a discontinued index is written or refused, never thrown.</summary>
+    /// <summary>Creation only checks that a clause's index exists, so one on a discontinued index is written. Pins today's behavior; no spec rule covers it.</summary>
     [SkippableFact]
-    public async Task AClauseOnADiscontinuedIndex_DoesNotThrow()
+    public async Task AClauseOnADiscontinuedIndex_IsWritten()
     {
         Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
         await using var world = await DeskWorld.CreateAsync(_fixture);
@@ -200,6 +204,7 @@ public sealed class ContractCreationRoleTests
             },
             false);
 
-        Assert.True(result.Succeeded || result.Refusal is not null);
+        Assert.True(result.Succeeded, $"{result.Refusal}");
+        Assert.Equal(1, await world.CountAsync($"SELECT count(*) FROM adjustment_clause_indices WHERE economic_index_id = '{index.Id}'"));
     }
 }
