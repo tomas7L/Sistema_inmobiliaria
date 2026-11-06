@@ -357,7 +357,7 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("ck_contracts_due_day_range", "due_day BETWEEN 1 AND 31");
 
-                            t.HasCheckConstraint("ck_contracts_end_reason", "end_reason IS NULL OR end_reason IN ('Expiry', 'EarlyTerminationByTenant', 'TerminationForCause', 'MutualAgreement')");
+                            t.HasCheckConstraint("ck_contracts_end_reason", "end_reason IS NULL OR end_reason IN ('Expiry', 'EarlyTerminationByTenant', 'TerminationForCause', 'MutualAgreement', 'LoadedByMistake')");
 
                             t.HasCheckConstraint("ck_contracts_honorarios_percentage_range", "honorarios_percentage IS NULL OR (honorarios_percentage >= 0 AND honorarios_percentage <= 100)");
 

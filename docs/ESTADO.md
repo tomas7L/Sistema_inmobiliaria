@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-06, con S4 escrita y verificada, sin commitear; M1 aplicada en PRUEBA y producción, M2 todavía no_
+_Última actualización: 2026-11-06, con S5 escrita y verificada, sin commitear; M2 aplicada en PRUEBA y producción, M3 todavía no_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -13,9 +13,9 @@ _Última actualización: 2026-11-06, con S4 escrita y verificada, sin commitear;
 
 ## Próximos pasos
 
-1. **Tomás commitea S4, abre el PR de `ramatomy` y mergea.** Trae M2.
-2. **Tomás aplica M2** (`20261106150156_AddContractEventsAndTermsLock`) en PRUEBA y después en producción, antes de instalar una versión que la necesite.
-3. **Seguir con S5 (Cancelar y deshacer).** Trae M3 y un verificador independiente. Antes, leer los Advisories de `tasks.md`, Phase 4, punto 4.9.
+1. **Tomás commitea S5, abre el PR de `ramatomy` y mergea.** Trae M3.
+2. **Tomás aplica M3** (`20261106193800_AddLoadedByMistakeEndReason`) en PRUEBA y después en producción. **Desde M3, todas las PC de la inmobiliaria se actualizan juntas** (`tasks.md`, H.5).
+3. **Seguir con S6 (Índices).** Trae M4; no lleva verificador. Antes, leer los Advisories de `tasks.md`, Phase 5, punto 5.11.
 
 ## Pendientes / bloqueos
 
@@ -55,8 +55,8 @@ _Última actualización: 2026-11-06, con S4 escrita y verificada, sin commitear;
 
 | | |
 |---|---|
-| **Docker** | **Sí** para S5 (Testcontainers `postgres:17.6`) |
-| **Supabase** | **Sí** para aplicar M2 ahora, y M3 al terminar S5; las bases se pausan solas, y solo Tomás se conecta |
+| **Docker** | **Sí** para S6 (Testcontainers `postgres:17.6`) |
+| **Supabase** | **Sí** para aplicar M3 ahora, y M4 al terminar S6; las bases se pausan solas, y solo Tomás se conecta |
 | **Límite diario** | Tomás pasa el porcentaje al arrancar; el verificador y la revisión de gentle-ai son lo más caro |
 
 ## Para retomar
@@ -75,8 +75,8 @@ dotnet test Inmobiliaria.Core.slnf --configuration Release
 dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure
 ```
 
-Esperado: **1556 pasados, 0 fallas, 0 omitidos**, build sin advertencias y el modelo en sintonía con
-`20261106150156_AddContractEventsAndTermsLock`. Si el build de Desktop falla con MSB3027, la aplicación está
+Esperado: **1659 pasados, 0 fallas, 0 omitidos**, build sin advertencias y el modelo en sintonía con
+`20261106193800_AddLoadedByMistakeEndReason`. Si el build de Desktop falla con MSB3027, la aplicación está
 abierta y tiene tomadas sus DLL: cerrarla.
 
 **Aplicar una migración** (Tomás, en una ventana de PowerShell aparte, nunca con `!`): `tasks.md` H.3 y H.4; variable `INMOBILIARIA_DB` con

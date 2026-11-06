@@ -266,9 +266,14 @@ public sealed class SessionServicesTests
         await Assert.ThrowsAsync<ConnectionRefusedException>(() => contracts.GiveNoticeAsync(Guid.NewGuid(), new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 1)));
         await Assert.ThrowsAsync<ConnectionRefusedException>(() => contracts.SummarizeEndAsync(Guid.NewGuid(), EndReason.Expiry, new DateOnly(2026, 1, 1)));
         await Assert.ThrowsAsync<ConnectionRefusedException>(() => contracts.EndAsync(Guid.NewGuid(), EndReason.Expiry, new DateOnly(2026, 1, 1)));
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => contracts.SummarizeCancelAsync(Guid.NewGuid(), "x"));
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => contracts.CancelAsync(Guid.NewGuid(), "x", ContractCancellationSummary.Refused(ContractRefusal.ReasonMissing)));
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => contracts.UndoNoticeAsync(Guid.NewGuid(), "x"));
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => contracts.SummarizeUndoEndAsync(Guid.NewGuid(), "x"));
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => contracts.UndoEndAsync(Guid.NewGuid(), "x"));
 
-        Assert.Equal(10, factory.Created.Count);
-        Assert.Equal(10, factory.Created.Distinct().Count());
+        Assert.Equal(15, factory.Created.Count);
+        Assert.Equal(15, factory.Created.Distinct().Count());
         Assert.All(factory.Created, context => Assert.Throws<ObjectDisposedException>(() => context.ChangeTracker));
     }
 

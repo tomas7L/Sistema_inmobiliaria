@@ -90,4 +90,30 @@ internal sealed class FakeContractRegistry : IContractRegistry
 
     public Task<ContractResult> EndAsync(Guid contractId, EndReason? reason, DateOnly endDate, CancellationToken ct = default) =>
         Change("End", contractId, reason, endDate);
+
+    public ContractCancellationSummary CancelSummary { get; set; } =
+        new(null, "Pérez, Juan", "Alem 1258, Sunchales", 900_000m, [], false, 0m, [], "plan");
+
+    public ContractUndoEndSummary UndoEndSummary { get; set; } = new(null, null, []);
+
+    public Task<ContractCancellationSummary> SummarizeCancelAsync(Guid contractId, string? reason, CancellationToken ct = default)
+    {
+        Calls.Add(["SummarizeCancel", contractId, reason]);
+        return Task.FromResult(CancelSummary);
+    }
+
+    public Task<ContractResult> CancelAsync(Guid contractId, string? reason, ContractCancellationSummary shown, CancellationToken ct = default) =>
+        Change("Cancel", contractId, reason, shown);
+
+    public Task<ContractResult> UndoNoticeAsync(Guid contractId, string? reason, CancellationToken ct = default) =>
+        Change("UndoNotice", contractId, reason);
+
+    public Task<ContractUndoEndSummary> SummarizeUndoEndAsync(Guid contractId, string? reason, CancellationToken ct = default)
+    {
+        Calls.Add(["SummarizeUndoEnd", contractId, reason]);
+        return Task.FromResult(UndoEndSummary);
+    }
+
+    public Task<ContractResult> UndoEndAsync(Guid contractId, string? reason, CancellationToken ct = default) =>
+        Change("UndoEnd", contractId, reason);
 }

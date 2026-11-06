@@ -449,7 +449,8 @@ window MUST NOT block it: it stays with its recibos, and the summary MUST say th
 - GIVEN a contract loaded for the wrong tenant, owing two months, nothing paid, 40 days later
 - WHEN it is cancelled with a reason
 - THEN its balance MUST be zero and the tenant MUST owe nothing
-- AND both accruals MUST still be on the ledger, each with its `Correction`
+- AND every accrual already on the ledger MUST still be there, each with its `Correction`
+- AND a month not yet written MUST stay unwritten, while the summary still counts it in the amount that stops being owed
 
 #### Scenario: A contract already ended can still be cancelled
 

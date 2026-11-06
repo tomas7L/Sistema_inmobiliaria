@@ -7,7 +7,7 @@ using Npgsql;
 namespace Inmobiliaria.Infrastructure.Persistence;
 
 /// <summary>
-/// <see cref="IContractRegistry"/> over <c>contracts</c> (gestion-de-alquileres spec Requirements 6 to 10, design §4). Creating is
+/// <see cref="IContractRegistry"/> over <c>contracts</c> (gestion-de-alquileres spec Requirements 6 to 10, 23 and 24, design §4). Creating is
 /// one <c>SaveChanges</c> inside a transaction, with the units locked before their availability is read, so two operators
 /// cannot both let the same unit. A cutover date is left to the database to refuse: the trigger decides who may set one, not
 /// this class. Searching is done in memory by <see cref="AccountSearch"/>'s rule, as <see cref="AccountDirectory"/> does.
@@ -58,6 +58,9 @@ public sealed partial class ContractRegistry : IContractRegistry
         }
 
         var (parties, units) = await NamesAsync([contract], ct);
+        var events = await _context.ContractEvents.AsNoTracking()
+            .Where(e => EF.Property<Guid>(e, "ContractId") == contractId)
+            .ToListAsync(ct);
 
         return new ContractDetail(
             contract.Id,
@@ -88,7 +91,18 @@ public sealed partial class ContractRegistry : IContractRegistry
                 .OrderBy(a => a.EffectiveDate)
                 .ThenBy(a => a.ConfirmedAt)
                 .Select(a => new ContractAdjustmentLine(a.EffectiveDate, a.PreviousCanon, a.NewCanon, a.Coefficient, a.Kind))
-                .ToList());
+                .ToList())
+        {
+            Events = events
+                .Select(e => new ContractEventLine(
+                    Enum.Parse<ContractEventKind>(ReciboRows.Read<string>(e, "Kind")),
+                    e.GetValueOrDefault("Reason") as string,
+                    e.GetValueOrDefault("Detail") as string,
+                    ReciboRows.Read<string>(e, "RecordedBy"),
+                    ReciboRows.Read<DateTimeOffset>(e, "RecordedAt")))
+                .OrderBy(e => e.RecordedAt)
+                .ToList(),
+        };
     }
 
     public async Task<ContractResult> CreateAsync(ContractDraft draft, bool acceptWarnings, CancellationToken ct = default)
@@ -169,6 +183,7 @@ public sealed partial class ContractRegistry : IContractRegistry
         (from party in _context.ContractParties
          join contract in _context.Contracts on party.ContractId equals contract.Id
          where party.PartyId == lessorId && party.Role == PartyRole.Lessor && contract.HonorariosPercentage != null
+             && contract.EndReason != EndReason.LoadedByMistake
          orderby contract.StartDate descending, contract.Id
          select contract.HonorariosPercentage)
         .FirstOrDefaultAsync(ct);
@@ -239,7 +254,8 @@ public sealed partial class ContractRegistry : IContractRegistry
                 c.Status,
                 c.StartDate,
                 c.NominalEndDate,
-                IsPastEnd(c)))
+                IsPastEnd(c),
+                c.EndReason == EndReason.LoadedByMistake))
             .ToList();
     }
 

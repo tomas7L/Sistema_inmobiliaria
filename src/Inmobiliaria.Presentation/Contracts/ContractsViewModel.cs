@@ -83,7 +83,7 @@ public sealed class ContractRow
 
     public string Units => Listing.Units;
 
-    public string StatusText => Formats.Status(Listing.Status);
+    public string StatusText => Listing.IsCancelled ? "Cancelado por error de carga" : Formats.Status(Listing.Status);
 
     /// <summary>Beside the state, which stays as it is: passing the end date does not end a contract.</summary>
     public string? PastEndFlag => Listing.IsPastEnd ? "Fecha de fin vencida" : null;

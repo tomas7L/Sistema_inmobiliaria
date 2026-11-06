@@ -30,7 +30,9 @@ public sealed class GoLiveSetup : IGoLiveSetup
 
     public async Task<IReadOnlyList<CutoverListing>> ListContractsAsync(CancellationToken ct = default)
     {
+        // A contract loaded by mistake has nothing to carry over.
         var contracts = await _context.Contracts.AsNoTracking()
+            .Where(c => c.EndReason != EndReason.LoadedByMistake)
             .Include(c => c.Parties)
             .Include(c => c.Units)
             .ToListAsync(ct);

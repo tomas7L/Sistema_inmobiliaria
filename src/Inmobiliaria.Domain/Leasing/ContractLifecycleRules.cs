@@ -35,11 +35,43 @@ public static class ContractLifecycleRules
             return ContractRefusal.EndReasonMissing;
         }
 
+        if (reason == EndReason.LoadedByMistake)
+        {
+            return ContractRefusal.EndReasonNotOffered;
+        }
+
         if (endDate > today)
         {
             return ContractRefusal.EndAfterToday;
         }
 
         return endDate < startDate ? ContractRefusal.EndBeforeContractStart : null;
+    }
+
+    /// <summary>Why a notice cannot be undone, or null (spec Requirement 24).</summary>
+    public static ContractRefusal? CheckUndoNotice(ContractStatus status, string? reason)
+    {
+        if (status != ContractStatus.PendingTermination)
+        {
+            return ContractRefusal.NoNoticeToUndo;
+        }
+
+        return string.IsNullOrWhiteSpace(reason) ? ContractRefusal.ReasonMissing : null;
+    }
+
+    /// <summary>Why an end cannot be undone as far as the contract alone can tell, or null. Whether its units are free is the adapter's.</summary>
+    public static ContractRefusal? CheckUndoEnd(ContractStatus status, EndReason? endReason, string? reason)
+    {
+        if (status != ContractStatus.Ended)
+        {
+            return ContractRefusal.NoEndToUndo;
+        }
+
+        if (endReason == EndReason.LoadedByMistake)
+        {
+            return ContractRefusal.ContractCancelled;
+        }
+
+        return string.IsNullOrWhiteSpace(reason) ? ContractRefusal.ReasonMissing : null;
     }
 }

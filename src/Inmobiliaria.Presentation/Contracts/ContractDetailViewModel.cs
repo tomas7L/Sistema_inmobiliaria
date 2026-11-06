@@ -7,7 +7,7 @@ using Inmobiliaria.Presentation.Common;
 namespace Inmobiliaria.Presentation.Contracts;
 
 /// <summary>
-/// One contract, with notice and end (gestion-de-alquileres spec Requirements 6 and 10, design §6). Each of them opens a summary
+/// One contract, with notice, end, their undoing and cancelling (gestion-de-alquileres spec Requirements 6, 10, 23 and 24, design §6). Each of them opens a summary
 /// that the operator confirms, and editing what the summary was built from closes it, so what is confirmed is what was read. The
 /// contract is read again after every action. Both roles; the view arrives in S12.
 /// </summary>
@@ -25,6 +25,9 @@ public sealed partial class ContractDetailViewModel : ObservableObject
         LoadCommand = new AsyncRelayCommand(LoadAsync, CanAct);
         ReviewNoticeCommand = new RelayCommand(ReviewNotice, CanAct);
         ReviewEndCommand = new AsyncRelayCommand(ReviewEndAsync, CanAct);
+        ReviewUndoNoticeCommand = new RelayCommand(ReviewUndoNotice, CanAct);
+        ReviewUndoEndCommand = new AsyncRelayCommand(ReviewUndoEndAsync, CanAct);
+        ReviewCancelCommand = new AsyncRelayCommand(ReviewCancelAsync, CanAct);
         ConfirmCommand = new AsyncRelayCommand(ConfirmAsync, () => CanAct() && PendingChange is not null);
         CancelCommand = new RelayCommand(CloseSummary, CanAct);
         Runner.PropertyChanged += OnRunnerChanged;
@@ -38,12 +41,18 @@ public sealed partial class ContractDetailViewModel : ObservableObject
 
     public IAsyncRelayCommand ReviewEndCommand { get; }
 
+    public IRelayCommand ReviewUndoNoticeCommand { get; }
+
+    public IAsyncRelayCommand ReviewUndoEndCommand { get; }
+
+    public IAsyncRelayCommand ReviewCancelCommand { get; }
+
     public IAsyncRelayCommand ConfirmCommand { get; }
 
     public IRelayCommand CancelCommand { get; }
 
     /// <summary>The reasons offered for ending. "Cargado por error" never is: only cancelling uses it (spec Requirement 10).</summary>
-    public IReadOnlyList<EndReason> EndReasons { get; } = Enum.GetValues<EndReason>();
+    public IReadOnlyList<EndReason> EndReasons { get; } = Enum.GetValues<EndReason>().Where(r => r != Domain.Leasing.EndReason.LoadedByMistake).ToList();
 
     /// <summary>The contract as last read, or null before that or when it is not there.</summary>
     [ObservableProperty]
@@ -60,6 +69,10 @@ public sealed partial class ContractDetailViewModel : ObservableObject
 
     [ObservableProperty]
     private DateOnly? _endDate;
+
+    /// <summary>Why a cancellation or an undo is being made, in the operator's words. Kept with who did it and when.</summary>
+    [ObservableProperty]
+    private string _changeReason = string.Empty;
 
     /// <summary>The last refusal's operator text, or null. Cleared when the next action starts.</summary>
     [ObservableProperty]
@@ -80,6 +93,8 @@ public sealed partial class ContractDetailViewModel : ObservableObject
     partial void OnEndReasonChanged(EndReason? value) => CloseSummary();
 
     partial void OnEndDateChanged(DateOnly? value) => CloseSummary();
+
+    partial void OnChangeReasonChanged(string value) => CloseSummary();
 
     private bool CanAct() => !Runner.IsBusy;
 
@@ -141,6 +156,67 @@ public sealed partial class ContractDetailViewModel : ObservableObject
         }
     }
 
+    /// <summary>Nothing to fetch: the summary repeats the dates being cleared, and the port applies the rules again on confirming.</summary>
+    private void ReviewUndoNotice()
+    {
+        RefusalMessage = null;
+        CloseSummary();
+
+        if (string.IsNullOrWhiteSpace(ChangeReason))
+        {
+            RefusalMessage = ContractRefusal.ReasonMissing.OperatorText();
+            return;
+        }
+
+        PendingChange = new PendingUndoNotice(ChangeReason, Detail?.NoticeGivenDate, Detail?.PlannedMoveOutDate);
+    }
+
+    private async Task ReviewUndoEndAsync()
+    {
+        RefusalMessage = null;
+        CloseSummary();
+
+        var reason = ChangeReason;
+        var outcome = await Runner.RunAsync(() => _contracts.SummarizeUndoEndAsync(_contractId, reason));
+        if (!outcome.Completed)
+        {
+            return;
+        }
+
+        var summary = outcome.Value!;
+        if (summary.Refusal is { } refusal)
+        {
+            RefusalMessage = refusal.OperatorText(summary.CurrentTenant);
+        }
+        else if (ChangeReason == reason)
+        {
+            PendingChange = new PendingUndoEnd(reason, summary);
+        }
+    }
+
+    private async Task ReviewCancelAsync()
+    {
+        RefusalMessage = null;
+        CloseSummary();
+
+        var reason = ChangeReason;
+        var outcome = await Runner.RunAsync(() => _contracts.SummarizeCancelAsync(_contractId, reason));
+        if (!outcome.Completed)
+        {
+            return;
+        }
+
+        var summary = outcome.Value!;
+        if (summary.Refusal is not null)
+        {
+            RefusalMessage = summary.RefusalText;
+        }
+        else if (ChangeReason == reason)
+        {
+            PendingChange = new PendingCancel(reason, summary);
+        }
+    }
+
     private async Task ConfirmAsync()
     {
         RefusalMessage = null;
@@ -151,6 +227,9 @@ public sealed partial class ContractDetailViewModel : ObservableObject
             {
                 PendingNotice notice => _contracts.GiveNoticeAsync(_contractId, notice.NoticeDate, notice.MoveOutDate),
                 PendingEnd end => _contracts.EndAsync(_contractId, end.Reason, end.EndDate),
+                PendingUndoNotice undo => _contracts.UndoNoticeAsync(_contractId, undo.Reason),
+                PendingUndoEnd undo => _contracts.UndoEndAsync(_contractId, undo.Reason),
+                PendingCancel cancel => _contracts.CancelAsync(_contractId, cancel.Reason, cancel.Figures),
                 _ => throw new InvalidOperationException("Nothing to confirm."),
             },
             OperationKind.Commit);
@@ -162,7 +241,7 @@ public sealed partial class ContractDetailViewModel : ObservableObject
         CloseSummary();
         if (outcome.Value!.Refusal is { } refusal)
         {
-            RefusalMessage = refusal.OperatorText(outcome.Value.CurrentTenant);
+            RefusalMessage = outcome.Value.RefusalText ?? refusal.OperatorText(outcome.Value.CurrentTenant);
         }
 
         await LoadAsync();
@@ -175,6 +254,9 @@ public sealed partial class ContractDetailViewModel : ObservableObject
             LoadCommand.NotifyCanExecuteChanged();
             ReviewNoticeCommand.NotifyCanExecuteChanged();
             ReviewEndCommand.NotifyCanExecuteChanged();
+            ReviewUndoNoticeCommand.NotifyCanExecuteChanged();
+            ReviewUndoEndCommand.NotifyCanExecuteChanged();
+            ReviewCancelCommand.NotifyCanExecuteChanged();
             ConfirmCommand.NotifyCanExecuteChanged();
             CancelCommand.NotifyCanExecuteChanged();
         }
@@ -195,6 +277,38 @@ public abstract record PendingContractChange;
 public sealed record PendingNotice(DateOnly NoticeDate, DateOnly MoveOutDate) : PendingContractChange
 {
     public string Summary => $"El contrato pasa a rescisión avisada el {NoticeDate:dd/MM/yyyy}, con desocupación el {MoveOutDate:dd/MM/yyyy}.";
+}
+
+/// <param name="Reason">Why, in the operator's words.</param>
+/// <param name="NoticeDate">The notice date being cleared.</param>
+/// <param name="MoveOutDate">The move-out date being cleared.</param>
+public sealed record PendingUndoNotice(string Reason, DateOnly? NoticeDate, DateOnly? MoveOutDate) : PendingContractChange
+{
+    public string Summary => $"Se deshace el aviso del {NoticeDate:dd/MM/yyyy}, con desocupación el {MoveOutDate:dd/MM/yyyy}. El contrato vuelve a estar activo.";
+}
+
+/// <param name="Reason">Why, in the operator's words.</param>
+/// <param name="Figures">What undoing leaves, as the port read it.</param>
+public sealed record PendingUndoEnd(string Reason, ContractUndoEndSummary Figures) : PendingContractChange
+{
+    /// <summary>The months between the end and today accrue as usual, and the operator is told which (spec Requirement 24).</summary>
+    public string Summary => Figures.PeriodsToAccrue.Count == 0
+        ? "Se deshace el fin del contrato. No hay períodos para cobrar por el tiempo que estuvo terminado."
+        : $"Se deshace el fin del contrato. Estos períodos van a cargarse a la cuenta: {string.Join(", ", Figures.PeriodsToAccrue.Select(p => p.ToString("MM/yyyy")))}.";
+}
+
+/// <param name="Reason">Why, in the operator's words.</param>
+/// <param name="Figures">What cancelling means, as the port read it. Sent back on confirming, and compared.</param>
+public sealed record PendingCancel(string Reason, ContractCancellationSummary Figures) : PendingContractChange
+{
+    /// <summary>The tenant, the units and the exact amount, since this cannot be undone (spec Requirement 23).</summary>
+    public string Summary =>
+        $"Se cancela el contrato de {Figures.Tenants}, sobre {Figures.Units}. Deja de deberse {Formats.Money(Figures.AmountStoppedBeingOwed)}. Esto no se puede deshacer.";
+
+    /// <summary>Money past the voiding window, or null when there is none: it stays with its recibos and is returned by hand (spec Decision 36).</summary>
+    public string? RetainedLine => Figures.RetainedRecibos.Count == 0
+        ? null
+        : $"Los recibos {string.Join(", ", Figures.RetainedRecibos)} quedan como están, por {Formats.Money(Figures.RetainedAmount)}: ese dinero se devuelve a mano.";
 }
 
 /// <param name="Reason">Why it ends.</param>

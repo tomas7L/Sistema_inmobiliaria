@@ -20,7 +20,7 @@ public sealed class ContractConfiguration : IEntityTypeConfiguration<Contract>
             t.HasCheckConstraint(
                 "ck_contracts_end_reason",
                 "end_reason IS NULL OR end_reason IN " +
-                "('Expiry', 'EarlyTerminationByTenant', 'TerminationForCause', 'MutualAgreement')");
+                "('Expiry', 'EarlyTerminationByTenant', 'TerminationForCause', 'MutualAgreement', 'LoadedByMistake')");
 
             // Any day of the month, including the 29th through the 31st: a lease that says the
             // 31st is a lease the agency must be able to record. A month too short for it clamps

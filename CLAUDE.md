@@ -140,7 +140,9 @@ Do not re-read the codebase. Open only what the next task requires.
   machine out of ports, not a defect in that test.** It appears at about 15,650 `TIME_WAIT` sockets, which clear about
   two minutes later; one full suite run alone peaked near 4,300. Run `netstat -an | grep -c TIME_WAIT` **before**
   rerunning and record the count, because the one real occurrence (2026-11-04) was not measured. Only reproduced here,
-  on demand. If it appears with a low count, the explanation is wrong: investigate.
+  on demand. If it appears with a low count, the explanation is wrong: investigate. **A second occurrence does not clearly fit
+  it** (2026-11-06, one test in a full suite run, passing on rerun): the count was 1 before that run and 453 after, not measured
+  during it, and the rerun peaked at 4,353. Next time, measure during the run before concluding anything.
 - `sd` and `fd` are not available in the Bash tool here; `rg` and `bat` are. Use python for
   in-place source edits — a bash heredoc breaks on C# apostrophes.
 

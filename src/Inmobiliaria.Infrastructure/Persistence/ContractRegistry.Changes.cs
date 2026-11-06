@@ -35,6 +35,11 @@ public sealed partial class ContractRegistry
             contractId,
             locked =>
             {
+                if (locked.Contract.EndReason == EndReason.LoadedByMistake)
+                {
+                    return Task.FromResult<ContractResult?>(ContractResult.Refused(ContractRefusal.ContractCancelled));
+                }
+
                 locked.Contract.SetHonorariosPercentage(rate);
                 return Task.FromResult<ContractResult?>(null);
             },
@@ -325,17 +330,16 @@ public sealed partial class ContractRegistry
     private void Remove(Locked locked, Guid partyId, PartyRole role, bool replacementFollows)
     {
         locked.Contract.RemoveParty(partyId, role, locked.Account, DateTimeOffset.UtcNow, replacementFollows);
-        _context.ContractEvents.Add(new Dictionary<string, object>
-        {
-            ["Id"] = Guid.NewGuid(),
-            ["ContractId"] = locked.Contract.Id,
-            ["Kind"] = nameof(ContractEventKind.PartyRemoved),
-            ["Detail"] = $"{role} {partyId}",
-        });
+        RecordEvent(locked.Contract.Id, ContractEventKind.PartyRemoved, null, $"{role} {partyId}");
     }
 
     private async Task<ContractResult?> ApplyCodebtorsAsync(Locked locked, IReadOnlyList<Guid> wanted, CancellationToken ct)
     {
+        if (locked.Contract.EndReason == EndReason.LoadedByMistake)
+        {
+            return ContractResult.Refused(ContractRefusal.ContractCancelled);
+        }
+
         var persons = await _context.Parties.AsNoTracking().Where(p => wanted.Contains(p.Id)).ToDictionaryAsync(p => p.Id, ct);
         if (persons.Count != wanted.Count)
         {
