@@ -85,6 +85,68 @@ public sealed class PartyRegistryTests
         Assert.Equal(maria.Id, Assert.Single(found).Id);
     }
 
+    /// <summary>
+    /// Spec Test 93: a search says which roles each person holds on contracts in force. A contract giving notice is still in force; one
+    /// ended or cancelled is not, and someone taken off a contract no longer holds the role.
+    /// </summary>
+    [SkippableTheory]
+    [InlineData("inmobiliaria_admin")]
+    [InlineData("inmobiliaria_empleado")]
+    public async Task ASearch_NamesTheRolesOnContractsInForce(string groupRole)
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+        await using var world = await WorldAsync();
+        var clock = new FixedClock(DeskWorld.Today);
+        ContractRegistry Contracts() => new(world.NewContext(), clock, DeskWorld.Terms);
+
+        async Task<(Guid Contract, Guid Tenant, Guid Lessor)> SeedAsync()
+        {
+            var accountId = await world.SeedAccountAsync(DeskWorld.FirstOfMonth(DeskWorld.Today).AddMonths(1));
+            await using var read = world.NewContext();
+            var contractId = (await read.ContractAccounts.AsNoTracking().SingleAsync(a => a.Id == accountId)).ContractId;
+            var parties = await read.ContractParties.AsNoTracking().Where(p => p.ContractId == contractId).ToListAsync();
+            return (contractId, parties.Single(p => p.Role == PartyRole.Tenant).PartyId, parties.Single(p => p.Role == PartyRole.Lessor).PartyId);
+        }
+
+        var active = await SeedAsync();
+        var giving = await SeedAsync();
+        var ended = await SeedAsync();
+        var cancelled = await SeedAsync();
+        var both = await SavedAsync(Registry(world).CreateAsync(new PartyDraft("Lía", "Sosa", "30123456"), false));
+        var removed = await SavedAsync(Registry(world).CreateAsync(new PartyDraft("Raúl", "Vera", "28111222"), false));
+        var never = await SavedAsync(Registry(world).CreateAsync(new PartyDraft("Ana", "Ruiz", "27111222"), false));
+
+        Assert.True((await Contracts().SetCodebtorsAsync(active.Contract, [both.Id, removed.Id])).Succeeded);
+        Assert.True((await Contracts().SetCodebtorsAsync(active.Contract, [both.Id])).Succeeded);
+        Assert.True((await Contracts().SetCodebtorsAsync(giving.Contract, [both.Id])).Succeeded);
+        await using (var super = await ReciboTestSupport.OpenAsync(world.Database.Context))
+        {
+            // The same person as lessor on the contract giving notice, and in the same role on two contracts: one mention each.
+            await ReciboTestSupport.ExecAsync(super, "INSERT INTO contract_parties (contract_id, party_id, role) VALUES (@c, @p, 'Lessor')", ("c", giving.Contract), ("p", both.Id));
+            await ReciboTestSupport.ExecAsync(super, "UPDATE contracts SET start_date = @s WHERE id IN (@a, @b)", ("s", DeskWorld.OldestPeriod), ("a", giving.Contract), ("b", ended.Contract));
+        }
+
+        Assert.True((await Contracts().GiveNoticeAsync(giving.Contract, DeskWorld.Today, DeskWorld.Today)).Succeeded);
+        Assert.True((await Contracts().EndAsync(ended.Contract, EndReason.Expiry, DeskWorld.Today)).Succeeded);
+        var summary = await Contracts().SummarizeCancelAsync(cancelled.Contract, "Error");
+        Assert.True((await Contracts().CancelAsync(cancelled.Contract, "Error", summary)).Succeeded);
+
+        var (registry, context) = await RegistryAsAsync(world, groupRole);
+        await using (context)
+        {
+            var found = (await registry.SearchAsync(null)).ToDictionary(p => p.Id);
+
+            Assert.Equal([PartyRole.Tenant], found[active.Tenant].ActiveRoles);
+            Assert.Equal([PartyRole.Lessor], found[active.Lessor].ActiveRoles);
+            Assert.Equal([PartyRole.Tenant], found[giving.Tenant].ActiveRoles);
+            Assert.Equal([PartyRole.Lessor, PartyRole.Codebtor], found[both.Id].ActiveRoles);
+            Assert.Empty(found[ended.Tenant].ActiveRoles);
+            Assert.Empty(found[cancelled.Lessor].ActiveRoles);
+            Assert.Empty(found[removed.Id].ActiveRoles);
+            Assert.Empty(found[never.Id].ActiveRoles);
+        }
+    }
+
     /// <summary>Spec Test 2: a formatted DNI or CUIL, or part of it, finds the person.</summary>
     [SkippableTheory]
     [InlineData("30.123.456")]

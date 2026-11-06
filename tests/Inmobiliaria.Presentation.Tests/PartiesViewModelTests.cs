@@ -27,6 +27,64 @@ public class PartiesViewModelTests
 
     private static PartyRow Row(PartiesViewModel viewModel, Guid id) => viewModel.Persons.Single(p => p.Id == id);
 
+    /// <summary>Two listings saying the same are equal, whichever list holds the roles, and a different role makes them different.</summary>
+    [Fact]
+    public void TwoListings_CompareByWhatTheySay_RolesIncluded()
+    {
+        var first = Juan with { ActiveRoles = [PartyRole.Tenant, PartyRole.Lessor] };
+        var same = Juan with { ActiveRoles = new List<PartyRole> { PartyRole.Tenant, PartyRole.Lessor } };
+
+        Assert.Equal(first, same);
+        Assert.Equal(first.GetHashCode(), same.GetHashCode());
+        Assert.NotEqual(first, Juan with { ActiveRoles = [PartyRole.Tenant] });
+        Assert.NotEqual(first, first with { Email = "otro@example.com" });
+    }
+
+    /// <summary>Spec Test 93 on the screen: the column names every role, and is empty for someone on no contract in force.</summary>
+    [Fact]
+    public async Task TheList_NamesEachPersonsRoles()
+    {
+        var port = new FakePartyRegistry { Persons = [Juan with { ActiveRoles = [PartyRole.Lessor, PartyRole.Codebtor] }, Ana] };
+
+        var viewModel = await LoadedAsync(port);
+
+        Assert.Equal("Propietario, Codeudor", Row(viewModel, JuanId).RolesText);
+        Assert.Equal(string.Empty, Row(viewModel, AnaId).RolesText);
+    }
+
+    /// <summary>Spec Test 93: the filter keeps whoever holds the role, works on what the search already brought, and clearing it lists everyone again.</summary>
+    [Fact]
+    public async Task TheRoleFilter_KeepsWhoeverHoldsTheRole_WithoutSearchingAgain()
+    {
+        var port = new FakePartyRegistry { Persons = [Juan with { ActiveRoles = [PartyRole.Lessor, PartyRole.Tenant] }, Ana with { ActiveRoles = [PartyRole.Codebtor] }] };
+        var viewModel = await LoadedAsync(port);
+        var searches = port.Searches.Count;
+
+        viewModel.RoleFilter = PartyRole.Tenant;
+        Assert.Equal([JuanId], viewModel.Persons.Select(p => p.Id));
+
+        viewModel.RoleFilter = PartyRole.Codebtor;
+        Assert.Equal([AnaId], viewModel.Persons.Select(p => p.Id));
+
+        viewModel.RoleFilter = null;
+        Assert.Equal(2, viewModel.Persons.Count);
+        Assert.Equal(searches, port.Searches.Count);
+    }
+
+    /// <summary>A search or a re-read after saving keeps the filter the operator chose.</summary>
+    [Fact]
+    public async Task TheRoleFilter_StaysOnAfterSearchingAgain()
+    {
+        var port = new FakePartyRegistry { Persons = [Juan with { ActiveRoles = [PartyRole.Tenant] }, Ana] };
+        var viewModel = await LoadedAsync(port);
+        viewModel.RoleFilter = PartyRole.Tenant;
+
+        await viewModel.SearchCommand.ExecuteAsync(null);
+
+        Assert.Equal([JuanId], viewModel.Persons.Select(p => p.Id));
+    }
+
+
     private static void Fill(PartiesViewModel viewModel, string first, string last, string dni = "", string cuil = "")
     {
         viewModel.FirstName = first;

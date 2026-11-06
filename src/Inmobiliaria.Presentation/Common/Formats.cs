@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Inmobiliaria.Domain.Leasing;
+using Inmobiliaria.Domain.Parties;
 
 namespace Inmobiliaria.Presentation.Common;
 
@@ -19,6 +20,14 @@ public static class Formats
 
     /// <summary>A month: "10/2026".</summary>
     public static string Period(DateOnly period) => period.ToString("MM/yyyy", CultureInfo.InvariantCulture);
+
+    public static string Role(PartyRole role) => role switch
+    {
+        PartyRole.Tenant => "Inquilino",
+        PartyRole.Lessor => "Propietario",
+        PartyRole.Codebtor => "Codeudor",
+        _ => throw new ArgumentOutOfRangeException(nameof(role), role, "A role without a name."),
+    };
 
     public static string Status(ContractStatus status) => status switch
     {

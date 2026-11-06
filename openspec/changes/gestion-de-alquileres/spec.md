@@ -163,7 +163,8 @@ this spec's.
 
 Both roles MUST be able to list persons and search them by name, DNI or CUIL. A name search MUST ignore case and accents and MUST
 match part of a name. A search by DNI or CUIL MUST ignore dots and dashes. The contract form MUST use this same search, so an
-existing person is reused rather than duplicated (`party-registry/spec.md:13`).
+existing person is reused rather than duplicated (`party-registry/spec.md:13`). Each listed person MUST show the roles they hold on contracts
+in force, `Active` or `PendingTermination`, and the list MUST be filterable by role. A person removed from a contract no longer holds the role there.
 
 #### Scenario: Accents and case do not hide a person
 
@@ -1133,3 +1134,4 @@ fail first.
 90. A contract already ended can be cancelled, its reason replaced and its balance zero. A blocked cancellation says when only an Admin can void. (R23)
 91. The corrected difference gives 330,000 in the spec's example; a paid one offers no new charge. (R18)
 92. Reversing a charge not yet due leaves no credit on any date, whether by a correction or by a cancellation. (R19, R23)
+93. A search names each person's roles on contracts in force; an ended or cancelled contract and a removed party count for nothing; the list filters by role. (R1)

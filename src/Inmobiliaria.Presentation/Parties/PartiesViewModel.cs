@@ -20,6 +20,9 @@ public sealed partial class PartiesViewModel : ObservableObject
 
     private readonly IPartyRegistry _parties;
 
+    /// <summary>What the last search brought. The role filter works on this, so choosing one asks the database nothing.</summary>
+    private IReadOnlyList<PartyListing> _found = [];
+
     public PartiesViewModel(IPartyRegistry parties)
     {
         ArgumentNullException.ThrowIfNull(parties);
@@ -61,6 +64,10 @@ public sealed partial class PartiesViewModel : ObservableObject
 
     [ObservableProperty]
     private string _searchText = string.Empty;
+
+    /// <summary>The role to list, or null for everyone.</summary>
+    [ObservableProperty]
+    private PartyRole? _roleFilter;
 
     [ObservableProperty]
     private string _firstName = string.Empty;
@@ -110,6 +117,8 @@ public sealed partial class PartiesViewModel : ObservableObject
     [ObservableProperty]
     private PartyRow? _chosenParty;
 
+    partial void OnRoleFilterChanged(PartyRole? value) => ShowFound();
+
     partial void OnFirstNameChanged(string value) => WithdrawConfirmations();
 
     partial void OnLastNameChanged(string value) => WithdrawConfirmations();
@@ -144,6 +153,15 @@ public sealed partial class PartiesViewModel : ObservableObject
         await ReloadAsync();
     }
 
+    private void ShowFound()
+    {
+        Persons.Clear();
+        foreach (var listing in _found.Where(p => RoleFilter is not { } role || p.ActiveRoles.Contains(role)))
+        {
+            Persons.Add(new PartyRow(listing));
+        }
+    }
+
     private async Task ReloadAsync()
     {
         var outcome = await Runner.RunAsync(() => _parties.SearchAsync(SearchText));
@@ -152,11 +170,8 @@ public sealed partial class PartiesViewModel : ObservableObject
             return;
         }
 
-        Persons.Clear();
-        foreach (var listing in outcome.Value!)
-        {
-            Persons.Add(new PartyRow(listing));
-        }
+        _found = outcome.Value!;
+        ShowFound();
     }
 
     private void Edit(PartyRow? row)
@@ -344,6 +359,9 @@ public sealed class PartyRow
     public string? Dni => Listing.Dni;
 
     public string? Cuil => Listing.Cuil;
+
+    /// <summary>The roles on contracts in force (spec Requirement 1), empty for someone on none.</summary>
+    public string RolesText => string.Join(", ", Listing.ActiveRoles.Select(Formats.Role));
 
     /// <summary>Shown beside a person with neither identifier (spec Decision 28).</summary>
     public string? IdentifierWarning => Listing.HasNoIdentifier ? "Sin DNI ni CUIL: no se pueden detectar duplicados." : null;
