@@ -85,6 +85,10 @@ public sealed class SchemaConstraintTests
         context.AdjustmentClauses.Add(clause);
         contract.AttachAdjustmentClause(clause);
 
+        // Written now: the clause lock refuses its indices if an adjustment reaches the database first, and one SaveChanges does
+        // not promise the order.
+        context.SaveChanges();
+
         return (contract, index);
     }
 

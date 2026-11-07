@@ -30,6 +30,45 @@ public class ContractFormViewModelTests
         return viewModel;
     }
 
+    /// <summary>Text that is no number is refused, never replaced by the suggestion; a number out of range is the port's to refuse.</summary>
+    [Fact]
+    public async Task ATypedClauseOffset_IsNeverReplacedByTheSuggestion()
+    {
+        var port = new FakeContractRegistry();
+        var viewModel = await FilledAsync(port);
+        var ipc = Guid.NewGuid();
+        viewModel.ClauseIndexNames = new Dictionary<Guid, string> { [ipc] = "IPC" };
+        viewModel.ClauseIndexIds.Add(ipc);
+        viewModel.ClauseIntervalText = "6";
+        viewModel.ClauseOffsetText = "x";
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Empty(port.Created);
+        Assert.Equal(ContractRefusal.ClauseInvalid.OperatorText(), viewModel.RefusalMessage);
+
+        viewModel.ClauseOffsetText = "4";
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal(4, Assert.Single(port.Created).Draft.Clause!.WindowOffsetMonths);
+    }
+
+    /// <summary>Spec Decision 15: an offset left blank takes the suggestion of the indices chosen, as the months shown said.</summary>
+    [Fact]
+    public async Task AClauseOffsetLeftBlank_SendsTheSuggestion()
+    {
+        var port = new FakeContractRegistry();
+        var viewModel = await FilledAsync(port);
+        var ipc = Guid.NewGuid();
+        viewModel.ClauseIndexNames = new Dictionary<Guid, string> { [ipc] = "IPC" };
+        viewModel.ClauseIndexIds.Add(ipc);
+        viewModel.ClauseIntervalText = "6";
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal(2, Assert.Single(port.Created).Draft.Clause!.WindowOffsetMonths);
+    }
+
     /// <summary>Spec Requirement 7: what the form holds reaches the port, a lone unit takes 100% and the due day defaults to 10.</summary>
     [Fact]
     public async Task Saving_SendsTheFormToThePort_AndClearsIt()
@@ -409,6 +448,7 @@ public class ContractFormViewModelTests
         var index = Guid.NewGuid();
         viewModel.ClauseIndexIds.Add(index);
         viewModel.ClauseIntervalText = "6";
+        viewModel.ClauseOffsetText = "3";
         viewModel.FeePlanAmountText = "120.000";
         viewModel.FeePlanInstalmentsText = "3";
 
@@ -416,6 +456,7 @@ public class ContractFormViewModelTests
 
         var draft = Assert.Single(port.Created).Draft;
         Assert.Equal(6, draft.Clause!.IntervalMonths);
+        Assert.Equal(3, draft.Clause.WindowOffsetMonths);
         Assert.Equal([index], draft.Clause.IndexIds);
         Assert.Equal(120_000m, draft.FeePlanAmount);
         Assert.Equal(3, draft.FeePlanInstalments);

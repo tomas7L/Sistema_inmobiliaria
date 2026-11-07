@@ -9,12 +9,18 @@ namespace Inmobiliaria.Domain.Leasing;
 /// </summary>
 public sealed class AdjustmentClause
 {
+    /// <summary>Today's window, which a clause recorded before the offset existed keeps (gestion-de-alquileres spec Requirement 13).</summary>
+    public const int DefaultWindowOffsetMonths = 1;
+
     private readonly List<AdjustmentClauseIndex> _indices = [];
 
     public Guid Id { get; }
     public Guid ContractId { get; }
-    public int IntervalMonths { get; }
+    public int IntervalMonths { get; private set; }
     public RoundingRule RoundingRule { get; }
+
+    /// <summary>How many months before the due date the index window ends (spec Decision 15). Never changes between adjustments.</summary>
+    public int WindowOffsetMonths { get; private set; }
 
     public IReadOnlyCollection<AdjustmentClauseIndex> Indices => _indices;
 
@@ -41,7 +47,8 @@ public sealed class AdjustmentClause
         Guid contractId,
         IReadOnlyList<Guid> economicIndexIds,
         int intervalMonths,
-        RoundingRule roundingRule)
+        RoundingRule roundingRule,
+        int windowOffsetMonths = DefaultWindowOffsetMonths)
     {
         ArgumentNullException.ThrowIfNull(economicIndexIds);
 
@@ -59,20 +66,38 @@ public sealed class AdjustmentClause
                 nameof(economicIndexIds));
         }
 
+        Id = id;
+        ContractId = contractId;
+        RoundingRule = roundingRule;
+        Correct(intervalMonths, windowOffsetMonths);
+
+        for (var ordinal = 0; ordinal < economicIndexIds.Count; ordinal++)
+        {
+            _indices.Add(new AdjustmentClauseIndex(id, economicIndexIds[ordinal], ordinal));
+        }
+    }
+
+    public static bool IsValidWindowOffset(int windowOffsetMonths) => windowOffsetMonths is >= 0 and <= 3;
+
+    /// <summary>
+    /// Corrects the interval and the offset. Whether the clause may still change is the adapter's and the database's: it depends
+    /// on the contract's adjustments (spec Decision 32). The indices change through <c>app_replace_clause_indices</c> (design D15).
+    /// </summary>
+    public void Correct(int intervalMonths, int windowOffsetMonths)
+    {
         if (intervalMonths is < 1 or > 60)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(intervalMonths), intervalMonths, "Interval must be between 1 and 60 months.");
         }
 
-        Id = id;
-        ContractId = contractId;
-        IntervalMonths = intervalMonths;
-        RoundingRule = roundingRule;
-
-        for (var ordinal = 0; ordinal < economicIndexIds.Count; ordinal++)
+        if (!IsValidWindowOffset(windowOffsetMonths))
         {
-            _indices.Add(new AdjustmentClauseIndex(id, economicIndexIds[ordinal], ordinal));
+            throw new ArgumentOutOfRangeException(
+                nameof(windowOffsetMonths), windowOffsetMonths, "The window offset must be between 0 and 3 months.");
         }
+
+        IntervalMonths = intervalMonths;
+        WindowOffsetMonths = windowOffsetMonths;
     }
 }

@@ -70,4 +70,7 @@ internal sealed class PerCallContractRegistry : IContractRegistry
 
     public Task<ContractResult> UndoEndAsync(Guid contractId, string? reason, CancellationToken ct = default) =>
         PerCall.RunAsync(_factory, context => Over(context).UndoEndAsync(contractId, reason, ct));
+
+    public Task<ContractResult> SetClauseAsync(Guid contractId, ClauseDraft clause, CancellationToken ct = default) =>
+        PerCall.RunAsync(_factory, context => Over(context).SetClauseAsync(contractId, clause, ct));
 }

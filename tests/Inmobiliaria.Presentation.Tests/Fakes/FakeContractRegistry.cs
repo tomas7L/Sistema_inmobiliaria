@@ -116,4 +116,7 @@ internal sealed class FakeContractRegistry : IContractRegistry
 
     public Task<ContractResult> UndoEndAsync(Guid contractId, string? reason, CancellationToken ct = default) =>
         Change("UndoEnd", contractId, reason);
+
+    public Task<ContractResult> SetClauseAsync(Guid contractId, ClauseDraft clause, CancellationToken ct = default) =>
+        Change("SetClause", contractId, clause);
 }

@@ -64,6 +64,12 @@ public interface IContractRegistry
 
     /// <summary>Takes back an end recorded by mistake (spec Requirement 24). The months in between accrue as usual when the account is next read.</summary>
     Task<ContractResult> UndoEndAsync(Guid contractId, string? reason, CancellationToken ct = default);
+
+    /// <summary>
+    /// Attaches a clause or corrects the one there, until the contract's first confirmed adjustment, even after movements (spec
+    /// Decision 32). It takes effect on the next proposal.
+    /// </summary>
+    Task<ContractResult> SetClauseAsync(Guid contractId, ClauseDraft clause, CancellationToken ct = default);
 }
 
 /// <param name="Refusal">Why it cannot be cancelled, or null.</param>
@@ -173,7 +179,8 @@ public sealed record ContractPartyLine(Guid PartyId, string Name, PartyRole Role
 
 public sealed record ContractUnitLine(Guid UnitId, string Address, decimal Percentage);
 
-public sealed record ContractClauseLine(IReadOnlyList<string> IndexNames, int IntervalMonths, RoundingRule RoundingRule);
+public sealed record ContractClauseLine(
+    IReadOnlyList<string> IndexNames, int IntervalMonths, RoundingRule RoundingRule, IReadOnlyList<Guid> IndexIds, int WindowOffsetMonths);
 
 public sealed record ContractAdjustmentLine(DateOnly EffectiveDate, decimal PreviousCanon, decimal NewCanon, decimal Coefficient, AdjustmentKind Kind);
 
@@ -327,7 +334,7 @@ public static class ContractRefusalText
         ContractRefusal.HonorariosOutOfRange => "Los honorarios tienen que estar entre 0 y 100, con hasta dos decimales.",
         ContractRefusal.FeePlanInvalid => "El plan de honorarios lleva un monto mayor que cero y de 1 a 6 cuotas.",
         ContractRefusal.SharesNotHundred => "Las partes de las unidades tienen que sumar exactamente el 100% del alquiler.",
-        ContractRefusal.ClauseInvalid => "La cláusula de ajuste lleva al menos un índice, sin repetir, y un intervalo de 1 a 60 meses.",
+        ContractRefusal.ClauseInvalid => "La cláusula de ajuste lleva al menos un índice, sin repetir, un intervalo de 1 a 60 meses y una distancia de 0 a 3 meses.",
         ContractRefusal.UnitUnderActiveContract => $"Esa unidad ya está alquilada a {currentTenant ?? "otra persona"}.",
         ContractRefusal.PartyNotFound => "Una de las personas elegidas ya no existe. Actualice la lista.",
         ContractRefusal.UnitNotFound => "Una de las unidades elegidas ya no existe. Actualice la lista.",

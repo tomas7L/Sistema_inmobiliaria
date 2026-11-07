@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-07, con M4 y M4b aplicadas en las dos bases y S7 escrita, sin commitear_
+_Última actualización: 2026-11-07, con S7 mergeada (PR #100) y S8 escrita, sin commitear; M5 todavía sin aplicar_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -13,8 +13,10 @@ _Última actualización: 2026-11-07, con M4 y M4b aplicadas en las dos bases y S
 
 ## Próximos pasos
 
-1. **Tomás commitea S7 y abre el PR.** Lo que falta, y qué se probó sin pantalla, está en `tasks.md`, al final.
-2. **Seguir con S8:** `tasks.md`, Phase 8, con su segunda inspección.
+1. **Tomás commitea S8 y abre el PR.** Al mergear, aplica M5 (`tasks.md` H.3), primero en PRUEBA y después en producción, con la consulta de confirmación que le pasó el asistente. Al confirmarlo, anotarlo en `tasks.md`, Phase 8.
+2. **Arreglar `app_clear_must_change_password`, en su propio PR y migración, antes de S9:** tiene el mismo `search_path` inseguro que corrigió S8, y ya está en producción (`tasks.md`, notas de S8, último punto).
+3. **Decidir qué pasa con el mes que queda sin cobrar** al terminar antes del vencimiento: `tasks.md`, notas de S8, punto 8.6. Cambia la Decisión 39 y el Test 81.
+4. **Seguir con S9 (Confirmar ajustes):** `tasks.md`, Phase 9, y las notas para S9 al final de las de S8. Lleva M6, con su consulta previa (H.4).
 
 ## Pendientes / bloqueos
 
@@ -44,7 +46,7 @@ _Última actualización: 2026-11-07, con M4 y M4b aplicadas en las dos bases y S
   solo afectarían a la sincronización con la nube, que nunca se configuró.
 - **El `appsettings.json` compilado apunta a la base de PRUEBA** (`chygrzoqmcqpncogeiuz`, `aws-1-sa-east-1`), solo en
   `src/Inmobiliaria.Desktop/bin/Release/net10.0-windows/appsettings.json` (ignorado por git). Lo que trae el repo es producción.
-  **Si cambia el `appsettings.json` del repo, el build pisa el compilado con producción:** antes de compilar, guardarlo y restaurarlo después.
+  **Si git toca el `appsettings.json` del repo, aunque sea un merge que no lo cambia de contenido, el build pisa el compilado con producción.** Antes de abrir la app, comprobar con `grep` a qué base apunta.
 - **Base de prueba:** usuario Admin `tomas`, el contrato ficticio "Maria/Juan Prueba" y el Empleado `muñoz`, desactivado.
 - **Registro de errores en la PC:** `%LOCALAPPDATA%\SistemaInmobiliaria\logs\errores-yyyy-MM-dd.log`.
 - **Datos personales, nunca al repo:** el Excel de Nicolás y el PDF de muestra (`C:\Users\buffa\Downloads\abregu.pdf`). Las
@@ -58,8 +60,8 @@ _Última actualización: 2026-11-07, con M4 y M4b aplicadas en las dos bases y S
 
 | | |
 |---|---|
-| **Docker** | **Sí** para S8 (Testcontainers `postgres:17.6`) |
-| **Supabase** | **Sí** para aplicar M5 al terminar S8; las bases se pausan solas, y solo Tomás se conecta |
+| **Docker** | **Sí** para S9 (Testcontainers `postgres:17.6`) |
+| **Supabase** | **Sí** para aplicar M5, y M6 al terminar S9; las bases se pausan solas, y solo Tomás se conecta |
 | **Límite diario** | Tomás pasa el porcentaje al arrancar; el verificador y la revisión de gentle-ai son lo más caro |
 
 ## Para retomar
@@ -78,8 +80,8 @@ dotnet test Inmobiliaria.Core.slnf --configuration Release
 dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure
 ```
 
-Esperado: **1861 pasados, 0 fallas, 0 omitidos**, build sin advertencias y el modelo en sintonía con
-`20261106221123_AddIndexValueCorrections`. Si el build de Desktop falla con MSB3027, la aplicación está
+Esperado: **1972 pasados, 0 fallas, 0 omitidos**, build sin advertencias y el modelo en sintonía con
+`20261107152256_AddClauseWindowOffset`. Si el build de Desktop falla con MSB3027, la aplicación está
 abierta y tiene tomadas sus DLL: cerrarla.
 
 **Aplicar una migración** (Tomás, en una ventana de PowerShell aparte, nunca con `!`): `tasks.md` H.3 y H.4; variable `INMOBILIARIA_DB` con

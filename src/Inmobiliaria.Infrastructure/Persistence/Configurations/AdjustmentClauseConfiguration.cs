@@ -13,9 +13,11 @@ public sealed class AdjustmentClauseConfiguration : IEntityTypeConfiguration<Adj
 {
     public void Configure(EntityTypeBuilder<AdjustmentClause> builder)
     {
-        builder.ToTable("adjustment_clauses", t => t.HasCheckConstraint(
-            "ck_adjustment_clauses_interval_months_range",
-            "interval_months BETWEEN 1 AND 60"));
+        builder.ToTable("adjustment_clauses", t =>
+        {
+            t.HasCheckConstraint("ck_adjustment_clauses_interval_months_range", "interval_months BETWEEN 1 AND 60");
+            t.HasCheckConstraint("ck_adjustment_clauses_window_offset_range", "window_offset_months BETWEEN 0 AND 3");
+        });
 
         builder.HasKey(c => c.Id);
 
@@ -26,6 +28,14 @@ public sealed class AdjustmentClauseConfiguration : IEntityTypeConfiguration<Adj
         // ContractConfiguration's own comment describes for the same shape of problem.
         builder.Property(c => c.ContractId).IsRequired();
         builder.Property(c => c.IntervalMonths).HasColumnName("interval_months").IsRequired();
+
+        // No HasDefaultValue here: EF would take the CLR default 0 as "not set" and send nothing, so a clause on ICL at offset 0
+        // would silently read as offset 1. The default of 1 lives in the migration, for the rows already there.
+        builder.Property(c => c.WindowOffsetMonths)
+            .HasColumnName("window_offset_months")
+            .HasColumnType("smallint")
+            .HasConversion<short>()
+            .IsRequired();
 
         builder.Property(c => c.RoundingRule)
             .HasConversion<string>()

@@ -7,8 +7,9 @@ namespace Inmobiliaria.Infrastructure.Persistence;
 /// <summary>
 /// The only implementation of <see cref="IDueAdjustmentQuery"/> (design Decision 8). Starts
 /// FROM <c>adjustment_clauses</c>, joined to <c>contracts</c> filtered to
-/// <see cref="ContractStatus.Active"/> — a fixed-price contract with no clause is absent by the
-/// query's own construction, and an ended lease has no canon left to adjust. Due-date derivation,
+/// <see cref="ContractStatus.Active"/> and <see cref="ContractStatus.PendingTermination"/> — a
+/// fixed-price contract with no clause is absent by the query's own construction, and an ended
+/// lease has no canon left to adjust. Due-date derivation,
 /// successor resolution and the coefficient are all pure domain logic
 /// (<see cref="AdjustmentSchedule"/>, <see cref="IndexResolver"/>, <see cref="AdjustmentMath"/>);
 /// this class only fetches the rows those functions need and applies them in memory.
@@ -28,10 +29,10 @@ public sealed class DueAdjustmentQuery : IDueAdjustmentQuery
             .AsNoTracking()
             .Include(clause => clause.Indices)
             .Join(
-                _context.Contracts.AsNoTracking().Where(c => c.Status == ContractStatus.Active),
+                _context.Contracts.AsNoTracking().Where(c => c.Status == ContractStatus.Active || c.Status == ContractStatus.PendingTermination),
                 clause => clause.ContractId,
                 contract => contract.Id,
-                (clause, contract) => new { Clause = clause, contract.Id, contract.StartDate, contract.MonthlyRent })
+                (clause, contract) => new { Clause = clause, contract.Id, contract.StartDate, contract.MonthlyRent, contract.CutoverDate })
             .ToListAsync(ct);
 
         if (clauseRows.Count == 0)
@@ -58,23 +59,20 @@ public sealed class DueAdjustmentQuery : IDueAdjustmentQuery
         foreach (var row in clauseRows)
         {
             var lastEffectiveDate = lastEffectiveDates.GetValueOrDefault(row.Id);
-            var dueDate = AdjustmentSchedule.NextDueDate(row.StartDate, row.Clause.IntervalMonths, lastEffectiveDate);
+            var dueDate = AdjustmentSchedule.NextDueDate(row.StartDate, row.Clause.IntervalMonths, lastEffectiveDate, row.CutoverDate);
 
             if (dueDate > asOf)
             {
                 continue;
             }
 
-            // Design Decision 8's window: for due date D and interval N, the adjustment covers
-            // the N months D-N .. D-1 — the end period is the last of those, the base period is
-            // the one preceding the window.
-            var endPeriod = new IndexPeriod(dueDate.Year, dueDate.Month).AddMonths(-1);
-            var basePeriod = endPeriod.AddMonths(-row.Clause.IntervalMonths);
+            var (basePeriod, endPeriod) = AdjustmentWindow.For(dueDate, row.Clause.IntervalMonths, row.Clause.WindowOffsetMonths);
 
             var (inputs, missing) = ResolveIndices(row.Clause, catalog, levels, basePeriod, endPeriod);
 
             decimal? coefficient = null;
             decimal? proposedCanon = null;
+            IReadOnlyList<RentAdjustmentIndexValue> indexValues = [];
 
             if (missing.Count == 0)
             {
@@ -83,6 +81,7 @@ public sealed class DueAdjustmentQuery : IDueAdjustmentQuery
                 if (mathResult.Coefficient is { } computedCoefficient)
                 {
                     coefficient = computedCoefficient;
+                    indexValues = mathResult.IndexValues;
                     var proposal = new AdjustmentProposal(
                         row.MonthlyRent, mathResult.IndexValues, row.Clause.Combination, computedCoefficient, dueDate);
                     proposedCanon = proposal.TruncatedNewCanon;
@@ -99,7 +98,10 @@ public sealed class DueAdjustmentQuery : IDueAdjustmentQuery
             }
 
             results.Add(new DueAdjustment(
-                row.Id, dueDate, row.MonthlyRent, basePeriod, endPeriod, missing, coefficient, proposedCanon));
+                row.Id, dueDate, row.MonthlyRent, basePeriod, endPeriod, missing, coefficient, proposedCanon)
+            {
+                IndexValues = indexValues,
+            });
         }
 
         return results;

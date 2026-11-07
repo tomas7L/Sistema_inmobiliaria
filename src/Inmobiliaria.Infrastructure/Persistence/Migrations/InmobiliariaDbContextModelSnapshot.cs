@@ -242,6 +242,10 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(32)")
                         .HasColumnName("rounding_rule");
 
+                    b.Property<short>("WindowOffsetMonths")
+                        .HasColumnType("smallint")
+                        .HasColumnName("window_offset_months");
+
                     b.HasKey("Id")
                         .HasName("pk_adjustment_clauses");
 
@@ -252,6 +256,8 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
                     b.ToTable("adjustment_clauses", null, t =>
                         {
                             t.HasCheckConstraint("ck_adjustment_clauses_interval_months_range", "interval_months BETWEEN 1 AND 60");
+
+                            t.HasCheckConstraint("ck_adjustment_clauses_window_offset_range", "window_offset_months BETWEEN 0 AND 3");
                         });
                 });
 
