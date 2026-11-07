@@ -1152,6 +1152,7 @@ public sealed class ContractChangesTests
 
         // The two later periods are long due today, and ending stops them: the figure counts the written one and no others.
         Assert.Equal([start], summary.PeriodsAlreadyWritten);
+        Assert.Null(summary.MonthLeftUncharged);
         Assert.Equal(450_000m, summary.LedgerBalance);
 
         AssertDone(await Registry(world).EndAsync(seeded.Contract, EndReason.Expiry, endDate));

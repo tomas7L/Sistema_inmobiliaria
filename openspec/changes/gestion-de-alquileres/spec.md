@@ -79,7 +79,7 @@ this spec's.
 | 36 | **Money already collected on it is handled by the recibo, not by the cancellation.** A payment that can still be voided must be voided first. One past the voiding window (30 days, `cobranza-y-recibos` D15) stays as a fact with its recibos; the cancellation reverses only what is unpaid, and says the money is returned by hand. | CONFIRMED BY USER (Tomás, 2026-11-05). A recibo was handed to someone, so it is not a typing error any more | Strong |
 | 37 | **A notice and an end recorded by mistake can be undone.** Undoing a notice returns the contract to `Active`. Undoing an end is refused when another contract now covers its unit, or when it was cancelled by Decision 35. Months in between accrue as usual. | SPEC CALL following Decision 35. Without it, one wrong click on a real contract would stop charging its rent for good | Medium |
 | 38 | **A correction can also be opened from the contract's history, without an index having changed.** Same figures are allowed, so a mistaken yes on the difference can be taken back while unpaid. | SPEC CALL following Decision 35 | Medium |
-| 39 | **An agreement between the parties that departs from the contract adds no new function.** Charging part of a difference, or paying it in instalments: answer no, and type the agreed amount on Otros Conceptos on each recibo. Changing the rent or the calendar: that is a new deal, so the contract ends with the reason "MutualAgreement" and a new one starts on the next 1st, with its old debt still collectable. | SPEC CALL. Tomás asked on 2026-11-05 how they would solve an agreement. Otros Conceptos is signed and already typed (`receipt/spec.md:182-189`), but it stays out of the honorarios base and the ledger, so a promise of later recibos is remembered by the agency, not the system | **Medium**; reopen if these turn out to be frequent |
+| 39 | **An agreement between the parties that departs from the contract adds no new function.** Charging part of a difference, or paying it in instalments: answer no, and type the agreed amount on Otros Conceptos on each recibo. Changing the rent or the calendar: that is a new deal, so the contract ends with the reason "MutualAgreement" and a new one starts on the first 1st the old contract did not charge, with its old debt still collectable. | SPEC CALL. Tomás asked on 2026-11-05 how they would solve an agreement. Otros Conceptos is signed and already typed (`receipt/spec.md:182-189`), but it stays out of the honorarios base and the ledger, so a promise of later recibos is remembered by the agency, not the system | **Medium**; reopen if these turn out to be frequent |
 | 40 | **A "bring values" button fetches ICL and IPC; RIPTE stays typed.** It proposes the months the worklist is missing, and the operator may name another month. It shows what it found, and nothing is stored until the operator confirms. A failure shows its own message and manual entry keeps working. It never runs on its own, and never overwrites a stored level. | Tomás asked for it, 2026-11-05. Finding F11. Replaces the "fetching automatically" row of `proposal.md` §2 for these two indices. `economic-index/spec.md:39` already says retrieval must fill the same table | **Medium** |
 | 41 | **ICL is stored as its value on the 1st of each month. No free choice of day.** | SPEC CALL. An adjustment reads two values, and adjustments fall on the 1st (`rent-adjustment/spec.md:59`), as do contract starts (Decision P14). The table is shared by every contract, and one day's gap moves a rent: on 500,000, 1 January against 1 July gives 582,511, and 2 January gives 581,917 | **Medium**, until N2 |
 | 42 | **Every change to a stored index level leaves a permanent record: who, when, the previous level and the new one.** The database writes it, so no correction can skip it, and nobody can change or delete it. No written reason is asked for. | Asked for by Tomás on 2026-11-06. A wrong level misprices every contract reading that period, and overwriting it left no way to tell what happened | Medium |
@@ -405,7 +405,14 @@ MUST precede each, and ending MUST show the amount owed. **Debt MUST NOT block
 ending** (`respuestas-del-dueno.md:292`). A mistaken one is undone by Requirement 24.
 
 Periods with a due date after the end date MUST NOT accrue (`AccrualSchedule.cs:31`). A period already written stays on the ledger,
-and the summary MUST say so when an end date falls before one.
+and the summary MUST say so when an end date falls before one. When the end date falls before the due date of its own month, the summary
+MUST name that month and say the contract will not charge it (Decision 39).
+
+#### Scenario: Ending before the month's due date names the month left uncharged
+
+- GIVEN a contract due on the 10th
+- WHEN its end summary is asked for the 5th
+- THEN it MUST name that month and say the contract will not charge it
 
 #### Scenario: A contract with debt can be ended
 
@@ -1134,7 +1141,7 @@ fail first.
 78. Undoing a notice returns to `Active` with both dates empty. (R24)
 79. Undoing an end resumes accrual for the months between; refused when a unit is covered by another contract or when it was cancelled. (R24)
 80. A codeudor can be removed, leaving a trace, and neither role holds DELETE afterward. (R9, Decision 33)
-81. **An agreed new deal goes through.** A contract ended by "MutualAgreement" with debt, and a new one on the same unit from the next 1st: the old debt stays collectable, no period is charged twice or skipped, and the old adjustment leaves the worklist. (Decision 39)
+81. **An agreed new deal goes through.** A contract ended by "MutualAgreement" with debt, and a new one on the same unit from the first 1st the old one did not charge: the old debt stays collectable, no period is charged twice or skipped, and the old adjustment leaves the worklist. Ended before the month's due date, the new one starts on the 1st of that same month, and the end summary names the month. (Decision 39)
 
 **Bringing index values** (against a fake source; no test touches the network)
 

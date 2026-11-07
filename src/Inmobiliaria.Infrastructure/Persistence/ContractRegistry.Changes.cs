@@ -141,6 +141,10 @@ public sealed partial class ContractRegistry
             .Select(m => m.Period!.Value)
             .Order()
             .ToList();
+        var uncharged = ContractLifecycleRules.MonthLeftUncharged(contract.DueDay, contract.CutoverDate, endDate) is { } month
+            && !alreadyWritten.Contains(month)
+            ? month
+            : (DateOnly?)null;
 
         // Nothing here is tracked or saved. The end is applied in memory so that the figure is what ending would leave. The figures
         // are the desk's, over every movement whatever its date: a voided early payment leaves rent dated ahead of today, and the
@@ -152,7 +156,8 @@ public sealed partial class ContractRegistry
             null,
             account.Movements.Sum(m => m.Amount),
             _terms is { } terms ? account.AmountOwedForPayment(today, terms) : null,
-            alreadyWritten);
+            alreadyWritten,
+            uncharged);
     }
 
     public Task<ContractResult> EndAsync(Guid contractId, EndReason? reason, DateOnly endDate, CancellationToken ct = default) =>

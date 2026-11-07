@@ -330,4 +330,9 @@ public sealed record PendingEnd(EndReason Reason, DateOnly EndDate, ContractEndS
     public string? AlreadyWrittenLine => Figures.PeriodsAlreadyWritten.Count == 0
         ? null
         : $"Estos períodos, con vencimiento posterior a la fecha de fin, ya están en la cuenta y quedan: {string.Join(", ", Figures.PeriodsAlreadyWritten.Select(p => p.ToString("MM/yyyy")))}.";
+
+    /// <summary>The month the end leaves uncharged, or null (spec Decision 39, Requirement 10): a new contract can start on its 1st.</summary>
+    public string? UnchargedMonthLine => Figures.MonthLeftUncharged is not { } month
+        ? null
+        : $"El período {month.ToString("MM/yyyy")} vence después de la fecha de fin, así que este contrato no lo cobra. Un contrato nuevo sobre la misma unidad puede empezar el {month.ToString("dd/MM/yyyy")}.";
 }

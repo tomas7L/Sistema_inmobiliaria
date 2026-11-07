@@ -146,11 +146,13 @@ public sealed record ContractCorrection
 /// <param name="LedgerBalance">Every movement on the account, whatever its date, with what ending leaves due.</param>
 /// <param name="AmountOwed">That balance plus recargo: what the desk asks for. Null when the recargo settings are invalid: the desk is closed then, and no figure is guessed.</param>
 /// <param name="PeriodsAlreadyWritten">Periods on the ledger due after the end date. They stay there, and the operator is told.</param>
+/// <param name="MonthLeftUncharged">The end date's month, when the end falls before its due date and that period is not already written: this contract will not charge it (spec Decision 39, Requirement 10).</param>
 public sealed record ContractEndSummary(
     ContractRefusal? Refusal,
     decimal LedgerBalance,
     decimal? AmountOwed,
-    IReadOnlyList<DateOnly> PeriodsAlreadyWritten)
+    IReadOnlyList<DateOnly> PeriodsAlreadyWritten,
+    DateOnly? MonthLeftUncharged = null)
 {
     public static ContractEndSummary Refused(ContractRefusal refusal) => new(refusal, 0m, null, []);
 }
