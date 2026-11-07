@@ -22,7 +22,7 @@ public class IndicesViewModelTests
 
     private static async Task<IndicesViewModel> LoadedAsync(FakeIndexRegistry port)
     {
-        var viewModel = new IndicesViewModel(port);
+        var viewModel = new IndicesViewModel(port, new FakeIndexValueSource(), new FakeClock(new DateOnly(2026, 11, 7)), new FakeDueAdjustmentQuery());
         await viewModel.LoadCommand.ExecuteAsync(null);
         return viewModel;
     }

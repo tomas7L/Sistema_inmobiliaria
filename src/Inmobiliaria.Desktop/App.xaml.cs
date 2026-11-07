@@ -7,6 +7,7 @@ using Inmobiliaria.Domain.Collection;
 using Inmobiliaria.Domain.GoLive;
 using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Infrastructure.Access;
+using Inmobiliaria.Infrastructure.IndexSources;
 using Inmobiliaria.Presentation.CashDesk;
 using Inmobiliaria.Presentation.Common;
 using Inmobiliaria.Desktop.Printing;
@@ -134,7 +135,7 @@ public partial class App : Application
             // the per-call ports and no database context (design D3).
             var recargo = LoadRecargoSettings();
             var sessionServices = new ServiceCollection();
-            sessionServices.AddSessionServices(success.Factory, success.Session, recargo);
+            sessionServices.AddSessionServices(success.Factory, success.Session, recargo, LoadIndexSourceSettings());
             _sessionProvider = sessionServices.BuildServiceProvider();
 
             var settingsProblems = recargo.Problem is null ? Array.Empty<string>() : [recargo.Problem];
@@ -260,6 +261,17 @@ public partial class App : Application
         var path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
         using var document = JsonDocument.Parse(File.ReadAllText(path));
         return RecargoSettings.Read(document.RootElement);
+    }
+
+    /// <summary>
+    /// The <c>IndexSources</c> section of the same file. A problem is not a settings problem of the shell's, which would close the
+    /// desk: it only makes the source button report a failing source, and manual entry stays open.
+    /// </summary>
+    private static IndexSourceSettings LoadIndexSourceSettings()
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+        using var document = JsonDocument.Parse(File.ReadAllText(path));
+        return IndexSourceSettings.Read(document.RootElement);
     }
 
     /// <summary>

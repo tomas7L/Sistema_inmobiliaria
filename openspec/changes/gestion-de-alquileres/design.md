@@ -257,18 +257,18 @@ Each is registered in `SessionServices.cs:39-45` with a `PerCall*` wrapper, exce
 
 ## 5. The index source button
 
-`IIndexValueSource.FetchAsync(indexName, period, ct)` **(new, Domain)** returns `IndexFetch`: `Found(level)`, `NotPublishedYet`, `Unreachable`, `SourceFailed`. Only ICL and IPC have a source; `Supports(indexName)` is what hides the button for RIPTE.
+`IIndexValueSource.FetchAsync(indexName, period, ct)` **(new, Domain)** returns `IndexFetch`: `Found(level)`, `NotPublishedYet`, `Unreachable(timedOut)`, `SourceFailed(serverError)`. Only ICL and IPC have a source; `Supports(indexName)` is what hides the button for RIPTE.
 
 | Source | Request | Response seen 2026-11-05 | Parsing |
 |---|---|---|---|
 | ICL | `GET {Bcra}/monetarias/40?desde=YYYY-MM-01&hasta=YYYY-MM-01` | `results[0].detalle[] = {fecha, valor}`, for example `2026-07-01`, `34.24`, including a Sunday and 1 January | The row for that exact `fecha`. None: `NotPublishedYet`. A row with another date, or a non-positive value: `SourceFailed` |
 | IPC | `GET {DatosGob}/series/?ids=148.3_INIVELNAL_DICI_M_26&start_date=YYYY-MM-01&limit=1&format=json` | `data[] = [date, value]`, for example `["2026-08-01", 12276.766]` | The row dated that month. None, or only later months: `NotPublishedYet`. An earlier month or non-positive value: `SourceFailed` |
 
-`start_date` and `limit` were exercised on another series of the same API, and `format=json` and `last` on this one, so the exact combination is untested. S7's first step is one manual query. Values are read as `decimal`, never floating point.
+The exact IPC combination was queried on 2026-11-07 and works. **ICL answers a date after today with HTTP 400**, and a date with no row with 200 and an empty `detalle`, so the view-model never asks for a future month. Values are read as `decimal`, never floating point.
 
-Failures map as: `HttpRequestException` or a timeout to `Unreachable`; a non-success status, invalid JSON or missing fields to `SourceFailed`. Nothing throws out of the adapter. The request has no client data and no credentials, and none of the existing keys go near it. `HttpClient` is created once with a 10-second timeout. Calls are `async`, so `OperationRunner.RunAsync` (`OperationRunner.cs:68`) keeps the window responsive.
+Failures map as: `HttpRequestException` to `Unreachable`, and a timeout to `Unreachable` with `timedOut`; a non-success status to `SourceFailed` with `serverError`, and invalid JSON, an unknown charset or missing fields to `SourceFailed` without it. That gives Test 84 its four messages. Nothing throws out of the adapter. The request has no client data and no credentials, and none of the existing keys go near it. `HttpClient` is created once with a 10-second timeout. Calls are `async`, so `OperationRunner.RunAsync` (`OperationRunner.cs:68`) keeps the window responsive.
 
-`IndexSourceSettings` **(new)**, read like `RecargoSettings`, with addresses in `appsettings.json` under `IndexSources`. The configuration guard that fails on anything credential-shaped (`appsettings.json:7`) is not affected, since these are public addresses.
+`IndexSourceSettings` **(new)**, read like `RecargoSettings`, with addresses in `appsettings.json` under `IndexSources`. The configuration guard that fails on anything credential-shaped (`appsettings.json:7`) is not affected, since these are public addresses. Invalid addresses read as a failing source: unlike recargo, they close nothing but the button.
 
 Storing goes through `IIndexRegistry`, so the checks and the plausibility warning are the typed path's. The view-model never overwrites: a stored level that differs is shown beside the source's, pointing to correct.
 

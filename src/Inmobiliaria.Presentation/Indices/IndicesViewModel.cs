@@ -3,7 +3,9 @@ using System.ComponentModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Inmobiliaria.Domain.Accounts;
 using Inmobiliaria.Domain.Indices;
+using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Presentation.Common;
 
 namespace Inmobiliaria.Presentation.Indices;
@@ -11,7 +13,8 @@ namespace Inmobiliaria.Presentation.Indices;
 /// <summary>
 /// The Índices screen (gestion-de-alquileres spec Requirements 11, 12 and 18, design §6): each index with its values, a form to
 /// type a level or correct one, the warning for a far level, the adjustments a correction affects, and the record corrections
-/// leave. The list is read again after every write, refused or not. Both roles; the view arrives in slice S12.
+/// leave, and the button that brings ICL and IPC from their official source (Requirement 25). The list is read again after every
+/// write, refused or not. Both roles; the view arrives in slice S12.
 /// </summary>
 public sealed partial class IndicesViewModel : ObservableObject
 {
@@ -22,14 +25,23 @@ public sealed partial class IndicesViewModel : ObservableObject
     private static readonly string[] PeriodFormats = ["MM/yyyy", "M/yyyy"];
 
     private readonly IIndexRegistry _indices;
+    private readonly IIndexValueSource _source;
+    private readonly IAgencyClock _clock;
+    private readonly IDueAdjustmentQuery _worklist;
     private bool _reloading;
     private decimal? _pendingLevel;
 
-    public IndicesViewModel(IIndexRegistry indices)
+    public IndicesViewModel(IIndexRegistry indices, IIndexValueSource source, IAgencyClock clock, IDueAdjustmentQuery worklist)
     {
         ArgumentNullException.ThrowIfNull(indices);
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(clock);
+        ArgumentNullException.ThrowIfNull(worklist);
 
         _indices = indices;
+        _source = source;
+        _clock = clock;
+        _worklist = worklist;
         LoadCommand = new AsyncRelayCommand(LoadAsync, CanAct);
         SaveCommand = new AsyncRelayCommand(SaveAsync, CanAct);
         ConfirmCorrectionCommand = new AsyncRelayCommand(ConfirmCorrectionAsync, () => CanAct() && CorrectionSummary is not null);
@@ -37,10 +49,16 @@ public sealed partial class IndicesViewModel : ObservableObject
         CorrectExistingCommand = new AsyncRelayCommand(CorrectExistingAsync, () => CanAct() && DuplicateOffer is not null);
         EditCommand = new AsyncRelayCommand<IndexValueRow>(EditAsync);
         ClearFormCommand = new RelayCommand(ClearForm);
+        BringFromSourceCommand = new AsyncRelayCommand(BringFromSourceAsync, () => CanAct() && CanBringFromSource);
+        ConfirmFetchedCommand = new AsyncRelayCommand<FetchedValueRow>(ConfirmFetchedAsync, row => CanAct() && row is { CanStore: true });
+        CorrectFromFetchedCommand = new AsyncRelayCommand<FetchedValueRow>(CorrectFromFetchedAsync, row => CanAct() && row is { CanCorrect: true });
         Runner.PropertyChanged += OnRunnerChanged;
     }
 
     public OperationRunner Runner { get; } = new();
+
+    /// <summary>What the last press of the source button found, one row per month. Nothing here is stored until confirmed.</summary>
+    public ObservableCollection<FetchedValueRow> Fetched { get; } = [];
 
     public ObservableCollection<IndexRow> Indices { get; } = [];
 
@@ -68,6 +86,18 @@ public sealed partial class IndicesViewModel : ObservableObject
 
     public IRelayCommand ClearFormCommand { get; }
 
+    /// <summary>Asks the source for the month typed or, with none typed, for what the worklist misses of this index. Stores nothing.</summary>
+    public IAsyncRelayCommand BringFromSourceCommand { get; }
+
+    /// <summary>Stores a month the source brought, through the same checks and port as a typed one.</summary>
+    public IAsyncRelayCommand<FetchedValueRow> ConfirmFetchedCommand { get; }
+
+    /// <summary>Opens the correction of a stored level that differs from the source's. Writes nothing by itself.</summary>
+    public IAsyncRelayCommand<FetchedValueRow> CorrectFromFetchedCommand { get; }
+
+    /// <summary>False for an index with no source, which is what leaves RIPTE typed.</summary>
+    public bool CanBringFromSource => SelectedIndex is { } index && _source.Supports(index.Name);
+
     /// <summary>A correction keeps its month: changing the month is a different value.</summary>
     public bool CanChoosePeriod => Editing is null;
 
@@ -75,6 +105,8 @@ public sealed partial class IndicesViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(GuidanceText))]
+    [NotifyPropertyChangedFor(nameof(CanBringFromSource))]
+    [NotifyCanExecuteChangedFor(nameof(BringFromSourceCommand))]
     private IndexRow? _selectedIndex;
 
     [ObservableProperty]
@@ -117,6 +149,7 @@ public sealed partial class IndicesViewModel : ObservableObject
 
         if (!_reloading)
         {
+            Fetched.Clear();
             ClearForm();
         }
     }
@@ -177,7 +210,123 @@ public sealed partial class IndicesViewModel : ObservableObject
         {
             _reloading = false;
         }
+
+        RefreshFetched();
     }
+
+    /// <summary>A month stored since the press stops offering to be stored, and a row can never outlive its index.</summary>
+    private void RefreshFetched()
+    {
+        for (var i = Fetched.Count - 1; i >= 0; i--)
+        {
+            var row = Fetched[i];
+            if (SelectedIndex?.Name != row.IndexName)
+            {
+                Fetched.RemoveAt(i);
+                continue;
+            }
+
+            Fetched[i] = new FetchedValueRow(row.IndexName, row.Period, row.Fetch, StoredOf(SelectedIndex, row.Period));
+        }
+    }
+
+    private static IndexValueListing? StoredOf(IndexRow index, IndexPeriod period) =>
+        index.Listing.Values.FirstOrDefault(value => value.Period == period);
+
+    private async Task BringFromSourceAsync()
+    {
+        RefusalMessage = null;
+        if (SelectedIndex is not { } index || !CanBringFromSource)
+        {
+            return;
+        }
+
+        Fetched.Clear();
+        var months = await MonthsToAskAsync(index);
+        foreach (var month in months)
+        {
+            var outcome = await Runner.RunAsync(() => _source.FetchAsync(index.Name, month));
+
+            // The list stays selectable while a slow source answers, and a late answer must not land on another index.
+            if (!outcome.Completed || SelectedIndex?.Id != index.Id)
+            {
+                return;
+            }
+
+            Fetched.Add(new FetchedValueRow(index.Name, month, outcome.Value!, StoredOf(index, month)));
+        }
+    }
+
+    /// <summary>
+    /// The month typed or the worklist's, none of them future: that is refused when typed, and the BCRA answers such a date with an
+    /// error rather than with no value. Leaves the reason on screen when there is nothing to ask.
+    /// </summary>
+    private async Task<IReadOnlyList<IndexPeriod>> MonthsToAskAsync(IndexRow index)
+    {
+        var today = _clock.Today;
+        if (!string.IsNullOrWhiteSpace(PeriodText))
+        {
+            if (!TryParsePeriod(PeriodText, out var typed))
+            {
+                RefusalMessage = PeriodFormatMessage;
+                return [];
+            }
+
+            if (IndexEntryRules.CheckPeriod(typed, today) is { } refusal)
+            {
+                RefusalMessage = refusal.OperatorText();
+                return [];
+            }
+
+            return [typed];
+        }
+
+        var due = await Runner.RunAsync(() => _worklist.GetDueAsync(today));
+        if (!due.Completed)
+        {
+            return [];
+        }
+
+        var months = due.Value!
+            .SelectMany(adjustment => adjustment.Missing)
+            .Where(missing => missing.EconomicIndexId == index.Id && IndexEntryRules.CheckPeriod(missing.Period, today) is null)
+            .Select(missing => missing.Period)
+            .Distinct()
+            .Order()
+            .ToList();
+
+        if (months.Count == 0)
+        {
+            RefusalMessage = $"La lista de ajustes no tiene meses de {index.Name} para traer. Escriba un mes para pedirlo.";
+        }
+
+        return months;
+    }
+
+    /// <summary>
+    /// The form holds what is being stored, so a far level's second confirmation reads it exactly as it reads a typed one.
+    /// </summary>
+    private async Task ConfirmFetchedAsync(FetchedValueRow? row)
+    {
+        if (row is not { CanStore: true, Level: { } level } || SelectedIndex is not { } index || row.IndexName != index.Name)
+        {
+            return;
+        }
+
+        RefusalMessage = null;
+        Editing = null;
+        Corrections.Clear();
+        PeriodText = row.PeriodText;
+        LevelText = row.LevelText!;
+        WithdrawPending();
+
+        await SubmitNewAsync(index.Id, row.Period, level, acceptFarLevel: false);
+    }
+
+    private Task CorrectFromFetchedAsync(FetchedValueRow? row) =>
+        row is { CanCorrect: true, Stored: { } stored, LevelText: { } level }
+            ? OpenAsync(new IndexValueRow(stored), level)
+            : Task.CompletedTask;
 
     private async Task SaveAsync()
     {
@@ -359,6 +508,9 @@ public sealed partial class IndicesViewModel : ObservableObject
             ConfirmCorrectionCommand.NotifyCanExecuteChanged();
             AcceptFarLevelCommand.NotifyCanExecuteChanged();
             CorrectExistingCommand.NotifyCanExecuteChanged();
+            BringFromSourceCommand.NotifyCanExecuteChanged();
+            ConfirmFetchedCommand.NotifyCanExecuteChanged();
+            CorrectFromFetchedCommand.NotifyCanExecuteChanged();
         }
     }
 }
