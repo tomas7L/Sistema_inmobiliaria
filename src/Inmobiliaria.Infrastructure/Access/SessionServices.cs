@@ -6,6 +6,7 @@ using Inmobiliaria.Domain.Indices;
 using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Domain.Parties;
 using Inmobiliaria.Domain.Units;
+using Inmobiliaria.Infrastructure.IndexSources;
 using Inmobiliaria.Infrastructure.Persistence;
 using Inmobiliaria.Infrastructure.Persistence.PerCall;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,12 +31,14 @@ public static class SessionServices
         this IServiceCollection services,
         ISessionDbContextFactory factory,
         IUserSession session,
-        RecargoSettings recargo)
+        RecargoSettings recargo,
+        IndexSourceSettings indexSources)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(factory);
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(recargo);
+        ArgumentNullException.ThrowIfNull(indexSources);
 
         services.AddSingleton(session);
         services.AddSingleton<IAgencyClock>(_ => new AgencyClock());
@@ -50,6 +53,7 @@ public static class SessionServices
         services.AddSingleton<IUnitRegistry>(_ => new PerCallUnitRegistry(factory));
         services.AddSingleton<IIndexRegistry>(provider =>
             new PerCallIndexRegistry(factory, provider.GetRequiredService<IAgencyClock>()));
+        services.AddSingleton<IIndexValueSource>(_ => new OfficialIndexValueSource(OfficialIndexValueSource.SharedClient, indexSources));
         services.AddSingleton<IContractRegistry>(provider =>
             new PerCallContractRegistry(factory, provider.GetRequiredService<IAgencyClock>(), recargo.Terms));
 

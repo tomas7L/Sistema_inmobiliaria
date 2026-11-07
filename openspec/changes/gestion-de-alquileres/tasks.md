@@ -195,13 +195,13 @@ Same three commands as PR 1.
 **Docker: yes. Supabase: no. Model change: no. Network: one manual query first, and one press of each button at the end.** Spec tests: 82 to 88. Requirement 25. Design anchors: D21,
 D22, §5. **Risk: item 6 (no test sees the live API).** Needs: **S6**, because the button stores through `IIndexRegistry`.
 
-- [ ] 7.1 **[First step, manual]** One query of the exact IPC combination, untested so far (design §5): `start_date` with `limit` and `format=json`
-- [ ] 7.2 **[Domain]** `IIndexValueSource`, `IndexFetch` (`Found`, `NotPublishedYet`, `Unreachable`, `SourceFailed`), `Supports`
-- [ ] 7.3 **[RED then GREEN, Tests 82, 84, 85, 86]** `IndexSources/*`, ICL and IPC, with a fake `HttpMessageHandler` replaying design §5's shapes, malformed ones included. Nothing touches the network
-- [ ] 7.4 **[RED then GREEN]** `IndexSourceSettings`, `appsettings.json` section `IndexSources`, 10-second timeout; the credential guard stays unaffected
-- [ ] 7.5 **[RED then GREEN, Tests 83, 87, 88]** Button logic in the view-model: same checks and table as typed, a differing stored level shown beside the source's, RIPTE offering no button, nothing requested unless pressed
-- [ ] 7.6 **[Guardrails and handover]** as 1.8, 1.10 and 1.11
-- [ ] 7.7 **[Independent verifier]** Item 6, plus H.6, one manual press of each button against the live source
+- [x] 7.1 **[First step, manual]** One query of the exact IPC combination, untested so far (design §5): `start_date` with `limit` and `format=json`
+- [x] 7.2 **[Domain]** `IIndexValueSource`, `IndexFetch` (`Found`, `NotPublishedYet`, `Unreachable`, `SourceFailed`), `Supports`
+- [x] 7.3 **[RED then GREEN, Tests 82, 84, 85, 86]** `IndexSources/*`, ICL and IPC, with a fake `HttpMessageHandler` replaying design §5's shapes, malformed ones included. Nothing touches the network
+- [x] 7.4 **[RED then GREEN]** `IndexSourceSettings`, `appsettings.json` section `IndexSources`, 10-second timeout; the credential guard stays unaffected
+- [x] 7.5 **[RED then GREEN, Tests 83, 87, 88]** Button logic in the view-model: same checks and table as typed, a differing stored level shown beside the source's, RIPTE offering no button, nothing requested unless pressed
+- [x] 7.6 **[Guardrails and handover]** as 1.8, 1.10 and 1.11
+- [x] 7.7 **[Independent verifier]** Item 6, plus H.6, one manual press of each button against the live source. **The press from a screen moved to 12.3b: there is no view until S12**
 
 ### Verification, PR 7 (Docker: yes)
 
@@ -299,6 +299,7 @@ plain views for some screens and restyle them later (proposal §7).
 - [ ] 12.1 **[Second inspection, read-only]** `NavigationEntry.cs:4-11`, `ShellViewModel.cs:48-52`, `ShellViewModelTests.cs:42,56`, `App.xaml.cs:148-183`, `MainWindow.xaml.cs:18-36`
 - [ ] 12.2 **[RED then GREEN, Test 70]** `NavigationTarget` gains `Parties`, `Units`, `Contracts`, `Indices`, `Adjustments`; added **before** the Admin block, so Usuarios stays Admin-only
 - [ ] 12.3 **[Desktop]** Theme dictionary and the five views, one PR per screen; build only
+- [ ] 12.3b **[H.6, carried from S7]** With the Índices view: `IndicesViewModel` now takes `IIndexRegistry`, `IIndexValueSource`, `IAgencyClock` and `IDueAdjustmentQuery`; it needs a row list for `Fetched` with its confirm and correct actions, and hides the button on `CanBringFromSource`. One press of each button (ICL, IPC) against the live source, from the screen
 - [ ] 12.4 **[Audit, Test 71]** Every refusal in this spec has its own operator text, none reaching the generic error
 - [ ] 12.5 **[Specs]** Merge the deltas into `openspec/specs/` on archiving, as before
 - [ ] 12.6 **[Guardrails and handover]** as 1.10 and 1.11
@@ -318,7 +319,7 @@ Same three commands as PR 1.
 | H.3 | With S3, S4, S5, S6, S8, S9, S10 | **Apply the slice's migration to the test database, smoke-test it, then to production, before installing a version that needs it** (design §12, D25). M1 `AddContractPartyRemovalAndGuards` (S3), M2 `AddContractEventsAndTermsLock` (S4), M3 `AddLoadedByMistakeEndReason` (S5), M4 `SeedEconomicIndices` (S6), M5 `AddClauseWindowOffset` (S8), M6 `AddAdjustmentAppliesFrom` (S9), M7 `AddAdjustmentDifference` (S10) |
 | H.4 | **Before M1 and before M6, on production, expecting no rows** | The two preflight queries below. M1 fails if a contract has two tenants; M6 fails on duplicate Regular rows |
 | H.5 | From M3 on | **Every PC at the agency updates together**: once a version writes a new enum value, an older version cannot read that row (design §12) |
-| H.6 | S7 | One manual press of each button (ICL, IPC) against the live source |
+| H.6 | S7, then S12 | One manual press of each button (ICL, IPC) against the live source. Done on 2026-11-07 without a screen, from a scratch program; the press from the screen is task 12.3b |
 | H.7 | After S12 | Live smoke of the five screens on the test Supabase, restored first |
 | H.8 | When Nicolás answers | Questions N1 to N4 below. None blocks anything: N1 and N2 change only form suggestions and which day the ICL button asks for, each a small edit |
 
@@ -496,3 +497,25 @@ SELECT has_schema_privilege('inmobiliaria_empleado', 'public', 'CREATE');
 - 6.7: **Full suite: 1768 passed, 0 failed, 0 skipped** (1665 + 103). Build: 0 warnings. `has-pending-model-changes`: none. `TIME_WAIT` went from 561 to 5,064 with no socket failure.
 - 6.7: **Nine mutations, each caught by the test meant to:** no `WHEN`, no append-only, no stamp, Empleado without `INSERT`, swapped levels, the seed ignoring what exists, every copy affected, far correction unchecked, the race reaching the generic error. Two first attempts proved nothing, `BEFORE TRUNCATE ... FOR EACH ROW` breaking the migration and `if (false)` not compiling, so they were redone.
 - 6.7: **Risk: none, held at medium.** Item 2 was weighed, since M4b adds a grant and a guard: they are on a new table, change no existing permission, and are proven with real logins and by mutation. Assessment: `medium`, `review_due: false`, `under_budget`, so neither the verifier nor the gentle-ai review ran.
+- 6.2, 6.5b: **M4 and M4b applied by Tomás on 2026-11-07**, to the test database and then production. On both, one query confirmed the two history rows, one active IPC, RIPTE and ICL each, the three triggers, and `SELECT` and `INSERT` on `index_value_corrections` for both roles. Smoke test on the test database: the app opened and the cash desk found and selected the fictitious contract. No screen uses these tables yet (S12), so the smoke test proves only that the app still works on the migrated database.
+
+**S7 written, 2026-11-07. Risk: item 6 (no test sees the live API).**
+- 7.1: **The exact IPC combination works:** `start_date=2026-08-01&limit=1&format=json` gave `["2026-08-01", 12276.766]`. A month it does not hold gives `data: []`, and `start_date=2000-01-01` gives the series' first row, `2016-12-01`, which reads as not published.
+- 7.1: **New on ICL, not in design §5:** a date after today is HTTP 400, `La fecha desde no puede mayor a la actual`, while a date with no row is 200 with an empty `detalle`. So the view-model never asks for a future month, typed or on the worklist; a 400 that still arrives, for example from a wrong clock on the last night of a month, reads as a server error. Design §5 amended.
+- 7.2: **Deviation from design §5:** `Unreachable` carries `TimedOut` and `SourceFailed` carries `ServerError`, because Test 84 asks for a message of its own for no connection, a server failure, a timeout and a changed format, and §5 mapped those to two outcomes.
+- 7.4: **Invalid `IndexSources` settings read as a failing source, and do not reach the shell's settings problems,** which would close the cash desk over one button. `IndexSourceSettings.Problem` is read by nothing today but its tests; the guard is the test over the shipped file.
+- 7.5: **A level the typed checks refuse is shown as a failure, never rounded.** Live, only IPC 04/2019 hits it (`212.9596414`, seven decimals), and typing it would be refused too.
+- 7.5: **Decided beyond the task:** a month already stored with the same level says so; a differing one offers to open the correction with the source's level, under the correction's own confirmation; a slow answer arriving after choosing another index is dropped; a typed month wins over the worklist.
+- 7.6: **RED observed:** with stubs, 56 of 57 adapter and settings tests and 27 of 29 view-model tests failed on behavior. Three failed cases were added after the verifier: an unknown charset, and two with a level of more than two decimals, those two proven by changing `Formats.Level` to round.
+- 7.6: **31 mutations, each caught by the test meant to.** Four first attempts did not compile, `when (false)` being unreachable code under warnings as errors, so they were redone with a condition the compiler cannot resolve.
+- 7.6: **Full suite: 1861 passed, 0 failed, 0 skipped** (1768 + 93). Build: 0 warnings. `has-pending-model-changes`: none. `TIME_WAIT` went from 6 to a peak of 3,141, measured during the run, with no socket failure.**
+- 7.7: **H.6, without a screen:** a scratch program outside the repository drove the real adapter and view-model with a fake registry. ICL 07/2026 gave 34,24 and 11/2026 gave 37,21; IPC 08/2026 gave 12.276,766 and 10/2026 said it is not there yet; TLS validated by .NET's `HttpClient`, no `-k`. Also real: a host that does not exist gave no connection, the retired BCRA v3.0 gave a server error, and an address that never answers timed out at 10,009 ms. The verifier repeated this independently. **No button has been pressed on a screen: task 12.3b.**
+- 7.7: **Independent verifier: no blockers,** Tests 82 to 88 pass. Of its advisories, the test gap on rounding and the charset escaping the adapter were fixed. Left as they are: `IndexSourceSettings.Problem` leaving no trace, an address with credentials in it passing the settings check (none is shipped), the decimals message not naming the source, and a discontinued row named "IPC" getting the button, which typed entry has at the baseline too.
+- 7.7: **The compiled `appsettings.json` of `bin/Release` still points at the test database:** the shipped file changed, so the build overwrote it with production's, and it was restored with the `IndexSources` section added.
+- 7.7: **The ICL-at-offset-0 scenario of Requirement 25 is proven on the button only:** a clause cannot hold that offset until S8.
+- 7.7: **Assessment: `high`, by the escalation on item 6. gentle-ai review, three lenses (risk, resilience, reliability): approved and acknowledged,** lineage `review-43a319e6ea61c9ed`. Risk found nothing. Five non-blocking findings, left as later work, none reopening this review:
+  - **A hanging source blocks typed entry for the whole press:** the months are asked one after another, up to 10 seconds each, so 12 missing months keep the form's commands waiting about 2 minutes (`IndicesViewModel.cs:246-257`). The one worth fixing first, before S12 gives it a screen, since Requirement 25 asks that manual entry stay available.
+  - **A source failure leaves nothing in the error log,** so a retired API, a TLS failure and a changed format cannot be told apart afterwards (`OfficialIndexValueSource.cs:47-71`).
+  - **Invalid settings read as an unrecognized answer, with no trace,** and one bad address disables both sources (`OfficialIndexValueSource.cs:39`). The verifier noted this too.
+  - **The late-answer check runs after a fetch, not after the worklist query,** so choosing another index meanwhile can show a message about the old one, or send one request nobody reads (`IndicesViewModel.cs:298-301`).
+  - **No test sends the BCRA's real `34.24000000000` through `FetchedValueRow`;** only the scratch program did.

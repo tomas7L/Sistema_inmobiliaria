@@ -3,10 +3,12 @@ using Inmobiliaria.Domain.Access;
 using Inmobiliaria.Domain.Accounts;
 using Inmobiliaria.Domain.Collection;
 using Inmobiliaria.Domain.GoLive;
+using Inmobiliaria.Domain.Indices;
 using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Domain.Parties;
 using Inmobiliaria.Domain.Units;
 using Inmobiliaria.Infrastructure.Access;
+using Inmobiliaria.Infrastructure.IndexSources;
 using Inmobiliaria.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -71,10 +73,27 @@ public sealed class SessionServicesTests
         return RecargoSettings.Read(document.RootElement);
     }
 
+    private static IndexSourceSettings ValidIndexSources()
+    {
+        using var document = System.Text.Json.JsonDocument.Parse("""{ "IndexSources": { "Bcra": "https://bcra.test", "DatosGob": "https://datos.test" } }""");
+        return IndexSourceSettings.Read(document.RootElement);
+    }
+
+    [Fact]
+    public async Task TheSourceButton_HasItsPort_ForEitherRole()
+    {
+        await using var provider = Collect(new SpySessionFactory(), UserRole.Empleado, ValidSettings()).BuildServiceProvider();
+
+        var source = provider.GetRequiredService<IIndexValueSource>();
+
+        Assert.True(source.Supports("ICL"));
+        Assert.False(source.Supports("RIPTE"));
+    }
+
     private static ServiceCollection Collect(SpySessionFactory factory, UserRole role, RecargoSettings settings)
     {
         var services = new ServiceCollection();
-        services.AddSessionServices(factory, SessionOf(role), settings);
+        services.AddSessionServices(factory, SessionOf(role), settings, ValidIndexSources());
         return services;
     }
 

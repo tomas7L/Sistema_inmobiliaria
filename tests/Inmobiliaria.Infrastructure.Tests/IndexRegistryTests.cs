@@ -266,6 +266,20 @@ public sealed class IndexRegistryTests
         Assert.NotNull(after.ProposedCanon);
     }
 
+    // ---- Test 83, with what the source really sends -------------------------------------------------------------------------
+
+    [SkippableFact]
+    public async Task ALevelWithTheTrailingZerosTheBcraSends_IsStoredAsThatLevel()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+        await using var world = await WorldAsync();
+        var icl = await IndexIdAsync(world, "ICL");
+
+        var added = await AddedAsync(Registry(world).AddAsync(icl, July, 34.24000000000m, false));
+
+        Assert.Equal(34.24m, await StoredLevelAsync(world, added.Id));
+    }
+
     // ---- Test 94, through the port ---------------------------------------------------------------------------------------
 
     [SkippableTheory]

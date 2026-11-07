@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-06, con S6 escrita y sin commitear; M4 y M4b todavía sin aplicar_
+_Última actualización: 2026-11-07, con M4 y M4b aplicadas en las dos bases y S7 escrita, sin commitear_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -13,12 +13,12 @@ _Última actualización: 2026-11-06, con S6 escrita y sin commitear; M4 y M4b to
 
 ## Próximos pasos
 
-1. **Tomás commitea S6 y abre el PR**, con la enmienda de la spec leída (`lectura-spec-gestion-de-alquileres-decision-42.md`).
-2. **Al mergear, Tomás aplica M4 y M4b** (`tasks.md` H.3), primero en PRUEBA y después en producción. El mismo comando aplica las dos.
-3. **Seguir con S7 (Traer índices):** `tasks.md`, Phase 7. Lleva verificador (item 6) y una prueba manual de cada botón contra la fuente real.
+1. **Tomás commitea S7 y abre el PR.** Lo que falta, y qué se probó sin pantalla, está en `tasks.md`, al final.
+2. **Seguir con S8:** `tasks.md`, Phase 8, con su segunda inspección.
 
 ## Pendientes / bloqueos
 
+- **El botón de Traer índices todavía no se apretó en una pantalla:** no hay vista hasta S12, `tasks.md` 12.3b. Se probó contra las fuentes reales con un programa temporal.
 - **Precio para la reunión con Nicolás:** sin decidir. Lo discutido está en Engram, sesión del 2026-11-05.
 - **Esperando a Nicolás:** respondió el 2026-11-05 que está complicado y quiere verlo cuando esté más tranquilo, en unas 2 semanas.
   Lo que queda para esa reunión: la copia del Excel, si no llega antes, y el logo en vector. Nada de este change lo espera.
@@ -44,6 +44,7 @@ _Última actualización: 2026-11-06, con S6 escrita y sin commitear; M4 y M4b to
   solo afectarían a la sincronización con la nube, que nunca se configuró.
 - **El `appsettings.json` compilado apunta a la base de PRUEBA** (`chygrzoqmcqpncogeiuz`, `aws-1-sa-east-1`), solo en
   `src/Inmobiliaria.Desktop/bin/Release/net10.0-windows/appsettings.json` (ignorado por git). Lo que trae el repo es producción.
+  **Si cambia el `appsettings.json` del repo, el build pisa el compilado con producción:** antes de compilar, guardarlo y restaurarlo después.
 - **Base de prueba:** usuario Admin `tomas`, el contrato ficticio "Maria/Juan Prueba" y el Empleado `muñoz`, desactivado.
 - **Registro de errores en la PC:** `%LOCALAPPDATA%\SistemaInmobiliaria\logs\errores-yyyy-MM-dd.log`.
 - **Datos personales, nunca al repo:** el Excel de Nicolás y el PDF de muestra (`C:\Users\buffa\Downloads\abregu.pdf`). Las
@@ -57,8 +58,8 @@ _Última actualización: 2026-11-06, con S6 escrita y sin commitear; M4 y M4b to
 
 | | |
 |---|---|
-| **Docker** | **Sí** para S7 (Testcontainers `postgres:17.6`) |
-| **Supabase** | **Sí** para aplicar M4 y M4b; las bases se pausan solas, y solo Tomás se conecta |
+| **Docker** | **Sí** para S8 (Testcontainers `postgres:17.6`) |
+| **Supabase** | **Sí** para aplicar M5 al terminar S8; las bases se pausan solas, y solo Tomás se conecta |
 | **Límite diario** | Tomás pasa el porcentaje al arrancar; el verificador y la revisión de gentle-ai son lo más caro |
 
 ## Para retomar
@@ -77,7 +78,7 @@ dotnet test Inmobiliaria.Core.slnf --configuration Release
 dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure
 ```
 
-Esperado: **1768 pasados, 0 fallas, 0 omitidos**, build sin advertencias y el modelo en sintonía con
+Esperado: **1861 pasados, 0 fallas, 0 omitidos**, build sin advertencias y el modelo en sintonía con
 `20261106221123_AddIndexValueCorrections`. Si el build de Desktop falla con MSB3027, la aplicación está
 abierta y tiene tomadas sus DLL: cerrarla.
 
