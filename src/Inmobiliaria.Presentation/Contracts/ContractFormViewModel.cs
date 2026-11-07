@@ -40,6 +40,11 @@ public sealed partial class ContractFormViewModel : ObservableObject
         Codebtors.CollectionChanged += OnFormCollectionChanged;
         Units.CollectionChanged += OnUnitsChanged;
         ClauseIndexIds.CollectionChanged += OnFormCollectionChanged;
+        ClauseIndexIds.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(SuggestedClauseOffset));
+            OnPropertyChanged(nameof(ClauseWindowText));
+        };
         Runner.PropertyChanged += OnRunnerChanged;
     }
 
@@ -55,6 +60,16 @@ public sealed partial class ContractFormViewModel : ObservableObject
     public ObservableCollection<ContractFormUnit> Units { get; } = [];
 
     public ObservableCollection<Guid> ClauseIndexIds { get; } = [];
+
+    /// <summary>The catalog's names, for the suggestion. Filled by whoever shows the list of indices.</summary>
+    public IReadOnlyDictionary<Guid, string> ClauseIndexNames { get; set; } = new Dictionary<Guid, string>();
+
+    /// <summary>The offset the indices chosen suggest, or null. Spec Decision 15 only suggests it.</summary>
+    public int? SuggestedClauseOffset =>
+        ClauseOffsetSuggestion.For(ClauseIndexIds.Where(ClauseIndexNames.ContainsKey).Select(id => ClauseIndexNames[id]));
+
+    /// <summary>The due date and the months it will read, so the operator can check them against the paper (spec Requirement 13).</summary>
+    public string? ClauseWindowText => ClauseFormRules.WindowText(StartDate, CutoverDate, ClauseIntervalText, ClauseOffsetText, SuggestedClauseOffset);
 
     /// <summary>What the operator has to accept before the contract is written.</summary>
     public ObservableCollection<string> Warnings { get; } = [];
@@ -74,12 +89,14 @@ public sealed partial class ContractFormViewModel : ObservableObject
     private PartyListing? _tenant;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ClauseWindowText))]
     private DateOnly? _startDate;
 
     [ObservableProperty]
     private DateOnly? _nominalEndDate;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ClauseWindowText))]
     private DateOnly? _cutoverDate;
 
     [ObservableProperty]
@@ -98,7 +115,12 @@ public sealed partial class ContractFormViewModel : ObservableObject
     private string _feePlanInstalmentsText = string.Empty;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ClauseWindowText))]
     private string _clauseIntervalText = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ClauseWindowText))]
+    private string _clauseOffsetText = string.Empty;
 
     /// <summary>Whether each unit's share is typed as an amount, converted to a percentage, rather than as a percentage.</summary>
     [ObservableProperty]
@@ -131,6 +153,8 @@ public sealed partial class ContractFormViewModel : ObservableObject
     partial void OnFeePlanInstalmentsTextChanged(string value) => WithdrawWarnings();
 
     partial void OnClauseIntervalTextChanged(string value) => WithdrawWarnings();
+
+    partial void OnClauseOffsetTextChanged(string value) => WithdrawWarnings();
 
     partial void OnSharesAsAmountsChanged(bool value) => WithdrawWarnings();
 
@@ -306,22 +330,8 @@ public sealed partial class ContractFormViewModel : ObservableObject
         return true;
     }
 
-    private bool TryParseClause(out ClauseDraft? clause)
-    {
-        clause = null;
-        if (ClauseIndexIds.Count == 0 && string.IsNullOrWhiteSpace(ClauseIntervalText))
-        {
-            return true;
-        }
-
-        if (!int.TryParse(ClauseIntervalText, NumberStyles.None, CultureInfo.InvariantCulture, out var interval))
-        {
-            return false;
-        }
-
-        clause = new ClauseDraft(ClauseIndexIds.ToList(), interval);
-        return true;
-    }
+    private bool TryParseClause(out ClauseDraft? clause) =>
+        ClauseFormRules.TryBuild(ClauseIndexIds, ClauseIntervalText, ClauseOffsetText, SuggestedClauseOffset, out clause);
 
     /// <summary>No share typed splits equally; a share left blank beside typed ones does not total anything.</summary>
     private bool TryBuildShares(decimal? rent, out IReadOnlyList<UnitShare> shares)
@@ -380,6 +390,7 @@ public sealed partial class ContractFormViewModel : ObservableObject
         FeePlanAmountText = string.Empty;
         FeePlanInstalmentsText = string.Empty;
         ClauseIntervalText = string.Empty;
+        ClauseOffsetText = string.Empty;
         SharesAsAmounts = false;
     }
 

@@ -214,15 +214,15 @@ Same three commands as PR 1, then the independent verifier.
 **Docker: yes. Supabase: M5 (H.3). Model change: yes, M5 in this PR.** Spec tests: 35 to 38, 40, 56, 81. Requirements 13, 17. Design anchors: D3, D15, §3.5, §12 M5. **Risk: item 1 (decides when
 rent moves).** Needs: **S4**, since Test 81 ends a contract and creates another.
 
-- [ ] 8.1 **[Second inspection, read-only]** `AdjustmentSchedule.cs:12-24`, `DueAdjustmentQuery.cs:31,44-49,71,86-88`, `AdjustmentWarning.cs:14-32`, `20260924202549_AddUsersAndRoles.cs:159`
-- [ ] 8.2 **[Model and M5]** `AddClauseWindowOffset`: `window_offset_months`, default 1, check 0 to 3; `app_replace_clause_indices`; clause lock
-- [ ] 8.3 **[RED then GREEN, Tests 35 to 38]** Window `end = due − K`, `base = end − N`; existing clauses read as today; a clause cannot change after a confirmed adjustment, through the function, as each role
-- [ ] 8.4 **[RED then GREEN, Test 56]** `AdjustmentSchedule.NextDueDate` gains the cutover; existing calls unchanged
-- [ ] 8.5 **[RED then GREEN, Test 40]** `DueAdjustmentQuery`: `Active` or `PendingTermination`, `IndexValues`, the desk's warning following it (replaces `ui-de-cobranza/design.md:578`)
-- [ ] 8.6 **[RED then GREEN, Test 81]** An agreed new deal goes through
-- [ ] 8.7 **[Prove the guards by making them fail]** Clause lock, the function's refusal
-- [ ] 8.8 **[Guardrails and handover]** as 1.10 and 1.11
-- [ ] 8.9 **[Independent verifier]** Item 1
+- [x] 8.1 **[Second inspection, read-only]** `AdjustmentSchedule.cs:12-24`, `DueAdjustmentQuery.cs:31,44-49,71,86-88`, `AdjustmentWarning.cs:14-32`, `20260924202549_AddUsersAndRoles.cs:159`
+- [x] 8.2 **[Model and M5]** `AddClauseWindowOffset`: `window_offset_months`, default 1, check 0 to 3; `app_replace_clause_indices`; clause lock
+- [x] 8.3 **[RED then GREEN, Tests 35 to 38]** Window `end = due − K`, `base = end − N`; existing clauses read as today; a clause cannot change after a confirmed adjustment, through the function, as each role
+- [x] 8.4 **[RED then GREEN, Test 56]** `AdjustmentSchedule.NextDueDate` gains the cutover; existing calls unchanged
+- [x] 8.5 **[RED then GREEN, Test 40]** `DueAdjustmentQuery`: `Active` or `PendingTermination`, `IndexValues`, the desk's warning following it (replaces `ui-de-cobranza/design.md:578`)
+- [x] 8.6 **[RED then GREEN, Test 81]** An agreed new deal goes through
+- [x] 8.7 **[Prove the guards by making them fail]** Clause lock, the function's refusal
+- [x] 8.8 **[Guardrails and handover]** as 1.10 and 1.11
+- [x] 8.9 **[Independent verifier]** Item 1
 
 ### Verification, PR 8 (Docker: yes)
 
@@ -300,6 +300,7 @@ plain views for some screens and restyle them later (proposal §7).
 - [ ] 12.2 **[RED then GREEN, Test 70]** `NavigationTarget` gains `Parties`, `Units`, `Contracts`, `Indices`, `Adjustments`; added **before** the Admin block, so Usuarios stays Admin-only
 - [ ] 12.3 **[Desktop]** Theme dictionary and the five views, one PR per screen; build only
 - [ ] 12.3b **[H.6, carried from S7]** With the Índices view: `IndicesViewModel` now takes `IIndexRegistry`, `IIndexValueSource`, `IAgencyClock` and `IDueAdjustmentQuery`; it needs a row list for `Fetched` with its confirm and correct actions, and hides the button on `CanBringFromSource`. One press of each button (ICL, IPC) against the live source, from the screen
+- [ ] 12.3c **[Carried from S8]** The clause forms: set `ClauseIndexNames` and `IndexNames` from the catalog, or an offset left blank silently reads 1 instead of the suggestion. Show `ClauseWindowText` and `WindowText`
 - [ ] 12.4 **[Audit, Test 71]** Every refusal in this spec has its own operator text, none reaching the generic error
 - [ ] 12.5 **[Specs]** Merge the deltas into `openspec/specs/` on archiving, as before
 - [ ] 12.6 **[Guardrails and handover]** as 1.10 and 1.11
@@ -519,3 +520,24 @@ SELECT has_schema_privilege('inmobiliaria_empleado', 'public', 'CREATE');
   - **Invalid settings read as an unrecognized answer, with no trace,** and one bad address disables both sources (`OfficialIndexValueSource.cs:39`). The verifier noted this too.
   - **The late-answer check runs after a fetch, not after the worklist query,** so choosing another index meanwhile can show a message about the old one, or send one request nobody reads (`IndicesViewModel.cs:298-301`).
   - **No test sends the BCRA's real `34.24000000000` through `FetchedValueRow`;** only the scratch program did.
+
+**S8 written, 2026-11-07. Risk: item 1 (decides when rent moves), and item 4 for the lock's row wait.**
+- 8.1: Second inspection: the branch's tree is identical to `origin/develop` after PR #100, and `AdjustmentSchedule`, `DueAdjustmentQuery`, `AdjustmentWarning` and the grants match the design.
+- 8.2: **M5 is `20261107152256_AddClauseWindowOffset`. Still to be applied (H.3).**
+- 8.2: **Two traps, both pinned.** The default of 1 lives only in the migration: on the model, EF would take the CLR 0 as "not set", and a clause on ICL at offset 0 would silently read as 1 (`OffsetZero_IsStoredAsZero`). And EF scaffolded `defaultValue: 0`, which would have moved every clause already there (`AClauseRecordedBeforeThisChange_BehavesAsOffsetOne`).
+- 8.2: **Beyond the design:** the lock takes the contract's row before reading, because it reads committed rows only and a direct write could otherwise slip in beside an adjustment still being written. The verifier reproduced that; `AWriteRacingAnAdjustmentBeingConfirmed_WaitsForIt_AndIsRefused` pins it.
+- 8.2: **Beyond the design:** the migration revokes the function from Supabase's API roles where they exist, since Supabase's default privileges grant new functions to them and `REVOKE FROM PUBLIC` does not reach those grants. No test here sees it, as those roles exist only on Supabase: **the confirmation query at H.3 does. The same query must also list the earlier `SECURITY DEFINER` functions, which nothing has revoked.** How strongly held: the Supabase default is from memory, not checked; the query settles it.
+- 8.3: **Added to the plan: `IContractRegistry.SetClauseAsync`, `ContractClauseViewModel` and `ClauseFormRules`.** The design names the correction and the spec the months on the form, with no task line. No view: S12, task 12.3c.
+- 8.3: **The line after a confirmed adjustment is the database's alone,** in the port too, through the error map, so the two cannot disagree. `SchemaConstraintTests.SeedContractWithClause` now saves before an adjustment is added, since one `SaveChanges` does not promise the order and the lock would refuse.
+- 8.3: **An offset left blank takes the suggestion, else 1, and the months shown say which.** With several indices the suggestion is the largest any of them needs (weak, until N1).
+- 8.6: **Open, needs Tomás: ending before the month's due date leaves that month charged on neither contract.** Ended 5 Oct with due day 10, and a new contract from 1 Nov: October accrues on neither, with no message. That is Requirement 10 working (`AccrualSchedule.cs`), but Decision 39 says "the next 1st" and Test 81 says no period is skipped. Starting the new contract on the 1st of the same month avoids it, except when the end is recorded a month late, where the start is refused (`StartBeforeCurrentMonth`). So Test 81 is proven with the end after the due date, and **not** for this case. The verifier agreed it is not a code blocker and rejected leaving it unwritten.
+- 8.8: **RED observed by breaking each rule rather than beforehand:** these tests cannot fail on behavior until the migration exists. 53 mutations in all; every one caught. Five needed a test first: the indices' order, which passed by luck of row order, the direct `INSERT` of a clause, the two row waits, and the temporary tables.
+- 8.8: **Full suite: 1972 passed, 0 failed, 0 skipped** (1861 + 111): Domain 664, Presentation 495, Infrastructure 813. Build: 0 warnings. `has-pending-model-changes`: none. Measured during the runs: `TIME_WAIT` peak 5,242, free RAM never below 4.9 GB.
+- 8.8: **One failure not explained: `ContractCancellationRegistryTests.AContractAlreadyEnded_IsCancelled_ReplacingItsReason_AndKeepingItsDate` failed once in a full suite run, and passed alone three times and in the next two full runs.** The quiet output kept no message, so the cause is unknown. Its path holds no clause, and `TIME_WAIT` was 5,175 at most in that run, far from the port exhaustion near 15,650. Next time, run with `--logger "console;verbosity=normal"` to keep the message.
+- 8.8: **A run was stopped by Claude Code when the machine ran critically low on memory,** before any test could report. Not reproduced: the next runs stayed above 4.9 GB free.
+- 8.8: **The compiled `appsettings.json` was overwritten with production's by a build,** though nothing had edited the file: merging PR #100 had rewritten the source file, making it newer. Restored and confirmed pointing at the test database. **Any pull can do this.**
+- 8.9: **Independent verifier: one blocker, fixed.** A locked clause form showed the first due date instead of the next one; it now reads the last adjustment. Left as they are: `app_replace_clause_indices` does not refuse an `Ended` contract if called directly, only the port does.
+- 8.9: **For S9:** confirming has to take the locks in `LockAsync`'s order and build the window after them, re-reading the clause under the lock, since the clause lock only stops a write after an adjustment and a correction can commit before one (the review's `R4-clause-lock-one-sided`). It also has to allow a `PendingTermination` contract, which is now on the worklist.
+- 8.9: **gentle-ai review, in two candidates on a scratch clone,** since the whole slice (28 files, 3,188 lines) hit `lens_context_budget_exceeded`. **Code and M5 (18 files, 2,012 lines; lenses risk and resilience): `review-8612432cd65a1960`, one bounded correction, approved, acknowledged.** **Tests over that code (7 files, 1,143 lines; lens reliability): `review-9b2908403b501756`, approved, acknowledged.** Its four non-blocking findings were taken up: a form's typed offset is never replaced by the suggestion, a new contract keeps its offset through `CreateAsync`, and the tests named after movements assert one exists.
+- 8.9: **The correction: `SET search_path = pg_catalog, public` does not exclude the session's temporary schema, it searches it first.** A role could shadow the function's tables with temporary ones, with a trigger running as the function's owner. Now `pg_catalog, public, pg_temp`, pinned by `TheFunction_IgnoresTemporaryTablesNamedLikeItsOwn`, seen failing without it.
+- 8.9: **Open, already in production: `app_clear_must_change_password` has that same `search_path`** (`20261025005832_FixClearMustChangePasswordIdentity.cs:25`), and both roles run it. Not fixed here: it is outside this slice, and it deserves its own PR and migration. **Recommended before S9.** The H.3 query's check of the API roles covers it too.

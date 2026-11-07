@@ -36,7 +36,7 @@ public sealed record ContractDraft
 
 /// <param name="IndexIds">The clause's indices, in order.</param>
 /// <param name="IntervalMonths">Months between adjustments.</param>
-public sealed record ClauseDraft(IReadOnlyList<Guid> IndexIds, int IntervalMonths);
+public sealed record ClauseDraft(IReadOnlyList<Guid> IndexIds, int IntervalMonths, int WindowOffsetMonths = AdjustmentClause.DefaultWindowOffsetMonths);
 
 /// <summary>
 /// The form's rules, pure and without a database (design D19). They are separate from <see cref="Contract"/>'s
@@ -177,11 +177,14 @@ public static class ContractDraftRules
         return valid ? null : ContractRefusal.SharesNotHundred;
     }
 
-    private static ContractRefusal? Clause(ContractDraft draft) =>
-        draft.Clause is { } clause
-        && (clause.IndexIds.Count == 0
-            || clause.IndexIds.Distinct().Count() != clause.IndexIds.Count
-            || clause.IntervalMonths is < 1 or > 60)
+    private static ContractRefusal? Clause(ContractDraft draft) => draft.Clause is { } clause ? CheckClause(clause) : null;
+
+    /// <summary>What a clause must hold, on creation and on correction alike.</summary>
+    public static ContractRefusal? CheckClause(ClauseDraft clause) =>
+        clause.IndexIds.Count == 0
+        || clause.IndexIds.Distinct().Count() != clause.IndexIds.Count
+        || clause.IntervalMonths is < 1 or > 60
+        || !AdjustmentClause.IsValidWindowOffset(clause.WindowOffsetMonths)
             ? ContractRefusal.ClauseInvalid
             : null;
 }

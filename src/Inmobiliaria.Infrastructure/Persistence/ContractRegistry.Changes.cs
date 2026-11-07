@@ -24,6 +24,53 @@ public sealed partial class ContractRegistry
         return ChangeAsync(contractId, locked => ApplyCorrectionAsync(locked, correction, acceptWarnings, ct), ct);
     }
 
+    public Task<ContractResult> SetClauseAsync(Guid contractId, ClauseDraft clause, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(clause);
+
+        return ContractDraftRules.CheckClause(clause) is { } refusal
+            ? Task.FromResult(ContractResult.Refused(refusal))
+            : ChangeAsync(contractId, locked => ApplyClauseAsync(locked, clause, ct), ct);
+    }
+
+    /// <summary>
+    /// Movements do not stop this, unlike <see cref="WhyNotCorrectable"/>: nothing on the ledger depends on a clause until its first
+    /// confirmed adjustment (spec Decision 32). That line is the database's alone, so it holds whoever writes, even racing an adjustment
+    /// being confirmed: its refusal comes back
+    /// through <see cref="ContractRegistryErrorMap"/>.
+    /// </summary>
+    private async Task<ContractResult?> ApplyClauseAsync(Locked locked, ClauseDraft draft, CancellationToken ct)
+    {
+        var contract = locked.Contract;
+        if (contract.EndReason == EndReason.LoadedByMistake)
+        {
+            return ContractResult.Refused(ContractRefusal.ContractCancelled);
+        }
+
+        if (contract.Status == ContractStatus.Ended)
+        {
+            return ContractResult.Refused(ContractRefusal.ContractEnded);
+        }
+
+        if (await _context.EconomicIndices.CountAsync(i => draft.IndexIds.Contains(i.Id), ct) != draft.IndexIds.Count)
+        {
+            return ContractResult.Refused(ContractRefusal.IndexNotFound);
+        }
+
+        var existing = await _context.AdjustmentClauses.SingleOrDefaultAsync(c => c.ContractId == contract.Id, ct);
+        if (existing is null)
+        {
+            AttachClause(contract, draft);
+            return null;
+        }
+
+        existing.Correct(draft.IntervalMonths, draft.WindowOffsetMonths);
+        var indexIds = draft.IndexIds.ToArray();
+        await _context.Database.ExecuteSqlAsync($"SELECT app_replace_clause_indices({existing.Id}, {indexIds})", ct);
+
+        return null;
+    }
+
     public Task<ContractResult> SetRateAsync(Guid contractId, decimal rate, CancellationToken ct = default)
     {
         if (!ContractDraftRules.IsValidRate(rate))

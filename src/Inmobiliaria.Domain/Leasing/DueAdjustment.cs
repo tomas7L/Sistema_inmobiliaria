@@ -13,8 +13,9 @@ public sealed record MissingIndexValue(Guid EconomicIndexId, string IndexName, I
 /// One contract whose derived next adjustment due date has arrived (design Decision 8). Query
 /// starts FROM <c>adjustment_clauses</c>, never from <c>contracts</c>, so a fixed-price contract
 /// with no clause is absent by the query's own construction, not by a filter (design Decision
-/// 5). Only <see cref="ContractStatus.Active"/> contracts are ever produced — an ended lease has
-/// no canon left to adjust.
+/// 5). Only <see cref="ContractStatus.Active"/> and <see cref="ContractStatus.PendingTermination"/>
+/// contracts are ever produced: one under notice still pays rent, and an ended lease has no canon
+/// left to adjust (gestion-de-alquileres spec Decision 25).
 /// </summary>
 /// <param name="Missing">
 /// Empty exactly when every referenced index resolved to a published value for both
@@ -32,4 +33,8 @@ public sealed record DueAdjustment(
     IndexPeriod EndPeriod,
     IReadOnlyList<MissingIndexValue> Missing,
     decimal? Coefficient,
-    decimal? ProposedCanon);
+    decimal? ProposedCanon)
+{
+    /// <summary>Each index's base and end level, for the summary. Empty exactly when <see cref="Missing"/> is non-empty.</summary>
+    public IReadOnlyList<RentAdjustmentIndexValue> IndexValues { get; init; } = [];
+}

@@ -222,13 +222,18 @@ public sealed partial class ContractRegistry : IContractRegistry
 
         if (draft.Clause is { } clauseDraft)
         {
-            var clause = new AdjustmentClause(
-                Guid.NewGuid(), contract.Id, clauseDraft.IndexIds, clauseDraft.IntervalMonths, RoundingRule.TruncateToWholePeso);
-            _context.AdjustmentClauses.Add(clause);
-            contract.AttachAdjustmentClause(clause);
+            AttachClause(contract, clauseDraft);
         }
 
         return contract;
+    }
+
+    private void AttachClause(Contract contract, ClauseDraft draft)
+    {
+        var clause = new AdjustmentClause(
+            Guid.NewGuid(), contract.Id, draft.IndexIds, draft.IntervalMonths, RoundingRule.TruncateToWholePeso, draft.WindowOffsetMonths);
+        _context.AdjustmentClauses.Add(clause);
+        contract.AttachAdjustmentClause(clause);
     }
 
     private async Task<List<ContractListing>> ListingsAsync(IQueryable<Contract> query, CancellationToken ct)
@@ -277,15 +282,17 @@ public sealed partial class ContractRegistry : IContractRegistry
             return null;
         }
 
-        var indexIds = clause.Indices.Select(i => i.EconomicIndexId).ToList();
+        var indexIds = clause.Indices.OrderBy(i => i.Ordinal).Select(i => i.EconomicIndexId).ToList();
         var names = await _context.EconomicIndices.AsNoTracking()
             .Where(i => indexIds.Contains(i.Id))
             .ToDictionaryAsync(i => i.Id, i => i.Name, ct);
 
         return new ContractClauseLine(
-            clause.Indices.OrderBy(i => i.Ordinal).Select(i => names[i.EconomicIndexId]).ToList(),
+            indexIds.Select(id => names[id]).ToList(),
             clause.IntervalMonths,
-            clause.RoundingRule);
+            clause.RoundingRule,
+            indexIds,
+            clause.WindowOffsetMonths);
     }
 
     /// <summary>Flagged, never ended by this: a contract past its end stays as it is until someone ends it (spec Requirement 6).</summary>
@@ -310,6 +317,7 @@ public static class ContractRegistryErrorMap
             ("P0001", "contracts_cutover_insert_admin_only") => ContractRefusal.CutoverAdminOnly,
             ("P0001", "contracts_terms_locked") => ContractRefusal.AccountHasMovements,
             ("P0001", "contracts_fee_plan_locked") => ContractRefusal.AccountHasMovements,
+            ("P0001", "adjustment_clauses_locked") => ContractRefusal.AdjustmentConfirmed,
             _ => null,
         };
 }

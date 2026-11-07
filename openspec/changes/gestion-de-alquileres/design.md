@@ -232,7 +232,7 @@ Voiding needs no change: `VoidingPlanner.cs:139-149` reverses only the payment a
 |---|---|---|
 | `IPartyRegistry` | `PartyRegistry` | §2.1 |
 | `IUnitRegistry` | `UnitRegistry` | §2.2 |
-| `IContractRegistry` | `ContractRegistry` | Create, list, detail, correct, notice, end, undo, cancel, remove party, replace unit, suggest rate |
+| `IContractRegistry` | `ContractRegistry` | Create, list, detail, correct, set clause, notice, end, undo, cancel, remove party, replace unit, suggest rate |
 | `IIndexRegistry` | `IndexRegistry` | List, add, correct, affected adjustments |
 | `IIndexValueSource` | `IndexSources/*` | §5 |
 | `IAdjustmentDesk` | `AdjustmentDesk` | §3.4 |
@@ -363,7 +363,7 @@ All additive. A model change and its migration ship in one PR. Each is applied t
 | M3 | `AddLoadedByMistakeEndReason` | S5 | Yes | Widens `ck_contracts_end_reason` | None |
 | M4 | `SeedEconomicIndices` | S6 | No | Adds missing IPC, RIPTE, ICL | Adds up to three catalog rows |
 | M4b | `AddIndexValueCorrections` | S6 | Yes | `index_value_corrections`, with stamp, append-only and the trigger on `index_values` (D26) | None |
-| M5 | `AddClauseWindowOffset` | S8 | Yes | `window_offset_months`, default 1, check 0 to 3; `app_replace_clause_indices`; clause lock | Existing clauses read 1, today's window |
+| M5 | `AddClauseWindowOffset` | S8 | Yes | `window_offset_months`, default 1 **in the database only**, since on the model EF would take 0 as unset; check 0 to 3; `app_replace_clause_indices`, with `search_path` ending in `pg_temp` and revoked from Supabase's API roles; clause lock, which waits on the contract's row so a write cannot slip in beside an adjustment being written | Existing clauses read 1, today's window |
 | M6 | `AddAdjustmentAppliesFrom` | S9 | Yes | `applies_from`, with first-of-month check; both unique indexes | None rewritten. **Fails on duplicate Regular rows** |
 | M7 | `AddAdjustmentDifference` | S10 | Yes | Widens both kind checks and `ck_account_movements_period_required`; adds a sign check; `difference_amount`, `difference_movement_id` with a unique index | None |
 
