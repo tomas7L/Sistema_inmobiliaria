@@ -475,16 +475,20 @@ public sealed class ClauseCorrectionTests
 
     // ---- Test 81 --------------------------------------------------------------------------------------------------------
 
-    [SkippableFact]
-    public async Task AnAgreedNewDeal_LeavesTheOldDebtCollectable_NoPeriodTwiceOrSkipped_AndTheOldAdjustmentOffTheWorklist()
+    /// <param name="beforeTheDueDate">
+    /// False: ended last month past its due date, so that month is the old contract's. True: ended on this month's 1st, before its
+    /// due date, so this month is left uncharged and named, and the new contract starts on that same 1st (spec Decision 39).
+    /// </param>
+    [SkippableTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AnAgreedNewDeal_LeavesTheOldDebtCollectable_NoPeriodTwiceOrSkipped_AndTheOldAdjustmentOffTheWorklist(bool beforeTheDueDate)
     {
         Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
         await using var world = await WorldAsync();
 
-        // Past the month's due date, so the month is the old contract's. Ending before it leaves that month on neither contract
-        // (spec Requirement 10): an open question, tasks.md, S8 notes.
         var thisMonth = DeskWorld.FirstOfMonth(Today);
-        var endDay = thisMonth.AddMonths(-1).AddDays(14);
+        var endDay = beforeTheDueDate ? thisMonth : thisMonth.AddMonths(-1).AddDays(14);
         var oldAccount = await world.SeedAccountAsync(DeskWorld.OldestPeriod);
         var oldContract = await ContractOfAsync(world, oldAccount);
         Assert.True((await Registry(world).SetClauseAsync(oldContract, new ClauseDraft([await IndexAsync(world, "IPC")], 1, 2))).Succeeded);
@@ -494,6 +498,9 @@ public sealed class ClauseCorrectionTests
         {
             Assert.Contains(await new DueAdjustmentQuery(before).GetDueAsync(Today), d => d.ContractId == oldContract);
         }
+
+        var summary = await Registry(world).SummarizeEndAsync(oldContract, EndReason.MutualAgreement, endDay);
+        Assert.Equal(beforeTheDueDate ? thisMonth : null, summary.MonthLeftUncharged);
 
         Assert.True((await Registry(world).EndAsync(oldContract, EndReason.MutualAgreement, endDay)).Succeeded);
 

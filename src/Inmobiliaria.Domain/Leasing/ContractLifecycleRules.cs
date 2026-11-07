@@ -1,3 +1,5 @@
+using Inmobiliaria.Domain.Accounts;
+
 namespace Inmobiliaria.Domain.Leasing;
 
 /// <summary>
@@ -6,6 +8,19 @@ namespace Inmobiliaria.Domain.Leasing;
 /// </summary>
 public static class ContractLifecycleRules
 {
+    /// <summary>
+    /// The month an end on <paramref name="endDate"/> leaves uncharged, or null. A contract charges a month only when its due date
+    /// falls on or before the end (<see cref="AccrualSchedule"/>), so an end before that month's due date leaves it to a new
+    /// contract starting on its 1st (spec Decision 39, Requirement 10). A due date on or before the cutover was never the system's.
+    /// </summary>
+    public static DateOnly? MonthLeftUncharged(int dueDay, DateOnly? cutoverDate, DateOnly endDate)
+    {
+        var month = new DateOnly(endDate.Year, endDate.Month, 1);
+        var due = AccrualSchedule.DueDateFor(month, dueDay);
+
+        return due > endDate && !(cutoverDate is { } cutover && due <= cutover) ? month : null;
+    }
+
     /// <summary>Why notice cannot be recorded, or null: only from <c>Active</c>, not after today, and a move-out not before it.</summary>
     public static ContractRefusal? CheckNotice(ContractStatus status, DateOnly noticeDate, DateOnly moveOutDate, DateOnly today)
     {

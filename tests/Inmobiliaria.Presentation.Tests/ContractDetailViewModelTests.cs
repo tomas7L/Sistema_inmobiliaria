@@ -148,6 +148,36 @@ public class ContractDetailViewModelTests
         Assert.Contains("12/2026", line, StringComparison.Ordinal);
     }
 
+    /// <summary>Spec Decision 39, Requirement 10: an end before the month's due date names the month left uncharged.</summary>
+    [Fact]
+    public async Task TheEndSummary_NamesTheMonthLeftUncharged()
+    {
+        var port = new FakeContractRegistry { EndSummary = new ContractEndSummary(null, 0m, 0m, [], new DateOnly(2026, 11, 1)) };
+        var viewModel = New(port);
+        viewModel.EndReason = EndReason.Expiry;
+        viewModel.EndDate = EndOn;
+
+        await viewModel.ReviewEndCommand.ExecuteAsync(null);
+
+        var line = Assert.IsType<PendingEnd>(viewModel.PendingChange).UnchargedMonthLine;
+        Assert.Contains("11/2026", line, StringComparison.Ordinal);
+        Assert.Contains("no lo cobra", line, StringComparison.Ordinal);
+        Assert.Contains("01/11/2026", line, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheEndSummary_WithNoMonthLeftUncharged_SaysNothingAboutIt()
+    {
+        var port = new FakeContractRegistry { EndSummary = new ContractEndSummary(null, 0m, 0m, []) };
+        var viewModel = New(port);
+        viewModel.EndReason = EndReason.Expiry;
+        viewModel.EndDate = EndOn;
+
+        await viewModel.ReviewEndCommand.ExecuteAsync(null);
+
+        Assert.Null(Assert.IsType<PendingEnd>(viewModel.PendingChange).UnchargedMonthLine);
+    }
+
     /// <summary>With invalid recargo settings the screen says the figure leaves recargo out, instead of passing the ledger off as what is owed.</summary>
     [Fact]
     public async Task TheEndSummary_WithoutRecargoTerms_SaysTheFigureLeavesItOut()
