@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-07, con S8 mergeada (PR #101), M5 aplicada en las dos bases, y el aviso del mes sin cobrar escrito, sin commitear_
+_Última actualización: 2026-11-07, con el aviso del mes sin cobrar mergeado (PR #102) y el arreglo de `app_clear_must_change_password` escrito, sin commitear_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -13,9 +13,8 @@ _Última actualización: 2026-11-07, con S8 mergeada (PR #101), M5 aplicada en l
 
 ## Próximos pasos
 
-1. **Tomás commitea el aviso del mes sin cobrar y abre el PR** (`tasks.md`, notas de S8, punto 8.6; spec Decisión 39, Requisito 10, Test 81). No lleva migración.
-2. **Arreglar `app_clear_must_change_password`, en su propio PR y migración, antes de S9:** `search_path` sin `pg_temp`, y la consulta del 2026-11-07 mostró que `anon`, `authenticated` y `service_role` la pueden ejecutar, en las dos bases (`tasks.md`, punto 8.2). El daño posible se estimó bajo.
-3. **Seguir con S9 (Confirmar ajustes):** `tasks.md`, Phase 9, y las notas para S9 al final de las de S8. Lleva M6, con su consulta previa (H.4).
+1. **Tomás commitea el arreglo de `app_clear_must_change_password` y abre el PR** (`tasks.md`, notas de S8, último punto 8.9). Al mergear, aplica `20261107213120_HardenClearMustChangePassword` (H.3), primero en PRUEBA y después en producción, con la consulta de confirmación que le pasó el asistente.
+2. **Seguir con S9 (Confirmar ajustes):** `tasks.md`, Phase 9, y las notas para S9 al final de las de S8. Lleva M6, con su consulta previa (H.4).
 
 ## Pendientes / bloqueos
 
@@ -60,7 +59,7 @@ _Última actualización: 2026-11-07, con S8 mergeada (PR #101), M5 aplicada en l
 | | |
 |---|---|
 | **Docker** | **Sí** para S9 (Testcontainers `postgres:17.6`) |
-| **Supabase** | **Sí** para la migración que arregla `app_clear_must_change_password`, y M6 al terminar S9; las bases se pausan solas, y solo Tomás se conecta |
+| **Supabase** | **Sí** para aplicar `HardenClearMustChangePassword`, y M6 al terminar S9; las bases se pausan solas, y solo Tomás se conecta |
 | **Límite diario** | Tomás pasa el porcentaje al arrancar; el verificador y la revisión de gentle-ai son lo más caro |
 
 ## Para retomar
@@ -79,8 +78,8 @@ dotnet test Inmobiliaria.Core.slnf --configuration Release
 dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure
 ```
 
-Esperado: **1985 pasados, 0 fallas, 0 omitidos**, build sin advertencias y el modelo en sintonía con
-`20261107152256_AddClauseWindowOffset`. Si el build de Desktop falla con MSB3027, la aplicación está
+Esperado: **1987 pasados, 0 fallas, 0 omitidos**, build sin advertencias y el modelo en sintonía con
+`20261107213120_HardenClearMustChangePassword`. Si el build de Desktop falla con MSB3027, la aplicación está
 abierta y tiene tomadas sus DLL: cerrarla.
 
 **Aplicar una migración** (Tomás, en una ventana de PowerShell aparte, nunca con `!`): `tasks.md` H.3 y H.4; variable `INMOBILIARIA_DB` con

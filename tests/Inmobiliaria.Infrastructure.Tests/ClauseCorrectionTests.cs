@@ -444,7 +444,10 @@ public sealed class ClauseCorrectionTests
             "SELECT count(*) FROM pg_proc WHERE proname = 'app_replace_clause_indices' AND prosecdef AND array_to_string(proconfig, ',') LIKE '%search_path=pg_catalog, public, pg_temp'"));
         Assert.Equal(1, await world.CountAsync($"SELECT count(*) WHERE has_function_privilege('inmobiliaria_admin', '{Function}', 'EXECUTE')"));
         Assert.Equal(1, await world.CountAsync($"SELECT count(*) WHERE has_function_privilege('inmobiliaria_empleado', '{Function}', 'EXECUTE')"));
-        Assert.Equal(0, await world.CountAsync($"SELECT count(*) WHERE has_function_privilege('public', '{Function}', 'EXECUTE')"));
+        foreach (var role in PostgresFixture.SupabaseApiRoles.Append("public"))
+        {
+            Assert.Equal(0, await world.CountAsync($"SELECT count(*) WHERE has_function_privilege('{role}', '{Function}', 'EXECUTE')"));
+        }
     }
 
     // ---- Test 40 --------------------------------------------------------------------------------------------------------
