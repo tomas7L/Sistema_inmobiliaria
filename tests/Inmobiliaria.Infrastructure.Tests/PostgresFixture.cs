@@ -55,8 +55,32 @@ public sealed class PostgresFixture : IAsyncLifetime
         IsDockerAvailable = true;
 
         await using var context = CreateDbContext();
+
+        // Supabase's API roles, and its default privileges granting them every new function in public: without them, a
+        // migration's REVOKE from those roles is skipped here and proven nowhere. Tables are left out; nothing here needs them.
+        await context.Database.ExecuteSqlRawAsync(SupabaseApiRolesSql);
+        await GrantFunctionsLikeSupabaseAsync(context);
         await context.Database.MigrateAsync();
     }
+
+    /// <summary>The roles Supabase's API connects as, which its default privileges grant every new function.</summary>
+    public static readonly IReadOnlyList<string> SupabaseApiRoles = ["anon", "authenticated", "service_role"];
+
+    /// <summary>
+    /// Supabase's default privileges on the database <paramref name="context"/> points at, before it is migrated. Roles belong to the
+    /// server, created once above, but default privileges belong to each database: a test that migrates a database of its own calls this.
+    /// </summary>
+    public static Task GrantFunctionsLikeSupabaseAsync(InmobiliariaDbContext context) =>
+        context.Database.ExecuteSqlRawAsync(SupabaseDefaultPrivilegesSql);
+
+    private const string SupabaseApiRolesSql = """
+        CREATE ROLE anon NOLOGIN;
+        CREATE ROLE authenticated NOLOGIN;
+        CREATE ROLE service_role NOLOGIN;
+        """;
+
+    private const string SupabaseDefaultPrivilegesSql =
+        "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;";
 
     /// <summary>Builds a fresh <see cref="InmobiliariaDbContext"/> against the running container.</summary>
     public InmobiliariaDbContext CreateDbContext()
