@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-07, con el aviso del mes sin cobrar mergeado (PR #102) y el arreglo de `app_clear_must_change_password` escrito, sin commitear_
+_Última actualización: 2026-11-10, con `HardenClearMustChangePassword` aplicada en PRUEBA y producción_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -13,8 +13,7 @@ _Última actualización: 2026-11-07, con el aviso del mes sin cobrar mergeado (P
 
 ## Próximos pasos
 
-1. **Tomás commitea el arreglo de `app_clear_must_change_password` y abre el PR** (`tasks.md`, notas de S8, último punto 8.9). Al mergear, aplica `20261107213120_HardenClearMustChangePassword` (H.3), primero en PRUEBA y después en producción, con la consulta de confirmación que le pasó el asistente.
-2. **Seguir con S9 (Confirmar ajustes):** `tasks.md`, Phase 9, y las notas para S9 al final de las de S8. Lleva M6, con su consulta previa (H.4).
+1. **Seguir con S9 (Confirmar ajustes):** `tasks.md`, Phase 9, empezando por 9.1, y las notas para S9 al final de las de S8. Lleva M6, con su consulta previa (H.4).
 
 ## Pendientes / bloqueos
 
@@ -31,6 +30,7 @@ _Última actualización: 2026-11-07, con el aviso del mes sin cobrar mergeado (P
 - **Mateo diseña las pantallas por su cuenta**, sin fecha acordada. La lógica no lo espera. Su maqueta se revisa antes de
   mergear: el repo es público y no pueden entrar datos reales. Sus dudas de Índices y Ajustes ya tienen respuesta en Engram
   `decisions/mockup-indices-ajustes`; que baje `develop`. **Su pantalla de Índices tiene que mostrar el registro de correcciones** (spec Decisión 42).
+  El 2026-11-07 se le respondió la segunda tanda (historial, honorarios contractuales, día de vencimiento, propietarios, fecha de corte, textos).
 - **`C:\Users\buffa\Downloads\Del Lago Alquileres-PantallasPrueba.html` tiene datos reales de inquilinos:** nunca publicarlo ni
   commitearlo. La que se le pasa a Mateo es `C:\Users\buffa\Downloads\Del Lago Maqueta Estilo D.html`, con datos ficticios y una
   copia centrada del logo que Nicolás no aprobó.
@@ -59,7 +59,7 @@ _Última actualización: 2026-11-07, con el aviso del mes sin cobrar mergeado (P
 | | |
 |---|---|
 | **Docker** | **Sí** para S9 (Testcontainers `postgres:17.6`) |
-| **Supabase** | **Sí** para aplicar `HardenClearMustChangePassword`, y M6 al terminar S9; las bases se pausan solas, y solo Tomás se conecta |
+| **Supabase** | **Sí** para M6 al terminar S9; las bases se pausan solas, y solo Tomás se conecta |
 | **Límite diario** | Tomás pasa el porcentaje al arrancar; el verificador y la revisión de gentle-ai son lo más caro |
 
 ## Para retomar
