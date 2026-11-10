@@ -13,11 +13,14 @@ _Última actualización: 2026-11-10, con S11 terminada, verificada y revisada, e
 
 ## Próximos pasos
 
-1. **Tomás commitea S11 y abre el PR**, junto con el commit de las notas de M7 que ya hizo (archivos, commit y PR en el último mensaje
-   de la sesión del 2026-11-10). S11 no lleva migración.
-2. **S12 (Pantallas)** espera las maquetas de Mateo (`tasks.md`, Phase 12). Si se demora, Tomás puede elegir vistas simples para
-   algunas pantallas y reestilizarlas después (proposal §7). Lo que S12 tiene que levantar de S9 a S11 está anotado en las notas 9.x a
-   11.x de `tasks.md` (por ejemplo, mostrar los meses de la diferencia en caja, nota 10.11).
+1. **Tomás commitea S11 y abre el PR**, junto con el commit de las notas de M7 que ya hizo (archivos, commit y PR en el mensaje de
+   entrega de S11, sesión del 2026-11-10). S11 no lleva migración.
+2. **Al arrancar la próxima sesión, armar el panorama de lo que falta** para el sistema completo, leyendo `proposal.md` y el plan
+   general: Tomás lo pidió el 2026-11-10 (carga inicial, mora, avisos, archivar este change). Es barato y da un número con fundamento.
+3. **S12 (Pantallas):** Mateo manda las pantallas con su explicación. El 2026-11-10 se le devolvió `textos_propuestos.md`: en Índices y
+   Ajustes usa los textos que ya están en el código (`AdjustmentRefusalText`, `IndexRefusalText`, `AdjustmentsViewModel`,
+   `IndicesViewModel`); los textos nuevos de Personas, Propiedades y Contratos los revisa Tomás. Lo que S12 tiene que levantar de S9 a
+   S11 está en las notas 9.x a 11.x de `tasks.md` (por ejemplo, los meses de la diferencia en caja, nota 10.11).
 
 ## Pendientes / bloqueos
 
