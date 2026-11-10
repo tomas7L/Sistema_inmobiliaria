@@ -177,6 +177,19 @@ public static class AccrualSchedule
     }
 
     /// <summary>
+    /// Whether the schedule charges <paramref name="period"/> at all, whenever it is read: the contract is not cancelled, the
+    /// period falls due while the contract is in force, and after any cutover date. The rule <see cref="PeriodsDue"/> applies,
+    /// without its "has it arrived yet" (gestion-de-alquileres design §3.3).
+    /// </summary>
+    public static bool IsChargedPeriod(Contract contract, DateOnly period)
+    {
+        ArgumentNullException.ThrowIfNull(contract);
+
+        var dueDate = DueDateFor(FirstOfMonth(period), contract.DueDay);
+        return IsScheduled(contract, dueDate) && !IsOnOrBeforeCutover(contract, dueDate);
+    }
+
+    /// <summary>
     /// Whether a period with this due date is one the contract charges at all: the due date fell
     /// while the contract existed, and no later than the day it actually ended.
     /// </summary>

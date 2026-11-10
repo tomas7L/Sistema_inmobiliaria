@@ -11,6 +11,7 @@ public static class ReciboLineLabels
         ReciboLineKind.Rent => "Alquiler",
         ReciboLineKind.ContractualFeeInstalment => "Cuota de honorarios contractuales",
         ReciboLineKind.Recargo => "Recargo por mora",
+        ReciboLineKind.AdjustmentDifference => "Diferencia de ajuste",
         ReciboLineKind.TasaMunicipal => "Tasa municipal",
         ReciboLineKind.Seguro => "Seguro",
         ReciboLineKind.OtrosConceptos => "Otros conceptos",

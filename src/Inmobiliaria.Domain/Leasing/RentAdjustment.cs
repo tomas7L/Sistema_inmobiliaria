@@ -27,6 +27,15 @@ public sealed class RentAdjustment
     public DateOnly? AppliesFrom { get; }
 
     /// <summary>
+    /// The difference the summary offered for a late confirmation, or null when none was offered (gestion-de-alquileres
+    /// design D6). With <see cref="DifferenceMovementId"/> null too, it was offered and declined: the recorded choice.
+    /// </summary>
+    public decimal? DifferenceAmount { get; }
+
+    /// <summary>The <see cref="Accounts.MovementKind.AdjustmentDifference"/> charge written for it, when the operator chose to charge it.</summary>
+    public Guid? DifferenceMovementId { get; }
+
+    /// <summary>
     /// Who confirmed this adjustment. Nullable here and at the mapped column, because rows
     /// that predate this column stay null forever under the append-only trigger — but
     /// <see cref="Confirm"/>'s <c>confirmedBy</c> parameter is a required, non-nullable
@@ -65,7 +74,9 @@ public sealed class RentAdjustment
         DateTimeOffset confirmedAt,
         Guid confirmedBy,
         IReadOnlyList<RentAdjustmentIndexValue> indexValues,
-        DateOnly? appliesFrom)
+        DateOnly? appliesFrom,
+        decimal? differenceAmount,
+        Guid? differenceMovementId)
     {
         Id = id;
         ContractId = contractId;
@@ -79,6 +90,8 @@ public sealed class RentAdjustment
         ConfirmedBy = confirmedBy;
         IndexValues = indexValues;
         AppliesFrom = appliesFrom;
+        DifferenceAmount = differenceAmount;
+        DifferenceMovementId = differenceMovementId;
     }
 
     /// <summary>
@@ -95,9 +108,21 @@ public sealed class RentAdjustment
         Guid confirmedBy,
         AdjustmentKind kind = AdjustmentKind.Regular,
         Guid? correctsAdjustmentId = null,
-        DateOnly? appliesFrom = null)
+        DateOnly? appliesFrom = null,
+        decimal? differenceAmount = null,
+        Guid? differenceMovementId = null)
     {
         ArgumentNullException.ThrowIfNull(proposal);
+
+        if (differenceAmount is <= 0m)
+        {
+            throw new ArgumentException("A difference offered must be a positive amount.", nameof(differenceAmount));
+        }
+
+        if (differenceMovementId is not null && differenceAmount is null)
+        {
+            throw new ArgumentException("A difference charged must be one that was offered.", nameof(differenceMovementId));
+        }
 
         if ((kind == AdjustmentKind.Correction) != (correctsAdjustmentId is not null))
         {
@@ -120,6 +145,8 @@ public sealed class RentAdjustment
             confirmedAt,
             confirmedBy,
             proposal.IndexValues,
-            appliesFrom);
+            appliesFrom,
+            differenceAmount,
+            differenceMovementId);
     }
 }

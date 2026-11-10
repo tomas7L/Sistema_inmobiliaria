@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-10, con `HardenClearMustChangePassword` aplicada en PRUEBA y producción_
+_Última actualización: 2026-11-10, con S10 terminada, verificada y revisada, entregada sin commitear_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -13,7 +13,12 @@ _Última actualización: 2026-11-10, con `HardenClearMustChangePassword` aplicad
 
 ## Próximos pasos
 
-1. **Seguir con S9 (Confirmar ajustes):** `tasks.md`, Phase 9, empezando por 9.1, y las notas para S9 al final de las de S8. Lleva M6, con su consulta previa (H.4).
+1. **Tomás commitea S10 y abre el PR** (archivos, commit y PR en el último mensaje de la sesión del 2026-11-10).
+2. **Al mergear, Tomás aplica M7 `20261110150305_AddAdjustmentDifference`** (H.3): PRUEBA, prueba de humo, producción. No necesita
+   consulta previa. Confirmación: `ck_account_movements_adjustment_difference_sign` y `ux_rent_adjustments_difference_movement`
+   existen, y la última migración es esta. Anotarlo en `tasks.md`, notas de Phase 10.
+3. **Seguir con S11 (Correcciones):** `tasks.md`, Phase 11. Revisar ahí la observación del verificador de S10: un alquiler corregido a
+   cero junto a una diferencia viva se leería como saldado.
 
 ## Pendientes / bloqueos
 
@@ -58,8 +63,8 @@ _Última actualización: 2026-11-10, con `HardenClearMustChangePassword` aplicad
 
 | | |
 |---|---|
-| **Docker** | **Sí** para S9 (Testcontainers `postgres:17.6`) |
-| **Supabase** | **Sí** para M6 al terminar S9; las bases se pausan solas, y solo Tomás se conecta |
+| **Docker** | **Sí** para S11 (Testcontainers `postgres:17.6`) |
+| **Supabase** | **Sí** para aplicar M7 al mergear S10; las bases se pausan solas, y solo Tomás se conecta |
 | **Límite diario** | Tomás pasa el porcentaje al arrancar; el verificador y la revisión de gentle-ai son lo más caro |
 
 ## Para retomar

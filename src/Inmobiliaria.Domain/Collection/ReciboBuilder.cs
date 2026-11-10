@@ -16,16 +16,22 @@ public sealed record ReciboLedgerFigures
 
     public decimal? SaldoDeudor { get; }
 
-    private ReciboLedgerFigures(decimal? rent, decimal? instalment, decimal recargo, decimal? saldoDeudor)
+    /// <summary>A late adjustment's difference charged on this period, or null (gestion-de-alquileres spec Requirement 20).</summary>
+    public decimal? Difference { get; }
+
+    private ReciboLedgerFigures(decimal? rent, decimal? instalment, decimal recargo, decimal? saldoDeudor, decimal? difference = null)
     {
         Rent = rent;
         ContractualFeeInstalment = instalment;
         Recargo = recargo;
         SaldoDeudor = saldoDeudor;
+        Difference = difference;
     }
 
-    public static ReciboLedgerFigures ForRentPeriod(decimal rent, decimal? contractualFeeInstalment, decimal recargo)
+    public static ReciboLedgerFigures ForRentPeriod(decimal rent, decimal? contractualFeeInstalment, decimal recargo, decimal? difference = null)
     {
+        ThrowIfNotPositive(difference, nameof(difference));
+
         ArgumentOutOfRangeException.ThrowIfNegative(rent);
         ArgumentOutOfRangeException.ThrowIfNegative(recargo);
         ThrowIfFractional(rent, nameof(rent));
@@ -41,7 +47,27 @@ public sealed record ReciboLedgerFigures
             ThrowIfFractional(instalment, nameof(contractualFeeInstalment));
         }
 
-        return new ReciboLedgerFigures(rent, contractualFeeInstalment, recargo, saldoDeudor: null);
+        return new ReciboLedgerFigures(rent, contractualFeeInstalment, recargo, saldoDeudor: null, difference);
+    }
+
+    /// <summary>
+    /// A period that holds only a late adjustment's difference, because its contract ended before it accrued: no rent line and
+    /// no recargo (spec Requirement 19).
+    /// </summary>
+    public static ReciboLedgerFigures ForDifferenceOnly(decimal difference)
+    {
+        ThrowIfNotPositive(difference, nameof(difference));
+
+        return new ReciboLedgerFigures(rent: null, instalment: null, recargo: 0m, saldoDeudor: null, difference);
+    }
+
+    private static void ThrowIfNotPositive(decimal? value, string paramName)
+    {
+        if (value is { } amount)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(amount, paramName);
+            ThrowIfFractional(amount, paramName);
+        }
     }
 
     public static ReciboLedgerFigures ForOpeningBalance(decimal figure)
@@ -62,10 +88,11 @@ public sealed record ReciboLedgerFigures
     }
 
     /// <summary>
-    /// What the honorarios percentage applies to: rent plus recargo, or the opening-balance figure
-    /// itself, never the whole loaded debt (design D25, D27). The instalment is not in it.
+    /// What the honorarios percentage applies to: rent plus recargo plus a late adjustment's difference, or the opening-balance
+    /// figure itself, never the whole loaded debt (design D25, D27; gestion-de-alquileres spec Decision 20). The instalment is
+    /// not in it.
     /// </summary>
-    internal decimal HonorariosBase => SaldoDeudor ?? ((Rent ?? 0m) + Recargo);
+    internal decimal HonorariosBase => SaldoDeudor ?? ((Rent ?? 0m) + Recargo + (Difference ?? 0m));
 }
 
 /// <summary>
@@ -109,6 +136,8 @@ public static class ReciboBuilder
         {
             amounts[ReciboLineKind.Recargo] = ledger.Recargo;
         }
+
+        Add(amounts, ReciboLineKind.AdjustmentDifference, ledger.Difference);
 
         // Typed amounts are truncated toward zero on entry; one that truncates to zero prints nothing.
         AddTyped(amounts, ReciboLineKind.TasaMunicipal, typed.TasaMunicipal);

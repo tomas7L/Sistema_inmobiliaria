@@ -98,6 +98,22 @@ public sealed class AccountMovement
     }
 
     /// <summary>
+    /// The difference a late adjustment charges, on the period it applies from and dated on that period's due date
+    /// (gestion-de-alquileres spec Requirement 19). Positive: a fall in the index is never offered (Requirement 16).
+    /// </summary>
+    public static AccountMovement AdjustmentDifference(Guid id, decimal amount, DateOnly period, DateOnly dueOn)
+    {
+        if (amount <= 0m)
+        {
+            throw new ArgumentException("An adjustment difference must be a positive amount.", nameof(amount));
+        }
+
+        RequireFirstOfMonth(period);
+
+        return new AccountMovement(id, MovementKind.AdjustmentDifference, amount, dueOn, period, correctsMovementId: null);
+    }
+
+    /// <summary>
     /// One instalment of the tenant's one-off contract commission. Fixed; it never adjusts. It
     /// carries the period of the rent it rides with, so the same payment settles both and the
     /// period's recargo runs on the two together.

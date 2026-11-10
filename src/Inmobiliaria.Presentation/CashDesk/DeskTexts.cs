@@ -16,7 +16,7 @@ public static class DeskTexts
     public const string PropietarioTotalLabel = "Total del recibo propietario";
 
     public const string HandedAmountLabel =
-        "Importe entregado por el inquilino (se compara con el saldo del período: alquiler, cuota y recargo)";
+        "Importe entregado por el inquilino (se compara con el saldo del período: alquiler, cuota, recargo y diferencia de ajuste)";
 
     public const string ZeroAdministrationRate =
         "El contrato cobra 0% de honorarios de administración. Verifique que sea correcto antes de cobrar.";

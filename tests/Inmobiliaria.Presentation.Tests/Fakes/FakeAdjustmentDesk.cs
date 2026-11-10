@@ -30,9 +30,12 @@ internal sealed class FakeAdjustmentDesk : IAdjustmentDesk
         return Task.FromResult(_last ?? throw new InvalidOperationException("No preview scripted."));
     }
 
-    public Task<AdjustmentConfirmResult> ConfirmAsync(AdjustmentPreview preview, CancellationToken ct = default)
+    public List<bool> ChargeChoices { get; } = [];
+
+    public Task<AdjustmentConfirmResult> ConfirmAsync(AdjustmentPreview preview, bool chargeDifference = false, CancellationToken ct = default)
     {
         Confirmed.Add(preview);
+        ChargeChoices.Add(chargeDifference);
         return Task.FromResult(NextConfirm ?? throw new InvalidOperationException("No confirmation scripted."));
     }
 

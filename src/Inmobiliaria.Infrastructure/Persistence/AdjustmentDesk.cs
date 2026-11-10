@@ -47,7 +47,7 @@ public sealed class AdjustmentDesk : IAdjustmentDesk
         return (await BuildAsync(contract, account, ct)).Result;
     }
 
-    public async Task<AdjustmentConfirmResult> ConfirmAsync(AdjustmentPreview preview, CancellationToken ct = default)
+    public async Task<AdjustmentConfirmResult> ConfirmAsync(AdjustmentPreview preview, bool chargeDifference = false, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(preview);
 
@@ -82,7 +82,9 @@ public sealed class AdjustmentDesk : IAdjustmentDesk
                 return AdjustmentConfirmResult.Refused(AdjustmentRefusal.AlreadyConfirmed);
             }
 
-            var account = await AccountOfAsync(preview.ContractId, ct);
+            // Tracked, so a difference charged is saved with the adjustment, in this one transaction (spec Decision 19).
+            var account = await _context.ContractAccounts.Include(a => a.Movements).SingleOrDefaultAsync(a => a.ContractId == preview.ContractId, ct)
+                ?? new ContractAccount(Guid.NewGuid(), preview.ContractId);
             var (rebuilt, proposal) = await BuildAsync(contract, account, ct);
             if (rebuilt.Preview is not { } current || proposal is null)
             {
@@ -94,8 +96,28 @@ public sealed class AdjustmentDesk : IAdjustmentDesk
                 return AdjustmentConfirmResult.Refused(AdjustmentRefusal.PreviewStale);
             }
 
+            if (chargeDifference && current.Difference is null)
+            {
+                return AdjustmentConfirmResult.Refused(AdjustmentRefusal.NoDifferenceToCharge);
+            }
+
+            Guid? chargeId = null;
+            if (chargeDifference && current.Difference is { } offer)
+            {
+                var charge = AccountMovement.AdjustmentDifference(
+                    Guid.NewGuid(), offer.Amount, current.AppliesFrom, AccrualSchedule.DueDateFor(current.AppliesFrom, contract.DueDay));
+                if (_context.Entry(account).State == EntityState.Detached)
+                {
+                    _context.ContractAccounts.Add(account);
+                }
+
+                account.Append(charge);
+                chargeId = charge.Id;
+            }
+
             var adjustment = contract.ConfirmAdjustment(
-                Guid.NewGuid(), proposal, DateTimeOffset.UtcNow, _confirmedBy, appliesFrom: current.AppliesFrom);
+                Guid.NewGuid(), proposal, DateTimeOffset.UtcNow, _confirmedBy, appliesFrom: current.AppliesFrom,
+                differenceAmount: current.Difference?.Amount, differenceMovementId: chargeId);
             await _context.SaveChangesAsync(ct);
 
             // Read before committing, so failing here writes nothing rather than reporting a failure over a saved change.
@@ -134,6 +156,7 @@ public sealed class AdjustmentDesk : IAdjustmentDesk
 
         var proposal = new AdjustmentProposal(due.CurrentCanon, due.IndexValues, due.Combination, coefficient, due.DueDate);
         var names = await NamesAsync(due.IndexValues.Select(v => v.ResolvedIndexId), ct);
+        var appliesFrom = AdjustmentTiming.AppliesFrom(contract, account, today);
 
         var preview = new AdjustmentPreview(
             contract.Id,
@@ -145,7 +168,8 @@ public sealed class AdjustmentDesk : IAdjustmentDesk
             coefficient,
             proposal.UntruncatedNewCanon,
             proposal.TruncatedNewCanon,
-            AdjustmentTiming.AppliesFrom(contract, account, today));
+            appliesFrom,
+            AdjustmentDifference.Regular(contract, account, due.DueDate, appliesFrom, due.CurrentCanon, proposal.TruncatedNewCanon));
 
         return (AdjustmentPreviewResult.Ready(preview), proposal);
     }
@@ -176,7 +200,11 @@ public sealed class AdjustmentDesk : IAdjustmentDesk
                 a.Kind,
                 a.ConfirmedAt,
                 a.ConfirmedBy is { } by ? confirmers.GetValueOrDefault(by) : null,
-                Lines(a.IndexValues, names)))
+                Lines(a.IndexValues, names))
+            {
+                DifferenceAmount = a.DifferenceAmount,
+                DifferenceCharged = a.DifferenceMovementId is not null,
+            })
             .ToList();
     }
 

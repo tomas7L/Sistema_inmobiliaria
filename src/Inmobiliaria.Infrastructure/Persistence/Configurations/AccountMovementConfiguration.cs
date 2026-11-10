@@ -44,7 +44,7 @@ public sealed class AccountMovementConfiguration : IEntityTypeConfiguration<Acco
             // Replaces ck_account_movements_accrual_has_period, which covered the rent alone.
             t.HasCheckConstraint(
                 "ck_account_movements_period_required",
-                "kind NOT IN ('RentAccrual','ContractualFeeInstalment','Payment','RecargoCharged') " +
+                "kind NOT IN ('RentAccrual','ContractualFeeInstalment','Payment','RecargoCharged','AdjustmentDifference') " +
                 "OR period IS NOT NULL");
 
             // A pre-existing debt is loaded month by month. The only figure that may stand without a
@@ -61,6 +61,9 @@ public sealed class AccountMovementConfiguration : IEntityTypeConfiguration<Acco
             t.HasCheckConstraint(
                 "ck_account_movements_recargo_charged_sign",
                 "kind <> 'RecargoCharged' OR amount > 0");
+            t.HasCheckConstraint(
+                "ck_account_movements_adjustment_difference_sign",
+                "kind <> 'AdjustmentDifference' OR amount > 0");
         });
 
         // The id is application-supplied, which InmobiliariaDbContext declares for every

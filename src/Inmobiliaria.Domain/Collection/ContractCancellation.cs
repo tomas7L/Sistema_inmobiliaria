@@ -125,5 +125,6 @@ public static class ContractCancellation
     }
 
     private static bool IsCharge(MovementKind kind) =>
-        kind is MovementKind.RentAccrual or MovementKind.OpeningBalance or MovementKind.ContractualFeeInstalment or MovementKind.RecargoCharged;
+        kind is MovementKind.RentAccrual or MovementKind.OpeningBalance or MovementKind.ContractualFeeInstalment or MovementKind.RecargoCharged
+            or MovementKind.AdjustmentDifference;
 }

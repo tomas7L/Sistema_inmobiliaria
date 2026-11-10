@@ -329,7 +329,9 @@ public sealed class Contract
         Guid confirmedBy,
         AdjustmentKind kind = AdjustmentKind.Regular,
         Guid? correctsAdjustmentId = null,
-        DateOnly? appliesFrom = null)
+        DateOnly? appliesFrom = null,
+        decimal? differenceAmount = null,
+        Guid? differenceMovementId = null)
     {
         ArgumentNullException.ThrowIfNull(proposal);
 
@@ -353,7 +355,8 @@ public sealed class Contract
         }
 
         var adjustment = RentAdjustment.Confirm(
-            adjustmentId, Id, proposal, confirmedAt, confirmedBy, kind, correctsAdjustmentId, appliesFrom);
+            adjustmentId, Id, proposal, confirmedAt, confirmedBy, kind, correctsAdjustmentId, appliesFrom,
+            differenceAmount, differenceMovementId);
 
         ChangeMonthlyRent(adjustment.NewCanon);
         _adjustments.Add(adjustment);

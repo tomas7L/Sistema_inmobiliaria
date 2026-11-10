@@ -119,7 +119,9 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
 
                     b.ToTable("account_movements", null, t =>
                         {
-                            t.HasCheckConstraint("ck_account_movements_kind", "kind IN ('OpeningBalance','RentAccrual','ContractualFeeInstalment','RecargoFrozen','Correction','Payment','RecargoCharged')");
+                            t.HasCheckConstraint("ck_account_movements_adjustment_difference_sign", "kind <> 'AdjustmentDifference' OR amount > 0");
+
+                            t.HasCheckConstraint("ck_account_movements_kind", "kind IN ('OpeningBalance','RentAccrual','ContractualFeeInstalment','RecargoFrozen','Correction','Payment','RecargoCharged','AdjustmentDifference')");
 
                             t.HasCheckConstraint("ck_account_movements_kind_corrects", "(kind = 'Correction') = (corrects_movement_id IS NOT NULL)");
 
@@ -129,7 +131,7 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("ck_account_movements_period_first_of_month", "period IS NULL OR EXTRACT(DAY FROM period) = 1");
 
-                            t.HasCheckConstraint("ck_account_movements_period_required", "kind NOT IN ('RentAccrual','ContractualFeeInstalment','Payment','RecargoCharged') OR period IS NOT NULL");
+                            t.HasCheckConstraint("ck_account_movements_period_required", "kind NOT IN ('RentAccrual','ContractualFeeInstalment','Payment','RecargoCharged','AdjustmentDifference') OR period IS NOT NULL");
 
                             t.HasCheckConstraint("ck_account_movements_recargo_charged_sign", "kind <> 'RecargoCharged' OR amount > 0");
                         });
@@ -519,6 +521,15 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("corrects_adjustment_id");
 
+                    b.Property<decimal?>("DifferenceAmount")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("difference_amount");
+
+                    b.Property<Guid?>("DifferenceMovementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("difference_movement_id");
+
                     b.Property<DateOnly>("EffectiveDate")
                         .HasColumnType("date")
                         .HasColumnName("effective_date");
@@ -553,6 +564,11 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ux_rent_adjustments_one_correction_per_adjustment")
                         .HasFilter("corrects_adjustment_id IS NOT NULL");
 
+                    b.HasIndex("DifferenceMovementId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_rent_adjustments_difference_movement")
+                        .HasFilter("difference_movement_id IS NOT NULL");
+
                     b.HasIndex("ContractId", "EffectiveDate")
                         .IsUnique()
                         .HasDatabaseName("ux_rent_adjustments_one_regular_per_due_date")
@@ -561,6 +577,10 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
                     b.ToTable("rent_adjustments", null, t =>
                         {
                             t.HasCheckConstraint("ck_rent_adjustments_applies_from_first_of_month", "applies_from IS NULL OR EXTRACT(DAY FROM applies_from) = 1");
+
+                            t.HasCheckConstraint("ck_rent_adjustments_difference_amount_positive", "difference_amount IS NULL OR difference_amount > 0");
+
+                            t.HasCheckConstraint("ck_rent_adjustments_difference_charged_was_offered", "difference_movement_id IS NULL OR difference_amount IS NOT NULL");
 
                             t.HasCheckConstraint("ck_rent_adjustments_effective_date_first_of_month", "EXTRACT(DAY FROM effective_date) = 1");
 
@@ -917,7 +937,7 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("ck_recibo_lines_honorarios_not_positive", "kind <> 'HonorariosAdministracion' OR amount <= 0");
 
-                            t.HasCheckConstraint("ck_recibo_lines_kind", "kind IN ('Rent','ContractualFeeInstalment','Recargo','TasaMunicipal','Seguro','OtrosConceptos','SaldoDeudor','HonorariosAdministracion')");
+                            t.HasCheckConstraint("ck_recibo_lines_kind", "kind IN ('Rent','ContractualFeeInstalment','Recargo','AdjustmentDifference','TasaMunicipal','Seguro','OtrosConceptos','SaldoDeudor','HonorariosAdministracion')");
 
                             t.HasCheckConstraint("ck_recibo_lines_tasa_not_negative", "kind <> 'TasaMunicipal' OR amount >= 0");
                         });

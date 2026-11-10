@@ -67,6 +67,7 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
     [NotifyPropertyChangedFor(nameof(TenantText), nameof(PreviousCanonText), nameof(CoefficientText), nameof(NewCanonText))]
     [NotifyPropertyChangedFor(nameof(DueDateText), nameof(AppliesFromText), nameof(LateText))]
+    [NotifyPropertyChangedFor(nameof(HasDifference), nameof(DifferenceText))]
     private AdjustmentPreview? _summary;
 
     /// <summary>After a confirmation: the new canon and the first period it applies to.</summary>
@@ -80,6 +81,18 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
     /// <summary>The last refusal's operator text, or null. Cleared when the next action starts.</summary>
     [ObservableProperty]
     private string? _refusalMessage;
+
+    /// <summary>The operator's choice on the difference offered: no until they say yes, and no again for every new summary.</summary>
+    [ObservableProperty]
+    private bool _chargeDifference;
+
+    /// <summary>The open summary offers a difference, so the choice is shown.</summary>
+    public bool HasDifference => Summary?.Difference is not null;
+
+    /// <summary>The difference offered and the months it covers, or null when none is offered.</summary>
+    public string? DifferenceText => Summary?.Difference is { } offer
+        ? $"Diferencia de {Formats.Money(offer.Amount)} por los meses {Formats.Period(offer.Months[0])} a {Formats.Period(offer.Months[^1])}, ya cobrados con el canon anterior."
+        : null;
 
     public string? TenantText => Summary?.TenantName;
 
@@ -177,7 +190,10 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
                 Formats.Money(entry.PreviousCanon),
                 Formats.Money(entry.NewCanon),
                 Formats.Level(entry.Coefficient),
-                entry.ConfirmedBy ?? "Sin registro"));
+                entry.ConfirmedBy ?? "Sin registro",
+                entry.DifferenceAmount is { } offered
+                    ? $"Diferencia de {Formats.Money(offered)} {(entry.DifferenceCharged ? "cobrada" : "no cobrada")}"
+                    : string.Empty));
         }
 
         var result = outcome.Value.Preview;
@@ -203,7 +219,8 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
         ConfirmedMessage = null;
         NoticeReminder = null;
 
-        var outcome = await Runner.RunAsync(() => _desk.ConfirmAsync(preview), OperationKind.Commit);
+        var charge = ChargeDifference && preview.Difference is not null;
+        var outcome = await Runner.RunAsync(() => _desk.ConfirmAsync(preview, charge), OperationKind.Commit);
         if (!outcome.Completed)
         {
             return;
@@ -213,8 +230,10 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
         if (result.Confirmed is { } confirmed)
         {
             SetSummary(null);
-            ConfirmedMessage =
-                $"Ajuste confirmado: el canon pasa a {Formats.Money(confirmed.NewCanon)} desde {Formats.Period(confirmed.AppliesFrom ?? confirmed.DueDate)}.";
+            var from = Formats.Period(confirmed.AppliesFrom ?? confirmed.DueDate);
+            ConfirmedMessage = confirmed is { DifferenceCharged: true, DifferenceAmount: { } charged }
+                ? $"Ajuste confirmado: el canon pasa a {Formats.Money(confirmed.NewCanon)} desde {from}. Se cobra una diferencia de {Formats.Money(charged)} con {from}."
+                : $"Ajuste confirmado: el canon pasa a {Formats.Money(confirmed.NewCanon)} desde {from}.";
             NoticeReminder = $"Avise a {preview.TenantName ?? "el inquilino"} del nuevo canon. El sistema no le envía nada.";
             await ReloadAsync();
             return;
@@ -237,6 +256,8 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
 
     private void SetSummary(AdjustmentPreview? preview)
     {
+        // A choice covers only the summary it was made on.
+        ChargeDifference = false;
         Summary = preview;
         SummaryLines.Clear();
         foreach (var line in preview?.Indices ?? [])
@@ -269,4 +290,5 @@ public sealed record AdjustmentIndexRow(
 /// <param name="AppliesFromText">The first period it priced; for a row from before this was recorded, its due month.</param>
 /// <param name="ConfirmedByText">Who confirmed it, or "Sin registro" on rows from before that was recorded.</param>
 public sealed record AdjustmentHistoryRow(
-    string DueDateText, string AppliesFromText, string PreviousCanonText, string NewCanonText, string CoefficientText, string ConfirmedByText);
+    string DueDateText, string AppliesFromText, string PreviousCanonText, string NewCanonText, string CoefficientText, string ConfirmedByText,
+    string DifferenceText = "");

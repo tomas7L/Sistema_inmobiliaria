@@ -87,7 +87,7 @@ public class ReciboLinesTests
 
     // Test 37
     [Fact]
-    public void TheCatalog_NamesExactlyFourDerivedKinds()
+    public void TheCatalog_NamesExactlyFiveDerivedKinds()
     {
         var derived = Enum.GetValues<ReciboLineKind>().Where(ReciboLineCatalog.IsLedgerDerived);
 
@@ -96,6 +96,7 @@ public class ReciboLinesTests
                 ReciboLineKind.Rent,
                 ReciboLineKind.ContractualFeeInstalment,
                 ReciboLineKind.Recargo,
+                ReciboLineKind.AdjustmentDifference,
                 ReciboLineKind.SaldoDeudor,
             ],
             derived);

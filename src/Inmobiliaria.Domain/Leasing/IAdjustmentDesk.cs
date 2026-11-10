@@ -18,7 +18,13 @@ public interface IAdjustmentDesk
     /// Writes the adjustment and the new canon in one transaction, recording who confirmed. The summary is rebuilt under
     /// the account's and the contract's locks and must match <paramref name="preview"/>, or nothing is written.
     /// </summary>
-    Task<AdjustmentConfirmResult> ConfirmAsync(AdjustmentPreview preview, CancellationToken ct = default);
+    /// <param name="preview">The summary the operator saw.</param>
+    /// <param name="chargeDifference">
+    /// The operator's choice on the difference the summary offered, no unless they say so (spec Requirement 16). Yes writes one
+    /// charge on the applied-from period in the same transaction; asking for it when none was offered is refused.
+    /// </param>
+    /// <param name="ct">Cancels the write.</param>
+    Task<AdjustmentConfirmResult> ConfirmAsync(AdjustmentPreview preview, bool chargeDifference = false, CancellationToken ct = default);
 
     /// <summary>The contract's confirmed adjustments, the most recently confirmed first.</summary>
     Task<IReadOnlyList<AdjustmentHistoryEntry>> HistoryAsync(Guid contractId, CancellationToken ct = default);
@@ -47,7 +53,8 @@ public sealed class AdjustmentPreview(
     decimal coefficient,
     decimal untruncatedNewCanon,
     decimal newCanon,
-    DateOnly appliesFrom)
+    DateOnly appliesFrom,
+    DifferenceOffer? difference = null)
 {
     public Guid ContractId { get; } = contractId;
 
@@ -76,6 +83,9 @@ public sealed class AdjustmentPreview(
     /// <summary>It prices from a later month than the one it fell due in.</summary>
     public bool IsLate => AdjustmentTiming.IsLate(DueDate, AppliesFrom);
 
+    /// <summary>The difference offered on a late confirmation and the months it covers, or null when none is offered.</summary>
+    public DifferenceOffer? Difference { get; } = difference;
+
     /// <summary>Every figure the operator saw: the canon, the window, each level, the result and the period it applies from.</summary>
     public bool SameFiguresAs(AdjustmentPreview other)
     {
@@ -88,7 +98,9 @@ public sealed class AdjustmentPreview(
             && Coefficient == other.Coefficient
             && NewCanon == other.NewCanon
             && AppliesFrom == other.AppliesFrom
-            && Indices.SequenceEqual(other.Indices);
+            && Indices.SequenceEqual(other.Indices)
+            && Difference?.Amount == other.Difference?.Amount
+            && (Difference?.Months ?? []).SequenceEqual(other.Difference?.Months ?? []);
     }
 }
 
@@ -134,7 +146,14 @@ public sealed record AdjustmentHistoryEntry(
     AdjustmentKind Kind,
     DateTimeOffset ConfirmedAt,
     string? ConfirmedBy,
-    IReadOnlyList<AdjustmentIndexLine> Indices);
+    IReadOnlyList<AdjustmentIndexLine> Indices)
+{
+    /// <summary>The difference its summary offered, or null when none was (gestion-de-alquileres design D6).</summary>
+    public decimal? DifferenceAmount { get; init; }
+
+    /// <summary>The operator chose to charge it: the recorded choice, shown in the history (spec Requirement 16).</summary>
+    public bool DifferenceCharged { get; init; }
+}
 
 public enum AdjustmentRefusal
 {
@@ -152,6 +171,9 @@ public enum AdjustmentRefusal
 
     /// <summary>A figure changed since the summary was opened; it must be opened again before confirming.</summary>
     PreviewStale,
+
+    /// <summary>Charging the difference was asked for, but the summary offered none.</summary>
+    NoDifferenceToCharge,
 }
 
 public static class AdjustmentRefusalText
@@ -163,6 +185,7 @@ public static class AdjustmentRefusalText
         AdjustmentRefusal.IndexValuesMissing => "Faltan valores de índice para calcular este ajuste.",
         AdjustmentRefusal.AlreadyConfirmed => "Este ajuste ya fue confirmado. La lista se actualizó.",
         AdjustmentRefusal.PreviewStale => "Algo cambió desde que abrió el resumen. Revise el resumen actualizado antes de confirmar.",
+        AdjustmentRefusal.NoDifferenceToCharge => "Este ajuste no tiene diferencia para cobrar.",
         _ => throw new ArgumentOutOfRangeException(nameof(refusal), refusal, "A refusal without operator text."),
     };
 }
