@@ -20,6 +20,7 @@ public static class ReciboLineCatalog
         ReciboLineKind.Rent or
         ReciboLineKind.ContractualFeeInstalment or
         ReciboLineKind.Recargo or
+        ReciboLineKind.AdjustmentDifference or
         ReciboLineKind.SaldoDeudor;
 
     /// <summary>

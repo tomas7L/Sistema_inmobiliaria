@@ -54,6 +54,39 @@ public class ContractCancellationTests
         Assert.Equal(0m, Balance(account, plan));
     }
 
+    /// <summary>
+    /// gestion-de-alquileres spec Test 92, cancellation half: a late adjustment's difference not yet due is reversed too, on its own
+    /// date, so the balance shows no credit on any day before it falls due.
+    /// </summary>
+    [Fact]
+    public void Test92_ADifferenceNotYetDue_IsReversedOnItsOwnDate_LeavingNoCreditOnAnyDay()
+    {
+        var contract = NewContract();
+        var account = AccountOf(contract);
+        var december = new DateOnly(2026, 12, 1);
+        var dueOn = new DateOnly(2026, 12, 10);
+        var charge = AccountMovement.AdjustmentDifference(Guid.NewGuid(), 300_000m, december, dueOn);
+        account.Append(charge);
+
+        var plan = ContractCancellation.Plan(account, contract, [], "Cargado por error", Today);
+
+        var reversal = Assert.Single(plan.Corrections, c => c.CorrectsMovementId == charge.Id);
+        Assert.Equal(-300_000m, reversal.Amount);
+        Assert.Equal(dueOn, reversal.OccurredOn);
+        Assert.Equal(december, reversal.Period);
+        foreach (var correction in plan.Corrections)
+        {
+            account.Append(correction);
+        }
+
+        for (var day = Today; day <= dueOn.AddDays(1); day = day.AddDays(1))
+        {
+            Assert.True(account.LedgerBalance(day) >= 0m, $"A credit on {day}.");
+        }
+
+        Assert.Equal(0m, account.LedgerBalance(dueOn));
+    }
+
     [Fact]
     public void EveryChargeKind_IsReversed_ForItsNetAfterEarlierCorrections()
     {

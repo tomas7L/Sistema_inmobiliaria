@@ -28,6 +28,14 @@ public sealed class RentAdjustmentConfiguration : IEntityTypeConfiguration<RentA
             t.HasCheckConstraint(
                 "ck_rent_adjustments_applies_from_first_of_month",
                 "applies_from IS NULL OR EXTRACT(DAY FROM applies_from) = 1");
+
+            // The recorded choice (design D6): not offered is both null, declined is an amount alone, charged is both.
+            t.HasCheckConstraint(
+                "ck_rent_adjustments_difference_amount_positive",
+                "difference_amount IS NULL OR difference_amount > 0");
+            t.HasCheckConstraint(
+                "ck_rent_adjustments_difference_charged_was_offered",
+                "difference_movement_id IS NULL OR difference_amount IS NOT NULL");
         });
 
         builder.HasKey(a => a.Id);
@@ -74,6 +82,15 @@ public sealed class RentAdjustmentConfiguration : IEntityTypeConfiguration<RentA
         // Nullable for the same reason as confirmed_by: rows written before it cannot be backfilled
         // (gestion-de-alquileres design D1).
         builder.Property(a => a.AppliesFrom).HasColumnName("applies_from");
+
+        builder.Property(a => a.DifferenceAmount).HasColumnName("difference_amount").HasPrecision(14, 2);
+        builder.Property(a => a.DifferenceMovementId).HasColumnName("difference_movement_id");
+
+        // One charge belongs to one adjustment.
+        builder.HasIndex(a => a.DifferenceMovementId)
+            .IsUnique()
+            .HasFilter("difference_movement_id IS NOT NULL")
+            .HasDatabaseName("ux_rent_adjustments_difference_movement");
 
         // A double confirmation, including two operators at once, is refused here and not only by
         // the adapter's re-read, which two concurrent transactions can both pass (design D8).

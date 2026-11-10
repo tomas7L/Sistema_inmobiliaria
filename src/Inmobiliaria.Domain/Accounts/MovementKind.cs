@@ -57,4 +57,12 @@ public enum MovementKind
     /// always carries its period.
     /// </summary>
     RecargoCharged,
+
+    /// <summary>
+    /// What a late adjustment's new canon would have charged on the months already priced at the old one, when the
+    /// operator chose to charge it (gestion-de-alquileres spec Requirements 16 and 19). Positive, attached to the
+    /// adjustment's applied-from period and dated on its due date. It carries no recargo of its own and does not raise the
+    /// period's (spec Decision 18).
+    /// </summary>
+    AdjustmentDifference,
 }

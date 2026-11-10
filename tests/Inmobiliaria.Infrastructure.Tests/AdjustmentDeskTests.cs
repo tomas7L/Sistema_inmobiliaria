@@ -374,6 +374,125 @@ public sealed class AdjustmentDeskTests
         Assert.Equal(110_000m, (await StoredAsync(world, seeded.Contract)).MonthlyRent);
     }
 
+    // ---- Tests 49 and 50: the difference, offered and chosen --------------------------------------------------------------
+
+    private static readonly DateOnly LateDay = new(2026, 10, 12);
+    private static readonly DateOnly November = new(2026, 11, 1);
+
+    private static async Task<List<AccountMovement>> DifferencesAsync(DeskWorld world, Guid account)
+    {
+        await using var read = world.NewContext();
+        var stored = await read.ContractAccounts.AsNoTracking().Include(a => a.Movements).SingleAsync(a => a.Id == account);
+        return stored.Movements.Where(m => m.Kind == MovementKind.AdjustmentDifference).ToList();
+    }
+
+    [SkippableFact]
+    public async Task ALateSummary_OffersTheDifference_WithTheMonthsItCovers()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+        await using var world = await WorldAsync();
+        var seeded = await SeedAsync(world);
+
+        var preview = await PreviewAsync(Desk(world, LateDay, seeded.User), seeded.Contract);
+
+        Assert.Equal(40_000m, preview.Difference!.Amount);
+        Assert.Equal([July, August, new DateOnly(2026, 9, 1), new DateOnly(2026, 10, 1)], preview.Difference.Months);
+    }
+
+    [SkippableFact]
+    public async Task Test53_ASummaryConfirmedBeforeItsDueDay_OffersNoDifference()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+        await using var world = await WorldAsync();
+        var seeded = await SeedAsync(world);
+
+        Assert.Null((await PreviewAsync(Desk(world, new DateOnly(2026, 7, 5), seeded.User), seeded.Contract)).Difference);
+    }
+
+    [SkippableFact]
+    public async Task Test49_TheDefault_WritesNoCharge_AndRecordsTheOfferDeclined()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+        await using var world = await WorldAsync();
+        var seeded = await SeedAsync(world);
+        var preview = await PreviewAsync(Desk(world, LateDay, seeded.User), seeded.Contract);
+
+        var result = await Desk(world, LateDay, seeded.User).ConfirmAsync(preview);
+
+        Assert.True(result.Succeeded);
+        Assert.Empty(await DifferencesAsync(world, seeded.Account));
+        var (rent, rows) = await StoredAsync(world, seeded.Contract);
+        var row = Assert.Single(rows);
+        Assert.Equal(110_000m, rent);
+        Assert.Equal(40_000m, row.DifferenceAmount);
+        Assert.Null(row.DifferenceMovementId);
+        Assert.Equal(40_000m, result.Confirmed!.DifferenceAmount);
+        Assert.False(result.Confirmed.DifferenceCharged);
+    }
+
+    [SkippableFact]
+    public async Task Test50_ChoosingYes_WritesOneChargeOnTheAppliedFromPeriod_LinkedFromTheAdjustment()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+        await using var world = await WorldAsync();
+        var seeded = await SeedAsync(world);
+        var preview = await PreviewAsync(Desk(world, LateDay, seeded.User), seeded.Contract);
+
+        var result = await Desk(world, LateDay, seeded.User).ConfirmAsync(preview, chargeDifference: true);
+
+        Assert.True(result.Succeeded, result.Refusal?.ToString());
+        var charge = Assert.Single(await DifferencesAsync(world, seeded.Account));
+        Assert.Equal(40_000m, charge.Amount);
+        Assert.Equal(November, charge.Period);
+        Assert.Equal(new DateOnly(2026, 11, 10), charge.OccurredOn);
+        var row = Assert.Single((await StoredAsync(world, seeded.Contract)).Rows);
+        Assert.Equal(40_000m, row.DifferenceAmount);
+        Assert.Equal(charge.Id, row.DifferenceMovementId);
+        Assert.True(result.Confirmed!.DifferenceCharged);
+
+        var history = Assert.Single(await Desk(world, LateDay, seeded.User).HistoryAsync(seeded.Contract));
+        Assert.Equal(40_000m, history.DifferenceAmount);
+        Assert.True(history.DifferenceCharged);
+    }
+
+    /// <summary>Failing on either row's insert, the adjustment's or the charge's, proves they share one transaction.</summary>
+    [SkippableTheory]
+    [InlineData("rent_adjustments")]
+    [InlineData("account_movements")]
+    public async Task Test50_AFailureWhileWriting_LeavesNeitherTheAdjustmentNorTheCharge(string table)
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+        await using var world = await WorldAsync();
+        var seeded = await SeedAsync(world);
+        var preview = await PreviewAsync(Desk(world, LateDay, seeded.User), seeded.Contract);
+        var probe = new FailureProbe();
+        var failing = world.NewContext(CommandHook.FailOnNth(new System.Text.RegularExpressions.Regex($@"INSERT INTO ""?{table}""?\s"), 1, probe));
+
+        await Assert.ThrowsAnyAsync<Exception>(() => Desk(world, LateDay, seeded.User, failing).ConfirmAsync(preview, chargeDifference: true));
+
+        Assert.True(probe.Fired);
+        Assert.Empty(await DifferencesAsync(world, seeded.Account));
+        var (rent, rows) = await StoredAsync(world, seeded.Contract);
+        Assert.Equal(100_000m, rent);
+        Assert.Empty(rows);
+    }
+
+    [SkippableFact]
+    public async Task ChoosingToChargeWhenNothingIsOffered_IsRefused_AndNothingIsWritten()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+        await using var world = await WorldAsync();
+        var seeded = await SeedAsync(world);
+        var onTime = new DateOnly(2026, 7, 5);
+        var preview = await PreviewAsync(Desk(world, onTime, seeded.User), seeded.Contract);
+
+        var result = await Desk(world, onTime, seeded.User).ConfirmAsync(preview, chargeDifference: true);
+
+        Assert.Equal(AdjustmentRefusal.NoDifferenceToCharge, result.Refusal);
+        Assert.Empty((await StoredAsync(world, seeded.Contract)).Rows);
+        Assert.Empty(await DifferencesAsync(world, seeded.Account));
+    }
+
     // ---- Tests 45 and 46 ------------------------------------------------------------------------------------------------
 
     [SkippableFact]

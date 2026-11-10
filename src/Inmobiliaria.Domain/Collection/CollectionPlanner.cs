@@ -119,6 +119,12 @@ public sealed record CollectionPreview(
     /// <summary>A preview can be committed only when nothing refused it.</summary>
     public bool CanCommit => Refusal is null;
 
+    /// <summary>
+    /// The months a late adjustment's difference charged on this period covers, oldest first, or empty (gestion-de-alquileres spec
+    /// Requirement 20).
+    /// </summary>
+    public IReadOnlyList<DateOnly> DifferenceMonths { get; init; } = [];
+
     // The synthesized equality would compare the warnings by reference; the list is part of the value.
     public bool Equals(CollectionPreview? other) =>
         other is not null &&
@@ -132,6 +138,7 @@ public sealed record CollectionPreview(
         Equals(Locatario, other.Locatario) &&
         Equals(Propietario, other.Propietario) &&
         Warnings.SequenceEqual(other.Warnings) &&
+        DifferenceMonths.SequenceEqual(other.DifferenceMonths) &&
         Refusal == other.Refusal;
 
     public override int GetHashCode()
@@ -257,7 +264,10 @@ public static class CollectionPlanner
         CollectionPreview WithFigures(CollectionRefusal? refusal, ReciboDraftPair? drafts, CollectionWarning[] warnings) =>
             new(
                 period, receivedOn, today, figures.Early, previous, figures.Total, resulting,
-                drafts?.Locatario, drafts?.Propietario, warnings, refusal);
+                drafts?.Locatario, drafts?.Propietario, warnings, refusal)
+            {
+                DifferenceMonths = DifferenceMonthsOf(account, contract, period),
+            };
 
         // A rate never entered is not a rate of zero (spec Decision 22): no propietario recibo can be built.
         if (contract.HonorariosPercentage is not { } rate)
@@ -326,6 +336,11 @@ public static class CollectionPlanner
         {
             chargeDate = accrual.OccurredOn;
         }
+        else if (AccrualSchedule.PeriodsBegun(contract, preview.ReceivedOn).All(p => p.Period != period))
+        {
+            // Only a late adjustment's difference: nothing to accrue, and the charge's own date is the one to pay against.
+            chargeDate = DifferenceChargeDate(account, period);
+        }
         else
         {
             var begun = AccrualSchedule.PeriodsBegun(contract, preview.ReceivedOn).Single(p => p.Period == period);
@@ -391,9 +406,15 @@ public static class CollectionPlanner
         var accrual = account.Movements.FirstOrDefault(m => m.Kind == MovementKind.RentAccrual && m.Period == period);
         var begun = AccrualSchedule.PeriodsBegun(contract, receivedOn).FirstOrDefault(p => p.Period == period);
 
+        // Held, whatever the period's rent: a late adjustment's difference, charged on top and carrying no recargo of its own.
+        var difference = account.DifferenceNet(period);
+
         if ((accrual?.OccurredOn ?? begun?.DueDate) is not { } dueDate)
         {
-            return null;
+            // A period its ended contract never accrued can still hold a difference, payable alone (spec Requirement 19).
+            return difference > 0m && account.PeriodNet(period) == difference
+                ? new PeriodFigures(DifferenceChargeDate(account, period) > receivedOn, ReciboLedgerFigures.ForDifferenceOnly(difference), difference)
+                : null;
         }
 
         var early = dueDate > receivedOn;
@@ -412,7 +433,7 @@ public static class CollectionPlanner
             : 0m;
         var newRent = accrual is null ? begun!.Canon : 0m;
 
-        var rent = account.PeriodNet(period) - heldInstalment + newRent;
+        var rent = account.PeriodNet(period) - heldInstalment - difference + newRent;
         var instalment = heldInstalment + newInstalment;
 
         if (rent <= 0m)
@@ -420,12 +441,47 @@ public static class CollectionPlanner
             return null;
         }
 
+        var charged = difference > 0m ? difference : (decimal?)null;
+
         // Charged on the recargo projected as of the received date, truncated to a whole peso (spec Test 8).
         var recargo = decimal.Truncate(account.RecargoProjectedForPayment(period, receivedOn, terms));
 
         return new PeriodFigures(
             early,
-            ReciboLedgerFigures.ForRentPeriod(rent, instalment > 0m ? instalment : null, recargo),
-            rent + instalment + recargo);
+            ReciboLedgerFigures.ForRentPeriod(rent, instalment > 0m ? instalment : null, recargo, charged),
+            rent + instalment + recargo + (charged ?? 0m));
     }
+
+    /// <summary>
+    /// The months the period's difference charges cover: for each adjustment that wrote one of them, from its own month up to,
+    /// not including, the period it applies from.
+    /// </summary>
+    private static IReadOnlyList<DateOnly> DifferenceMonthsOf(ContractAccount account, Contract contract, DateOnly period)
+    {
+        var charges = account.Movements
+            .Where(m => m.Kind == MovementKind.AdjustmentDifference && m.Period == period)
+            .Select(m => m.Id)
+            .ToHashSet();
+
+        return contract.Adjustments
+            .Where(a => a.DifferenceMovementId is { } charge && charges.Contains(charge) && a.AppliesFrom is not null)
+            .SelectMany(a => MonthsBetween(new DateOnly(a.EffectiveDate.Year, a.EffectiveDate.Month, 1), a.AppliesFrom!.Value))
+            .Distinct()
+            .Order()
+            .ToList();
+    }
+
+    private static IEnumerable<DateOnly> MonthsBetween(DateOnly from, DateOnly until)
+    {
+        for (var month = from; month < until; month = month.AddMonths(1))
+        {
+            yield return month;
+        }
+    }
+
+    /// <summary>The date the period's first difference charge falls due, its own movement's date.</summary>
+    private static DateOnly DifferenceChargeDate(ContractAccount account, DateOnly period) =>
+        account.Movements
+            .Where(m => m.Kind == MovementKind.AdjustmentDifference && m.Period == period)
+            .Min(m => m.OccurredOn);
 }

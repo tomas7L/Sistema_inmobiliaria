@@ -222,8 +222,8 @@ public sealed class ContractAccount
         }
 
         // Dated the same way the ledger balance is, so the two figures always describe the same
-        // moment.
-        var owing = PeriodNet(period, asOf);
+        // moment. A late adjustment's difference is owed but carries no recargo (spec Decision 18).
+        var owing = PeriodNet(period, asOf) - DifferenceNet(period, asOf);
         if (owing <= 0m)
         {
             return 0m;
@@ -259,6 +259,28 @@ public sealed class ContractAccount
         _movements.Where(m => m.Period == period).Sum(m => m.Amount);
 
     /// <summary>
+    /// What <paramref name="period"/> holds of late-adjustment differences as it stands: the charges on it and the corrections
+    /// naming them (gestion-de-alquileres design D5). Part of <see cref="PeriodNet(DateOnly)"/>, since the period is not settled
+    /// without it, and left out of the recargo base, since the charge carries none (spec Decision 18).
+    /// </summary>
+    public decimal DifferenceNet(DateOnly period) => DifferenceMovements(period, asOf: null).Sum(m => m.Amount);
+
+    /// <summary>As <see cref="DifferenceNet(DateOnly)"/>, counting only what is dated on or before <paramref name="asOf"/>.</summary>
+    public decimal DifferenceNet(DateOnly period, DateOnly asOf) => DifferenceMovements(period, asOf).Sum(m => m.Amount);
+
+    private IEnumerable<AccountMovement> DifferenceMovements(DateOnly period, DateOnly? asOf)
+    {
+        var charges = _movements
+            .Where(m => m.Kind == MovementKind.AdjustmentDifference && m.Period == period)
+            .Select(m => m.Id)
+            .ToHashSet();
+
+        return _movements.Where(m =>
+            (charges.Contains(m.Id) || m.CorrectsMovementId is { } corrected && charges.Contains(corrected))
+            && (asOf is null || m.OccurredOn <= asOf));
+    }
+
+    /// <summary>
     /// The recargo a payment received on <paramref name="receivedOn"/> charges on
     /// <paramref name="period"/>: measured to the received date, on the period as it stands (so a
     /// payment voided on a later day is as if it never existed). Differs from
@@ -275,7 +297,7 @@ public sealed class ContractAccount
             return 0m;
         }
 
-        var owing = PeriodNet(period);
+        var owing = PeriodNet(period) - DifferenceNet(period);
         if (owing <= 0m)
         {
             return 0m;
@@ -297,7 +319,14 @@ public sealed class ContractAccount
     {
         ArgumentNullException.ThrowIfNull(terms);
 
-        var ledger = _movements.Sum(m => m.Amount);
+        // A late adjustment's difference counts from the 1st of its month, when its period can be paid (design F8): attached to a
+        // month not yet begun, it is not owed today, whatever its own date says.
+        var notYetBegun = _movements
+            .Where(m => m.Kind == MovementKind.AdjustmentDifference && m.Period > receivedOn)
+            .SelectMany(m => DifferenceMovements(m.Period!.Value, asOf: null))
+            .Select(m => m.Id)
+            .ToHashSet();
+        var ledger = _movements.Where(m => !notYetBegun.Contains(m.Id)).Sum(m => m.Amount);
 
         if (IsFrozen(receivedOn))
         {

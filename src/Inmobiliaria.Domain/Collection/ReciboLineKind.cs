@@ -28,6 +28,9 @@ public enum ReciboLineKind
     /// <summary>The late-payment surcharge, from the ledger. Absent when it is zero.</summary>
     Recargo,
 
+    /// <summary>A late adjustment's difference, from the ledger (gestion-de-alquileres spec Requirement 20). Absent when there is none.</summary>
+    AdjustmentDifference,
+
     /// <summary>Municipal rate, typed by the operator. Never negative.</summary>
     TasaMunicipal,
 

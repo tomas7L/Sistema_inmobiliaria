@@ -228,6 +228,91 @@ public class AdjustmentsViewModelTests
         Assert.Null(world.ViewModel.ConfirmedMessage);
     }
 
+    // ---- Tests 49 and 53: the difference and the choice ---------------------------------------------------------------------
+
+    private static AdjustmentPreview WithDifference() =>
+        new(Ready, "Maria Prueba", July, 100_000m, [], CombinationRule.Single, 10m, 110_000m, 110_000m, new DateOnly(2026, 11, 1),
+            new DifferenceOffer(40_000m, [July, August, new DateOnly(2026, 9, 1), new DateOnly(2026, 10, 1)]));
+
+    [Fact]
+    public async Task ALateSummary_ShowsTheDifferenceAndItsMonths_WithTheChoiceAtNo()
+    {
+        var world = await OpenedAsync(WithDifference());
+
+        Assert.True(world.ViewModel.HasDifference);
+        Assert.Equal("Diferencia de 40.000 por los meses 07/2026 a 10/2026, ya cobrados con el canon anterior.", world.ViewModel.DifferenceText);
+        Assert.False(world.ViewModel.ChargeDifference);
+    }
+
+    [Fact]
+    public async Task Test53_ASummaryWithNoDifference_OffersNoChoice()
+    {
+        var world = await OpenedAsync(Preview(July));
+
+        Assert.False(world.ViewModel.HasDifference);
+        Assert.Null(world.ViewModel.DifferenceText);
+    }
+
+    [Fact]
+    public async Task Test49_ConfirmingWithoutTouchingTheChoice_ChargesNothing()
+    {
+        var preview = WithDifference();
+        var world = await OpenedAsync(preview);
+        world.Desk.NextConfirm = AdjustmentConfirmResult.Done(Written(preview));
+
+        await world.ViewModel.ConfirmCommand.ExecuteAsync(null);
+
+        Assert.Equal([false], world.Desk.ChargeChoices);
+    }
+
+    [Fact]
+    public async Task ChoosingYes_IsPassedToTheDesk_AndTheMessageNamesTheCharge()
+    {
+        var preview = WithDifference();
+        var world = await OpenedAsync(preview);
+        world.Desk.NextConfirm = AdjustmentConfirmResult.Done(Written(preview) with { DifferenceAmount = 40_000m, DifferenceCharged = true });
+        world.ViewModel.ChargeDifference = true;
+
+        await world.ViewModel.ConfirmCommand.ExecuteAsync(null);
+
+        Assert.Equal([true], world.Desk.ChargeChoices);
+        Assert.Equal(
+            "Ajuste confirmado: el canon pasa a 110.000 desde 11/2026. Se cobra una diferencia de 40.000 con 11/2026.",
+            world.ViewModel.ConfirmedMessage);
+    }
+
+    [Fact]
+    public async Task OpeningAnotherSummary_PutsTheChoiceBackAtNo()
+    {
+        var world = await OpenedAsync(WithDifference());
+        world.ViewModel.ChargeDifference = true;
+        world.Desk.Previews.Enqueue(AdjustmentPreviewResult.Ready(WithDifference()));
+
+        await world.ViewModel.OpenCommand.ExecuteAsync(null);
+
+        Assert.False(world.ViewModel.ChargeDifference);
+    }
+
+    [Fact]
+    public async Task TheHistory_ShowsTheChoiceMadeOnEachDifference()
+    {
+        var world = await LoadedAsync();
+        var entry = new AdjustmentHistoryEntry(Guid.NewGuid(), July, new DateOnly(2026, 11, 1), 100_000m, 110_000m, 10m,
+            AdjustmentKind.Regular, DateTimeOffset.UtcNow, "Tomás", []);
+        world.Desk.History =
+        [
+            entry with { DifferenceAmount = 40_000m, DifferenceCharged = true },
+            entry with { DifferenceAmount = 40_000m },
+            entry,
+        ];
+        world.Desk.Previews.Enqueue(AdjustmentPreviewResult.Ready(Preview(August)));
+        world.ViewModel.SelectedRow = world.ViewModel.Worklist.Single(r => r.ContractId == Ready);
+
+        await world.ViewModel.OpenCommand.ExecuteAsync(null);
+
+        Assert.Equal(["Diferencia de 40.000 cobrada", "Diferencia de 40.000 no cobrada", ""], world.ViewModel.History.Select(h => h.DifferenceText));
+    }
+
     // ---- History ------------------------------------------------------------------------------------------------------------
 
     [Fact]
