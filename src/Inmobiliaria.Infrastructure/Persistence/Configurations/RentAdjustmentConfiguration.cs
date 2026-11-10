@@ -25,6 +25,9 @@ public sealed class RentAdjustmentConfiguration : IEntityTypeConfiguration<RentA
             t.HasCheckConstraint(
                 "ck_rent_adjustments_effective_date_first_of_month",
                 "EXTRACT(DAY FROM effective_date) = 1");
+            t.HasCheckConstraint(
+                "ck_rent_adjustments_applies_from_first_of_month",
+                "applies_from IS NULL OR EXTRACT(DAY FROM applies_from) = 1");
         });
 
         builder.HasKey(a => a.Id);
@@ -67,6 +70,26 @@ public sealed class RentAdjustmentConfiguration : IEntityTypeConfiguration<RentA
         // confirmedBy parameter is what stays non-nullable, not this mapped property
         // (design Decision 8).
         builder.Property(a => a.ConfirmedBy).HasColumnName("confirmed_by");
+
+        // Nullable for the same reason as confirmed_by: rows written before it cannot be backfilled
+        // (gestion-de-alquileres design D1).
+        builder.Property(a => a.AppliesFrom).HasColumnName("applies_from");
+
+        // A double confirmation, including two operators at once, is refused here and not only by
+        // the adapter's re-read, which two concurrent transactions can both pass (design D8).
+        builder.HasIndex(a => new { a.ContractId, a.EffectiveDate })
+            .IsUnique()
+            .HasFilter("kind = 'Regular'")
+            .HasDatabaseName("ux_rent_adjustments_one_regular_per_due_date");
+
+        // Declared, or EF would drop the foreign key's own index for the one above, which is partial and serves neither the
+        // Include of a contract's adjustments nor the foreign key's checks.
+        builder.HasIndex(a => a.ContractId).HasDatabaseName("ix_rent_adjustments_contract_id");
+
+        builder.HasIndex(a => a.CorrectsAdjustmentId)
+            .IsUnique()
+            .HasFilter("corrects_adjustment_id IS NOT NULL")
+            .HasDatabaseName("ux_rent_adjustments_one_correction_per_adjustment");
 
         builder.Navigation(a => a.IndexValues).UsePropertyAccessMode(PropertyAccessMode.Field);
 

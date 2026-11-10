@@ -23,10 +23,15 @@ public sealed class DueAdjustmentQuery : IDueAdjustmentQuery
         _context = context;
     }
 
-    public async Task<IReadOnlyList<DueAdjustment>> GetDueAsync(DateOnly asOf, CancellationToken ct = default)
+    public Task<IReadOnlyList<DueAdjustment>> GetDueAsync(DateOnly asOf, CancellationToken ct = default) =>
+        GetDueAsync(asOf, contractId: null, ct);
+
+    /// <summary>As above, for one contract only: what <see cref="AdjustmentDesk"/> previews and rebuilds under its locks.</summary>
+    internal async Task<IReadOnlyList<DueAdjustment>> GetDueAsync(DateOnly asOf, Guid? contractId, CancellationToken ct)
     {
         var clauseRows = await _context.AdjustmentClauses
             .AsNoTracking()
+            .Where(clause => contractId == null || clause.ContractId == contractId)
             .Include(clause => clause.Indices)
             .Join(
                 _context.Contracts.AsNoTracking().Where(c => c.Status == ContractStatus.Active || c.Status == ContractStatus.PendingTermination),
@@ -101,6 +106,7 @@ public sealed class DueAdjustmentQuery : IDueAdjustmentQuery
                 row.Id, dueDate, row.MonthlyRent, basePeriod, endPeriod, missing, coefficient, proposedCanon)
             {
                 IndexValues = indexValues,
+                Combination = row.Clause.Combination,
             });
         }
 

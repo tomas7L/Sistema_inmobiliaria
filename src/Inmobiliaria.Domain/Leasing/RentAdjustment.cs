@@ -19,6 +19,14 @@ public sealed class RentAdjustment
     public DateTimeOffset ConfirmedAt { get; }
 
     /// <summary>
+    /// The first period this adjustment's canon prices (gestion-de-alquileres design D1): the
+    /// month after <see cref="EffectiveDate"/> when it was confirmed late. Null on rows written
+    /// before this column existed, which keep pricing from <see cref="EffectiveDate"/> as before;
+    /// the table is append-only, so they can never be backfilled.
+    /// </summary>
+    public DateOnly? AppliesFrom { get; }
+
+    /// <summary>
     /// Who confirmed this adjustment. Nullable here and at the mapped column, because rows
     /// that predate this column stay null forever under the append-only trigger — but
     /// <see cref="Confirm"/>'s <c>confirmedBy</c> parameter is a required, non-nullable
@@ -56,7 +64,8 @@ public sealed class RentAdjustment
         Guid? correctsAdjustmentId,
         DateTimeOffset confirmedAt,
         Guid confirmedBy,
-        IReadOnlyList<RentAdjustmentIndexValue> indexValues)
+        IReadOnlyList<RentAdjustmentIndexValue> indexValues,
+        DateOnly? appliesFrom)
     {
         Id = id;
         ContractId = contractId;
@@ -69,6 +78,7 @@ public sealed class RentAdjustment
         ConfirmedAt = confirmedAt;
         ConfirmedBy = confirmedBy;
         IndexValues = indexValues;
+        AppliesFrom = appliesFrom;
     }
 
     /// <summary>
@@ -84,7 +94,8 @@ public sealed class RentAdjustment
         DateTimeOffset confirmedAt,
         Guid confirmedBy,
         AdjustmentKind kind = AdjustmentKind.Regular,
-        Guid? correctsAdjustmentId = null)
+        Guid? correctsAdjustmentId = null,
+        DateOnly? appliesFrom = null)
     {
         ArgumentNullException.ThrowIfNull(proposal);
 
@@ -108,6 +119,7 @@ public sealed class RentAdjustment
             correctsAdjustmentId,
             confirmedAt,
             confirmedBy,
-            proposal.IndexValues);
+            proposal.IndexValues,
+            appliesFrom);
     }
 }

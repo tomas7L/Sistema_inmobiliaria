@@ -114,6 +114,7 @@ public sealed class SessionServicesTests
         Assert.IsAssignableFrom<IPartyRegistry>(provider.GetRequiredService<IPartyRegistry>());
         Assert.IsAssignableFrom<IUnitRegistry>(provider.GetRequiredService<IUnitRegistry>());
         Assert.IsAssignableFrom<IContractRegistry>(provider.GetRequiredService<IContractRegistry>());
+        Assert.IsAssignableFrom<IAdjustmentDesk>(provider.GetRequiredService<IAdjustmentDesk>());
         Assert.IsAssignableFrom<IAgencyClock>(provider.GetRequiredService<IAgencyClock>());
         Assert.Equal(role, provider.GetRequiredService<IUserSession>().Role);
         Assert.Empty(factory.Created);
@@ -170,6 +171,7 @@ public sealed class SessionServicesTests
         Assert.NotNull(provider.GetRequiredService<IPartyRegistry>());
         Assert.NotNull(provider.GetRequiredService<IUnitRegistry>());
         Assert.NotNull(provider.GetRequiredService<IContractRegistry>());
+        Assert.NotNull(provider.GetRequiredService<IAdjustmentDesk>());
         Assert.NotNull(provider.GetRequiredService<IAgencyClock>());
     }
 
@@ -293,6 +295,24 @@ public sealed class SessionServicesTests
 
         Assert.Equal(15, factory.Created.Count);
         Assert.Equal(15, factory.Created.Distinct().Count());
+        Assert.All(factory.Created, context => Assert.Throws<ObjectDisposedException>(() => context.ChangeTracker));
+    }
+
+    [Fact]
+    public async Task TheAdjustmentWrapper_AlsoObtainsOneDisposedContextPerCall()
+    {
+        var factory = new SpySessionFactory();
+        using var provider = Collect(factory, UserRole.Empleado, ValidSettings()).BuildServiceProvider();
+        var desk = provider.GetRequiredService<IAdjustmentDesk>();
+        var preview = new AdjustmentPreview(
+            Guid.NewGuid(), null, new DateOnly(2026, 7, 1), 100_000m, [], CombinationRule.Single, 10m, 110_000m, 110_000m, new DateOnly(2026, 8, 1));
+
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => desk.PreviewAsync(Guid.NewGuid()));
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => desk.ConfirmAsync(preview));
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => desk.HistoryAsync(Guid.NewGuid()));
+
+        Assert.Equal(3, factory.Created.Count);
+        Assert.Equal(3, factory.Created.Distinct().Count());
         Assert.All(factory.Created, context => Assert.Throws<ObjectDisposedException>(() => context.ChangeTracker));
     }
 
