@@ -221,16 +221,20 @@ public static class AccrualSchedule
     {
         ArgumentNullException.ThrowIfNull(contract);
 
-        // An adjustment effective ON a period's due date applies to that period. Comparing
-        // against the period's first day would be wrong for a contract whose adjustment lands
-        // mid-month, and comparing against the due date is what "the canon in force when it fell
-        // due" actually means.
+        // A row written before applies_from existed starts at the due date of the period it falls in, as it always has: an
+        // adjustment effective ON a period's due date applies to that period. A row that names its applied-from period starts
+        // exactly there, so a late confirmation leaves every earlier month at the old canon, written or not (design D2, F2).
         var dueDate = DueDateFor(period, contract.DueDay);
 
-        var inForce = contract.Adjustments
-            .Where(a => a.EffectiveDate <= dueDate)
-            .OrderByDescending(a => a.EffectiveDate)
-            .FirstOrDefault();
+        bool HasStarted(RentAdjustment a) => a.AppliesFrom is { } appliesFrom ? appliesFrom <= period : a.EffectiveDate <= dueDate;
+
+        // Ordered by where each starts, then by when it was confirmed: two rows starting on one period, the last confirmed wins.
+        var history = contract.Adjustments
+            .OrderBy(a => a.AppliesFrom ?? a.EffectiveDate)
+            .ThenBy(a => a.ConfirmedAt)
+            .ToList();
+
+        var inForce = history.LastOrDefault(HasStarted);
 
         if (inForce is not null)
         {
@@ -240,11 +244,7 @@ public static class AccrualSchedule
         // No adjustment had taken effect yet. The original canon is NOT MonthlyRent once any
         // adjustment has been confirmed, because that call overwrote it — it is the canon the
         // earliest adjustment replaced.
-        var earliest = contract.Adjustments
-            .OrderBy(a => a.EffectiveDate)
-            .FirstOrDefault();
-
-        return earliest?.PreviousCanon ?? contract.MonthlyRent;
+        return history.FirstOrDefault()?.PreviousCanon ?? contract.MonthlyRent;
     }
 
     private static DateOnly FirstOfMonth(DateOnly date) => new(date.Year, date.Month, 1);

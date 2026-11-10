@@ -318,6 +318,9 @@ public sealed class Contract
     /// they still sum to exactly 100% afterward (spec "Share Stored as Percentage, Never
     /// Amount"). No retroactive charge is generated for a late confirmation — this method only
     /// ever changes the canon going forward; billing does not exist in this change.
+    /// <paramref name="appliesFrom"/> is the first period the new canon prices (gestion-de-alquileres design §3.4). It does
+    /// not check that the previous canon is the current one or that a correction names the latest row: the adapter does,
+    /// by rebuilding the summary inside its transaction, and the database's unique indexes back it.
     /// </summary>
     public RentAdjustment ConfirmAdjustment(
         Guid adjustmentId,
@@ -325,10 +328,32 @@ public sealed class Contract
         DateTimeOffset confirmedAt,
         Guid confirmedBy,
         AdjustmentKind kind = AdjustmentKind.Regular,
-        Guid? correctsAdjustmentId = null)
+        Guid? correctsAdjustmentId = null,
+        DateOnly? appliesFrom = null)
     {
+        ArgumentNullException.ThrowIfNull(proposal);
+
+        // An ended lease has no canon left to adjust (spec Decision 25); one under notice still pays rent and is allowed.
+        if (Status == ContractStatus.Ended)
+        {
+            throw new InvalidOperationException("An ended contract cannot have an adjustment confirmed.");
+        }
+
+        if (appliesFrom is { } from)
+        {
+            if (from.Day != 1)
+            {
+                throw new ArgumentException("An adjustment applies from a whole period, the 1st of a month.", nameof(appliesFrom));
+            }
+
+            if (from < new DateOnly(proposal.EffectiveDate.Year, proposal.EffectiveDate.Month, 1))
+            {
+                throw new ArgumentException("An adjustment cannot apply before the month it falls due.", nameof(appliesFrom));
+            }
+        }
+
         var adjustment = RentAdjustment.Confirm(
-            adjustmentId, Id, proposal, confirmedAt, confirmedBy, kind, correctsAdjustmentId);
+            adjustmentId, Id, proposal, confirmedAt, confirmedBy, kind, correctsAdjustmentId, appliesFrom);
 
         ChangeMonthlyRent(adjustment.NewCanon);
         _adjustments.Add(adjustment);

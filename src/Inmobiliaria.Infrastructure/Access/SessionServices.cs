@@ -56,6 +56,8 @@ public static class SessionServices
         services.AddSingleton<IIndexValueSource>(_ => new OfficialIndexValueSource(OfficialIndexValueSource.SharedClient, indexSources));
         services.AddSingleton<IContractRegistry>(provider =>
             new PerCallContractRegistry(factory, provider.GetRequiredService<IAgencyClock>(), recargo.Terms));
+        services.AddSingleton<IAdjustmentDesk>(provider =>
+            new PerCallAdjustmentDesk(factory, provider.GetRequiredService<IAgencyClock>(), session.UserId));
 
         if (recargo.Terms is { } terms)
         {

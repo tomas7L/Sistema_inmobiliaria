@@ -35,12 +35,16 @@ internal static class ContractTestFactory
     /// <paramref name="percentage"/> from <paramref name="previousCanon"/> and taking effect on
     /// <paramref name="effectiveDate"/>. The index values are the minimum a proposal needs; the
     /// accrual tests care only about which canon was in force when, not how it was derived.
+    /// The optional parameters default to a row written before applies_from existed, confirmed now.
     /// </summary>
     public static RentAdjustment ConfirmAdjustment(
         Contract contract,
         decimal previousCanon,
         decimal percentage,
-        DateOnly effectiveDate)
+        DateOnly effectiveDate,
+        DateOnly? appliesFrom = null,
+        DateTimeOffset? confirmedAt = null,
+        Guid? correctsAdjustmentId = null)
     {
         var indexId = Guid.NewGuid();
         var indexValue = new RentAdjustmentIndexValue(
@@ -50,7 +54,13 @@ internal static class ContractTestFactory
             previousCanon, [indexValue], CombinationRule.Single, percentage, effectiveDate);
 
         return contract.ConfirmAdjustment(
-            Guid.NewGuid(), proposal, DateTimeOffset.UtcNow, Guid.NewGuid());
+            Guid.NewGuid(),
+            proposal,
+            confirmedAt ?? DateTimeOffset.UtcNow,
+            Guid.NewGuid(),
+            correctsAdjustmentId is null ? AdjustmentKind.Regular : AdjustmentKind.Correction,
+            correctsAdjustmentId,
+            appliesFrom);
     }
 
     public static Party CreateParty(string firstName, string lastName) =>

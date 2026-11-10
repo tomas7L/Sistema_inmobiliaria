@@ -37,4 +37,7 @@ public sealed record DueAdjustment(
 {
     /// <summary>Each index's base and end level, for the summary. Empty exactly when <see cref="Missing"/> is non-empty.</summary>
     public IReadOnlyList<RentAdjustmentIndexValue> IndexValues { get; init; } = [];
+
+    /// <summary>How the clause combines its indices: one alone, or their average.</summary>
+    public CombinationRule Combination { get; init; } = CombinationRule.Single;
 }

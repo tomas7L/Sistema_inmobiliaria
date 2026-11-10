@@ -494,6 +494,10 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<DateOnly?>("AppliesFrom")
+                        .HasColumnType("date")
+                        .HasColumnName("applies_from");
+
                     b.Property<decimal>("Coefficient")
                         .HasPrecision(12, 6)
                         .HasColumnType("numeric(12,6)")
@@ -544,8 +548,20 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
                     b.HasIndex("ContractId")
                         .HasDatabaseName("ix_rent_adjustments_contract_id");
 
+                    b.HasIndex("CorrectsAdjustmentId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_rent_adjustments_one_correction_per_adjustment")
+                        .HasFilter("corrects_adjustment_id IS NOT NULL");
+
+                    b.HasIndex("ContractId", "EffectiveDate")
+                        .IsUnique()
+                        .HasDatabaseName("ux_rent_adjustments_one_regular_per_due_date")
+                        .HasFilter("kind = 'Regular'");
+
                     b.ToTable("rent_adjustments", null, t =>
                         {
+                            t.HasCheckConstraint("ck_rent_adjustments_applies_from_first_of_month", "applies_from IS NULL OR EXTRACT(DAY FROM applies_from) = 1");
+
                             t.HasCheckConstraint("ck_rent_adjustments_effective_date_first_of_month", "EXTRACT(DAY FROM effective_date) = 1");
 
                             t.HasCheckConstraint("ck_rent_adjustments_kind_corrects", "(kind = 'Correction') = (corrects_adjustment_id IS NOT NULL)");
