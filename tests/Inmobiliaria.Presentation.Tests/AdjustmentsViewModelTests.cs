@@ -313,6 +313,125 @@ public class AdjustmentsViewModelTests
         Assert.Equal(["Diferencia de 40.000 cobrada", "Diferencia de 40.000 no cobrada", ""], world.ViewModel.History.Select(h => h.DifferenceText));
     }
 
+    // ---- Tests 58 to 60: correcting from the history ------------------------------------------------------------------------
+
+    private static readonly Guid LatestId = Guid.NewGuid();
+
+    private static async Task<World> WithHistoryAsync()
+    {
+        var world = await LoadedAsync();
+        world.Desk.History =
+        [
+            new AdjustmentHistoryEntry(LatestId, July, new DateOnly(2026, 11, 1), 100_000m, 110_000m, 10m, AdjustmentKind.Regular, DateTimeOffset.UtcNow, "Tomás", []),
+            new AdjustmentHistoryEntry(Guid.NewGuid(), new DateOnly(2026, 1, 1), null, 90_000m, 100_000m, 11.111111m, AdjustmentKind.Regular, DateTimeOffset.UtcNow.AddMonths(-6), null, []),
+        ];
+        world.Desk.Previews.Enqueue(AdjustmentPreviewResult.Ready(Preview(August)));
+        world.ViewModel.SelectedRow = world.ViewModel.Worklist.Single(r => r.ContractId == Ready);
+        await world.ViewModel.OpenCommand.ExecuteAsync(null);
+        return world;
+    }
+
+    private static AdjustmentPreview Correction(decimal? reversed = null, decimal? paidStays = null, DifferenceOffer? offer = null) =>
+        new AdjustmentPreview(Ready, "Maria Prueba", July, 100_000m, [], CombinationRule.Single, 12m, 112_000m, 112_000m, new DateOnly(2026, 12, 1), offer)
+        {
+            CorrectsAdjustmentId = LatestId,
+            ReversedDifference = reversed,
+            PaidDifferenceStays = paidStays,
+        };
+
+    [Fact]
+    public async Task OnlyTheLatestAdjustment_CanBeCorrectedFromTheHistory()
+    {
+        var world = await WithHistoryAsync();
+
+        Assert.Equal([true, false], world.ViewModel.History.Select(h => h.CanCorrect));
+        Assert.Equal(LatestId, world.ViewModel.History[0].AdjustmentId);
+    }
+
+    [Fact]
+    public async Task CorrectingFromTheHistory_OpensTheCorrectionsSummary()
+    {
+        var world = await WithHistoryAsync();
+        world.Desk.CorrectionPreviews.Enqueue(AdjustmentPreviewResult.Ready(Correction()));
+
+        await world.ViewModel.CorrectCommand.ExecuteAsync(world.ViewModel.History[0]);
+
+        Assert.Equal([(Ready, LatestId)], world.Desk.CorrectionsOpened);
+        Assert.Equal("112.000", world.ViewModel.NewCanonText);
+        Assert.Equal("Corrección del ajuste vencido el 01/07/2026. Se agrega como un ajuste nuevo; el anterior queda como está.", world.ViewModel.CorrectionText);
+    }
+
+    [Fact]
+    public async Task ACorrectionsRefusal_IsShownInItsOwnWords()
+    {
+        var world = await WithHistoryAsync();
+        world.Desk.CorrectionPreviews.Enqueue(AdjustmentPreviewResult.Refused(AdjustmentRefusal.NotLatest));
+
+        await world.ViewModel.CorrectCommand.ExecuteAsync(world.ViewModel.History[0]);
+
+        Assert.Equal("Solo se puede corregir el último ajuste del contrato. Este ajuste tiene otro posterior.", world.ViewModel.RefusalMessage);
+        Assert.Null(world.ViewModel.Summary);
+    }
+
+    [Fact]
+    public async Task Test60_TheSummarySaysAnUnpaidDifferenceIsReversed()
+    {
+        var world = await WithHistoryAsync();
+        world.Desk.CorrectionPreviews.Enqueue(AdjustmentPreviewResult.Ready(Correction(reversed: 40_000m)));
+
+        await world.ViewModel.CorrectCommand.ExecuteAsync(world.ViewModel.History[0]);
+
+        Assert.Equal("La diferencia de 40.000 que cobró el ajuste corregido no se pagó: se revierte al confirmar.", world.ViewModel.DifferenceOutcomeText);
+    }
+
+    [Fact]
+    public async Task Test60_TheSummarySaysAPaidDifferenceStays_AndMustBeSettledByHand()
+    {
+        var world = await WithHistoryAsync();
+        world.Desk.CorrectionPreviews.Enqueue(AdjustmentPreviewResult.Ready(Correction(paidStays: 40_000m)));
+
+        await world.ViewModel.CorrectCommand.ExecuteAsync(world.ViewModel.History[0]);
+
+        Assert.Equal("La diferencia de 40.000 ya se pagó: queda como está y se resuelve a mano.", world.ViewModel.DifferenceOutcomeText);
+        Assert.False(world.ViewModel.HasDifference);
+    }
+
+    [Fact]
+    public async Task ConfirmingACorrection_GoesToTheDeskAsACorrection_WithTheChoice()
+    {
+        var world = await WithHistoryAsync();
+        var correction = Correction(reversed: 40_000m, offer: new DifferenceOffer(50_000m, [July]));
+        world.Desk.CorrectionPreviews.Enqueue(AdjustmentPreviewResult.Ready(correction));
+        await world.ViewModel.CorrectCommand.ExecuteAsync(world.ViewModel.History[0]);
+        world.Desk.NextConfirm = AdjustmentConfirmResult.Done(Written(correction));
+        world.ViewModel.ChargeDifference = true;
+
+        await world.ViewModel.ConfirmCommand.ExecuteAsync(null);
+
+        Assert.Equal([(correction, true)], world.Desk.CorrectionsConfirmed);
+        Assert.Empty(world.Desk.Confirmed);
+    }
+
+    /// <summary>The S11 review's R3-002: a stale correction reopens as a correction, so the next confirm goes to the same method.</summary>
+    [Fact]
+    public async Task AStaleCorrection_ReopensAsACorrection()
+    {
+        var world = await WithHistoryAsync();
+        world.Desk.CorrectionPreviews.Enqueue(AdjustmentPreviewResult.Ready(Correction()));
+        await world.ViewModel.CorrectCommand.ExecuteAsync(world.ViewModel.History[0]);
+        var current = Correction(reversed: 40_000m);
+        world.Desk.CorrectionPreviews.Enqueue(AdjustmentPreviewResult.Ready(current));
+        world.Desk.NextConfirm = AdjustmentConfirmResult.Refused(AdjustmentRefusal.PreviewStale);
+        var previewsBefore = world.Desk.Previewed.Count;
+
+        await world.ViewModel.ConfirmCommand.ExecuteAsync(null);
+
+        Assert.Same(current, world.ViewModel.Summary);
+        Assert.Equal(2, world.Desk.CorrectionsOpened.Count);
+        Assert.Equal(previewsBefore, world.Desk.Previewed.Count);
+        Assert.Equal("Algo cambió desde que abrió el resumen. Revise el resumen actualizado antes de confirmar.", world.ViewModel.RefusalMessage);
+    }
+
     // ---- History ------------------------------------------------------------------------------------------------------------
 
     [Fact]

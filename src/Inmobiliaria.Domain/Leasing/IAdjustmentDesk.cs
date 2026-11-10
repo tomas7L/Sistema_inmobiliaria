@@ -28,6 +28,20 @@ public interface IAdjustmentDesk
 
     /// <summary>The contract's confirmed adjustments, the most recently confirmed first.</summary>
     Task<IReadOnlyList<AdjustmentHistoryEntry>> HistoryAsync(Guid contractId, CancellationToken ct = default);
+
+    /// <summary>
+    /// The summary of a correction of <paramref name="adjustmentId"/>, reached from a corrected index or from the history (spec
+    /// Requirement 18): the same window and previous canon, priced from today's index levels, applying from today's period. Only
+    /// the contract's latest adjustment can be corrected. Nothing is written.
+    /// </summary>
+    Task<AdjustmentPreviewResult> PreviewCorrectionAsync(Guid contractId, Guid adjustmentId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Appends the correction, naming the adjustment it corrects and keeping its due date, and sets the canon, in one transaction.
+    /// An unpaid difference the corrected adjustment charged is reversed in the same transaction; a paid one is left as it is.
+    /// The summary is rebuilt under the locks and must match <paramref name="preview"/>, or nothing is written.
+    /// </summary>
+    Task<AdjustmentConfirmResult> ConfirmCorrectionAsync(AdjustmentPreview preview, bool chargeDifference = false, CancellationToken ct = default);
 }
 
 /// <param name="IndexName">The index as the catalog names it.</param>
@@ -86,6 +100,15 @@ public sealed class AdjustmentPreview(
     /// <summary>The difference offered on a late confirmation and the months it covers, or null when none is offered.</summary>
     public DifferenceOffer? Difference { get; } = difference;
 
+    /// <summary>On a correction, the adjustment it corrects; null on a regular confirmation.</summary>
+    public Guid? CorrectsAdjustmentId { get; init; }
+
+    /// <summary>On a correction, the unpaid difference the corrected adjustment charged, which confirming reverses; or null.</summary>
+    public decimal? ReversedDifference { get; init; }
+
+    /// <summary>On a correction, a difference already paid, which stays and must be settled by hand (spec Decision 27); or null.</summary>
+    public decimal? PaidDifferenceStays { get; init; }
+
     /// <summary>Every figure the operator saw: the canon, the window, each level, the result and the period it applies from.</summary>
     public bool SameFiguresAs(AdjustmentPreview other)
     {
@@ -100,7 +123,10 @@ public sealed class AdjustmentPreview(
             && AppliesFrom == other.AppliesFrom
             && Indices.SequenceEqual(other.Indices)
             && Difference?.Amount == other.Difference?.Amount
-            && (Difference?.Months ?? []).SequenceEqual(other.Difference?.Months ?? []);
+            && (Difference?.Months ?? []).SequenceEqual(other.Difference?.Months ?? [])
+            && CorrectsAdjustmentId == other.CorrectsAdjustmentId
+            && ReversedDifference == other.ReversedDifference
+            && PaidDifferenceStays == other.PaidDifferenceStays;
     }
 }
 
@@ -174,6 +200,15 @@ public enum AdjustmentRefusal
 
     /// <summary>Charging the difference was asked for, but the summary offered none.</summary>
     NoDifferenceToCharge,
+
+    /// <summary>Only the contract's latest adjustment can be corrected (spec Decision 26).</summary>
+    NotLatest,
+
+    /// <summary>The adjustment to correct is no longer there, or not on this contract.</summary>
+    AdjustmentNotFound,
+
+    /// <summary>The contract has ended: its canon is no longer adjusted or corrected.</summary>
+    ContractEnded,
 }
 
 public static class AdjustmentRefusalText
@@ -186,6 +221,9 @@ public static class AdjustmentRefusalText
         AdjustmentRefusal.AlreadyConfirmed => "Este ajuste ya fue confirmado. La lista se actualizó.",
         AdjustmentRefusal.PreviewStale => "Algo cambió desde que abrió el resumen. Revise el resumen actualizado antes de confirmar.",
         AdjustmentRefusal.NoDifferenceToCharge => "Este ajuste no tiene diferencia para cobrar.",
+        AdjustmentRefusal.NotLatest => "Solo se puede corregir el último ajuste del contrato. Este ajuste tiene otro posterior.",
+        AdjustmentRefusal.AdjustmentNotFound => "El ajuste ya no existe. Actualice la lista.",
+        AdjustmentRefusal.ContractEnded => "El contrato terminó: su canon ya no se ajusta ni se corrige.",
         _ => throw new ArgumentOutOfRangeException(nameof(refusal), refusal, "A refusal without operator text."),
     };
 }

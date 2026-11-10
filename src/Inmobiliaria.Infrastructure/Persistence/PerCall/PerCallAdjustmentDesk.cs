@@ -32,4 +32,10 @@ internal sealed class PerCallAdjustmentDesk : IAdjustmentDesk
 
     public Task<IReadOnlyList<AdjustmentHistoryEntry>> HistoryAsync(Guid contractId, CancellationToken ct = default) =>
         PerCall.RunAsync(_factory, context => new AdjustmentDesk(context, _clock, _userId).HistoryAsync(contractId, ct));
+
+    public Task<AdjustmentPreviewResult> PreviewCorrectionAsync(Guid contractId, Guid adjustmentId, CancellationToken ct = default) =>
+        PerCall.RunAsync(_factory, context => new AdjustmentDesk(context, _clock, _userId).PreviewCorrectionAsync(contractId, adjustmentId, ct));
+
+    public Task<AdjustmentConfirmResult> ConfirmCorrectionAsync(AdjustmentPreview preview, bool chargeDifference = false, CancellationToken ct = default) =>
+        PerCall.RunAsync(_factory, context => new AdjustmentDesk(context, _clock, _userId).ConfirmCorrectionAsync(preview, chargeDifference, ct));
 }

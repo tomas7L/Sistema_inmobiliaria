@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-10, con S10 mergeada (PR #106) y M7 aplicada en PRUEBA y producción_
+_Última actualización: 2026-11-10, con S11 terminada, verificada y revisada, entregada sin commitear_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -13,9 +13,11 @@ _Última actualización: 2026-11-10, con S10 mergeada (PR #106) y M7 aplicada en
 
 ## Próximos pasos
 
-1. **Seguir con S11 (Correcciones):** `tasks.md`, Phase 11. Revisar ahí la observación del verificador de S10: un alquiler corregido a
-   cero junto a una diferencia viva se leería como saldado. Verificador y revisión completos, como siempre (Engram
-   `preferences/full-verification-over-tokens`).
+1. **Tomás commitea S11 y abre el PR**, junto con el commit de las notas de M7 que ya hizo (archivos, commit y PR en el último mensaje
+   de la sesión del 2026-11-10). S11 no lleva migración.
+2. **S12 (Pantallas)** espera las maquetas de Mateo (`tasks.md`, Phase 12). Si se demora, Tomás puede elegir vistas simples para
+   algunas pantallas y reestilizarlas después (proposal §7). Lo que S12 tiene que levantar de S9 a S11 está anotado en las notas 9.x a
+   11.x de `tasks.md` (por ejemplo, mostrar los meses de la diferencia en caja, nota 10.11).
 
 ## Pendientes / bloqueos
 
@@ -60,7 +62,7 @@ _Última actualización: 2026-11-10, con S10 mergeada (PR #106) y M7 aplicada en
 
 | | |
 |---|---|
-| **Docker** | **Sí** para S11 (Testcontainers `postgres:17.6`) |
+| **Docker** | **Sí** para S12 (Testcontainers `postgres:17.6`) |
 | **Supabase** | **No** para S11 (no lleva migración); las bases se pausan solas, y solo Tomás se conecta |
 | **Límite diario** | Tomás pasa el porcentaje al arrancar; el verificador y la revisión de gentle-ai son lo más caro |
 

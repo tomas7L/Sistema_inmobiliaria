@@ -39,6 +39,24 @@ internal sealed class FakeAdjustmentDesk : IAdjustmentDesk
         return Task.FromResult(NextConfirm ?? throw new InvalidOperationException("No confirmation scripted."));
     }
 
+    public Queue<AdjustmentPreviewResult> CorrectionPreviews { get; } = new();
+
+    public List<(Guid Contract, Guid Adjustment)> CorrectionsOpened { get; } = [];
+
+    public List<(AdjustmentPreview Preview, bool Charge)> CorrectionsConfirmed { get; } = [];
+
+    public Task<AdjustmentPreviewResult> PreviewCorrectionAsync(Guid contractId, Guid adjustmentId, CancellationToken ct = default)
+    {
+        CorrectionsOpened.Add((contractId, adjustmentId));
+        return Task.FromResult(CorrectionPreviews.Dequeue());
+    }
+
+    public Task<AdjustmentConfirmResult> ConfirmCorrectionAsync(AdjustmentPreview preview, bool chargeDifference = false, CancellationToken ct = default)
+    {
+        CorrectionsConfirmed.Add((preview, chargeDifference));
+        return Task.FromResult(NextConfirm ?? throw new InvalidOperationException("No confirmation scripted."));
+    }
+
     public Task<IReadOnlyList<AdjustmentHistoryEntry>> HistoryAsync(Guid contractId, CancellationToken ct = default)
     {
         HistoryAsked.Add(contractId);
