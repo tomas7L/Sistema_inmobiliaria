@@ -843,7 +843,8 @@ than the latest MUST be listed and refused with its own message (Decision 26).
 
 If the corrected adjustment charged a difference and its period is unpaid, the correction MUST reverse it with a `Correction` movement in
 the same transaction, and MUST offer the choice again on the corrected figures. If it is paid, the summary MUST say it stays and must be
-settled by hand, and MUST NOT offer a new charge (Decision 27).
+settled by hand, and MUST NOT offer a new charge (Decision 27). A difference offered and declined is final for that adjustment, as Requirement 16 says: no
+correction offers it again, whatever its figures (decided by Tomás on 2026-11-10, after the S11 verifier found the formula above would).
 
 The corrected difference MUST be computed as if the original had carried the corrected canon, in two parts: (corrected canon − the original's
 previous canon) × the periods from its month up to the original's applied-from period, plus (corrected canon − the original's new canon) × the

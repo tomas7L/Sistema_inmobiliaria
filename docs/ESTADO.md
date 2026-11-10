@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-10, con S10 terminada, verificada y revisada, entregada sin commitear_
+_Última actualización: 2026-11-10, con S11 terminada, verificada y revisada, entregada sin commitear_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -13,12 +13,11 @@ _Última actualización: 2026-11-10, con S10 terminada, verificada y revisada, e
 
 ## Próximos pasos
 
-1. **Tomás commitea S10 y abre el PR** (archivos, commit y PR en el último mensaje de la sesión del 2026-11-10).
-2. **Al mergear, Tomás aplica M7 `20261110150305_AddAdjustmentDifference`** (H.3): PRUEBA, prueba de humo, producción. No necesita
-   consulta previa. Confirmación: `ck_account_movements_adjustment_difference_sign` y `ux_rent_adjustments_difference_movement`
-   existen, y la última migración es esta. Anotarlo en `tasks.md`, notas de Phase 10.
-3. **Seguir con S11 (Correcciones):** `tasks.md`, Phase 11. Revisar ahí la observación del verificador de S10: un alquiler corregido a
-   cero junto a una diferencia viva se leería como saldado.
+1. **Tomás commitea S11 y abre el PR**, junto con el commit de las notas de M7 que ya hizo (archivos, commit y PR en el último mensaje
+   de la sesión del 2026-11-10). S11 no lleva migración.
+2. **S12 (Pantallas)** espera las maquetas de Mateo (`tasks.md`, Phase 12). Si se demora, Tomás puede elegir vistas simples para
+   algunas pantallas y reestilizarlas después (proposal §7). Lo que S12 tiene que levantar de S9 a S11 está anotado en las notas 9.x a
+   11.x de `tasks.md` (por ejemplo, mostrar los meses de la diferencia en caja, nota 10.11).
 
 ## Pendientes / bloqueos
 
@@ -63,8 +62,8 @@ _Última actualización: 2026-11-10, con S10 terminada, verificada y revisada, e
 
 | | |
 |---|---|
-| **Docker** | **Sí** para S11 (Testcontainers `postgres:17.6`) |
-| **Supabase** | **Sí** para aplicar M7 al mergear S10; las bases se pausan solas, y solo Tomás se conecta |
+| **Docker** | **Sí** para S12 (Testcontainers `postgres:17.6`) |
+| **Supabase** | **No** para S11 (no lleva migración); las bases se pausan solas, y solo Tomás se conecta |
 | **Límite diario** | Tomás pasa el porcentaje al arrancar; el verificador y la revisión de gentle-ai son lo más caro |
 
 ## Para retomar
