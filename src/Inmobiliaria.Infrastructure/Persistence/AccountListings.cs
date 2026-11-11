@@ -18,6 +18,11 @@ internal sealed record AccountListingEntry(AccountListing Listing, int DueDay, b
 /// </summary>
 internal static class AccountListings
 {
+    /// <summary>Every account's listing, loaded-by-mistake contracts included and flagged.</summary>
+    /// <param name="today">
+    /// Dates only the readiness's frozen flag, which the desk reads. The names, units, status and due day do not depend on
+    /// it, and the mora worklist reads none of the readiness: it finds a frozen recargo on the account's own movements.
+    /// </param>
     public static async Task<IReadOnlyList<AccountListingEntry>> ReadAllAsync(
         InmobiliariaDbContext context, DateOnly today, CancellationToken ct)
     {

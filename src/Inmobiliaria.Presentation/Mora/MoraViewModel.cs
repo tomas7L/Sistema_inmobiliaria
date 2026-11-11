@@ -102,19 +102,24 @@ public sealed partial class MoraViewModel : ObservableObject
         }
 
         OpenMessage = null;
-        var outcome = await Runner.RunAsync(() => _directory.FindAsync(row.AccountId));
-        if (!outcome.Completed)
-        {
-            return;
-        }
 
-        if (outcome.Value is not { } listing)
+        // Reading the listing and opening the desk run as one operation, so a failure in either becomes the screen's
+        // message instead of escaping the command.
+        var outcome = await Runner.RunAsync(async () =>
+        {
+            var listing = await _directory.FindAsync(row.AccountId);
+            if (listing is not null)
+            {
+                await _openAtDesk(listing);
+            }
+
+            return listing is not null;
+        });
+
+        if (outcome.Completed && !outcome.Value)
         {
             OpenMessage = MoraTexts.AccountGone;
-            return;
         }
-
-        await _openAtDesk(listing);
     }
 
     private void OnRunnerChanged(object? sender, PropertyChangedEventArgs e)

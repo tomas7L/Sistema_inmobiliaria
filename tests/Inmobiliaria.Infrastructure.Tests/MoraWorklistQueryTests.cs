@@ -1,4 +1,5 @@
 using Inmobiliaria.Domain.Accounts;
+using Inmobiliaria.Domain.Collection;
 using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Domain.Parties;
 using Inmobiliaria.Domain.Shared;
@@ -707,5 +708,64 @@ public sealed class MoraWorklistQueryTests
             mixedRow.RecargoAccrued);
         Assert.True(mixedRow.RecargoAccrued > 0m);
         Assert.Equal(50_000m, Assert.Single(worklist, r => r.AccountId == frozenAccount.Id).RecargoAccrued);
+    }
+
+    // ---- mora task 2.0: follow-ups from the M1 review ----
+
+    /// <summary>
+    /// Review finding R3-difference-due-date-nondeterministic: a period with no rent and two differences is dated by the EARLIEST
+    /// one, whatever order the movements load in. The later one is appended first, so a "first loaded" rule reads the 14th.
+    /// </summary>
+    [SkippableFact]
+    public async Task APeriodWithTwoDifferencesAndNoRent_IsDatedByTheEarliest()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var context = _fixture.CreateDbContext();
+        var (_, account, opening) = await SeedPreExistingAsync(context);
+        await SettleAsync(context, account.Id, new DateOnly(2026, 10, 1), opening.Select(m => m.Id).ToArray());
+
+        var tracked = await context.ContractAccounts.Include(a => a.Movements).SingleAsync(a => a.Id == account.Id);
+        tracked.Append(AccountMovement.AdjustmentDifference(Guid.NewGuid(), 20_000m, September, new DateOnly(2026, 9, 14)));
+        await context.SaveChangesAsync();
+        tracked.Append(AccountMovement.AdjustmentDifference(Guid.NewGuid(), 10_000m, September, new DateOnly(2026, 9, 12)));
+        await context.SaveChangesAsync();
+
+        var worklist = await QueryOver(context).GetAccountsInMoraAsync(new DateOnly(2026, 10, 5), LeaseTerms);
+
+        var row = Assert.Single(worklist, r => r.AccountId == account.Id);
+        Assert.Equal(new DateOnly(2026, 9, 12), row.OldestUnpaidDueDate);
+        Assert.Equal(23, row.DaysOverdue);
+    }
+
+    /// <summary>
+    /// Review finding R3-mistaken-contract-row-unopenable, pinned: a contract cancelled as loaded by mistake, with periods it
+    /// owed, never appears, because cancelling nets every period to zero and nothing accrues afterwards (design F8). A row
+    /// for it could never be opened at the desk, which hides that contract.
+    /// </summary>
+    [SkippableFact]
+    public async Task AContractCancelledAsLoadedByMistake_NeverAppears()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var context = _fixture.CreateDbContext();
+        var (contract, account) = await SeedUnreadAsync(context, new DateOnly(2026, 1, 1));
+        await new AccountMaterialiser(context).MaterialiseDueAccrualsThroughAsync(account.Id, new DateOnly(2026, 3, 20));
+
+        var today = new DateOnly(2026, 3, 20);
+        var tracked = await context.ContractAccounts.Include(a => a.Movements).SingleAsync(a => a.Id == account.Id);
+        var plan = ContractCancellation.Plan(tracked, contract, [], "Cargado dos veces", today);
+        Assert.Null(plan.Refusal);
+        foreach (var correction in plan.Corrections)
+        {
+            tracked.Append(correction);
+        }
+
+        contract.Cancel(today);
+        await context.SaveChangesAsync();
+
+        var worklist = await QueryOver(context).GetAccountsInMoraAsync(new DateOnly(2026, 6, 30), LeaseTerms);
+
+        Assert.DoesNotContain(worklist, r => r.AccountId == account.Id);
     }
 }

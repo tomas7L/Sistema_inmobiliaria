@@ -129,6 +129,27 @@ public class MoraViewModelTests
         Assert.Empty(mora.Rows);
     }
 
+    /// <summary>
+    /// Review finding R3-open-callback-unguarded: a failure while the desk opens the account, or while its listing is read,
+    /// becomes the screen's message, never an exception escaping the command.
+    /// </summary>
+    [Fact]
+    public async Task AFailureOpeningTheDesk_ShowsAMessage_AndThrowsNothing()
+    {
+        var query = new FakeMoraWorklist();
+        var directory = new FakeAccountDirectory();
+        var owing = Row("Zeta, Ana", 200);
+        query.Rows = [owing];
+        directory.Listings = [CashDeskTestKit.Account() with { AccountId = owing.AccountId }];
+        var mora = new MoraViewModel(query, Terms, new FakeClock(Today), directory, _ => throw new InvalidOperationException("desk"));
+        await mora.LoadCommand.ExecuteAsync(null);
+
+        await mora.OpenCommand.ExecuteAsync(mora.Rows[0]);
+
+        Assert.Equal(ErrorMessages.Generic, mora.Runner.ErrorMessage);
+        Assert.False(mora.Runner.IsBusy);
+    }
+
     /// <summary>Test 12: refreshing reads the port again and replaces every row, never patching the old list.</summary>
     [Fact]
     public async Task Refreshing_ReadsAgain_AndReplacesEveryRow()
