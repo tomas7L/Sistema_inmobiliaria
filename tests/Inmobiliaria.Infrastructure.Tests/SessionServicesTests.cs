@@ -106,6 +106,7 @@ public sealed class SessionServicesTests
         using var provider = Collect(factory, role, ValidSettings()).BuildServiceProvider();
 
         Assert.IsAssignableFrom<ICollectionDesk>(provider.GetRequiredService<ICollectionDesk>());
+        Assert.IsAssignableFrom<IMoraWorklistQuery>(provider.GetRequiredService<IMoraWorklistQuery>());
         Assert.IsAssignableFrom<IDueAdjustmentQuery>(provider.GetRequiredService<IDueAdjustmentQuery>());
         Assert.IsAssignableFrom<IGoLiveSetup>(provider.GetRequiredService<IGoLiveSetup>());
         Assert.IsAssignableFrom<IUserAdministration>(provider.GetRequiredService<IUserAdministration>());
@@ -164,6 +165,10 @@ public sealed class SessionServicesTests
 
         Assert.Null(provider.GetService<ICollectionDesk>());
         Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(ICollectionDesk));
+
+        // The mora list measures recargo with the same terms, so invalid terms close it too (mora spec Test 14).
+        Assert.Null(provider.GetService<IMoraWorklistQuery>());
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IMoraWorklistQuery));
         Assert.NotNull(provider.GetRequiredService<IDueAdjustmentQuery>());
         Assert.NotNull(provider.GetRequiredService<IGoLiveSetup>());
         Assert.NotNull(provider.GetRequiredService<IAccountDirectory>());
@@ -200,6 +205,37 @@ public sealed class SessionServicesTests
 
         await Assert.ThrowsAsync<ConnectionRefusedException>(() => desk.PreviewAsync(request));
         await Assert.ThrowsAsync<ConnectionRefusedException>(() => desk.PreviewAsync(request));
+
+        Assert.Equal(2, factory.Created.Count);
+        Assert.NotSame(factory.Created[0], factory.Created[1]);
+        Assert.All(factory.Created, context => Assert.Throws<ObjectDisposedException>(() => context.ChangeTracker));
+    }
+
+    [Fact]
+    public async Task TheMoraWrapper_AlsoObtainsOneDisposedContextPerCall()
+    {
+        var factory = new SpySessionFactory();
+        using var provider = Collect(factory, UserRole.Empleado, ValidSettings()).BuildServiceProvider();
+        var query = provider.GetRequiredService<IMoraWorklistQuery>();
+        var terms = new RecargoTerms(0.02m, graceDays: 0);
+
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => query.GetAccountsInMoraAsync(new DateOnly(2026, 10, 1), terms));
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => query.GetAccountsInMoraAsync(new DateOnly(2026, 10, 1), terms));
+
+        Assert.Equal(2, factory.Created.Count);
+        Assert.NotSame(factory.Created[0], factory.Created[1]);
+        Assert.All(factory.Created, context => Assert.Throws<ObjectDisposedException>(() => context.ChangeTracker));
+    }
+
+    [Fact]
+    public async Task TheDirectoryFind_AlsoObtainsOneDisposedContextPerCall()
+    {
+        var factory = new SpySessionFactory();
+        using var provider = Collect(factory, UserRole.Empleado, ValidSettings()).BuildServiceProvider();
+        var directory = provider.GetRequiredService<IAccountDirectory>();
+
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => directory.FindAsync(Guid.NewGuid()));
+        await Assert.ThrowsAsync<ConnectionRefusedException>(() => directory.FindAsync(Guid.NewGuid()));
 
         Assert.Equal(2, factory.Created.Count);
         Assert.NotSame(factory.Created[0], factory.Created[1]);

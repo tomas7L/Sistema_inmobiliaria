@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-11, con la spec de `mora` aprobada y el design revisado, entregados sin commitear_
+_Última actualización: 2026-11-11, con M1 de `mora` terminado, verificado y revisado, entregado sin commitear_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -8,16 +8,15 @@ _Última actualización: 2026-11-11, con la spec de `mora` aprobada y el design 
 
 ## En qué estamos
 
-**Change activo: `mora`**, en `openspec/changes/mora/`. La propuesta entró con el PR #108. `spec.md` (aprobada por Tomás el
-2026-11-11) y `design.md` están sin commitear. Todavía no hay `tasks.md`. `gestion-de-alquileres` sigue abierto, esperando S12;
+**Change activo: `mora`**, en `openspec/changes/mora/`. La propuesta entró con el PR #108. `spec.md` y `design.md` entraron con el
+PR #109; `tasks.md` tiene el avance. `gestion-de-alquileres` sigue abierto, esperando S12;
 S11 entró con el PR #107.
 
 ## Próximos pasos
 
-1. **Tomás commitea `spec.md` y `design.md` de `mora`** y abre el PR (texto en la entrega del 2026-11-11). El design lo
-   revisó el asistente contra el código: Tomás no lee designs.
-2. **Escribir `openspec/changes/mora/tasks.md`** y arrancar M1 (design §7): el agujero, los campos, el cargador compartido,
-   `FindAsync`, el registro y el view-model. Los Tests 1, 2 y 4 primero, vistos fallando.
+1. **Tomás commitea M1 de `mora` y abre el PR** (archivos, commit y PR en la entrega del 2026-11-11). Sin migración.
+2. **M2 de `mora`** va con las pantallas de Mateo: `openspec/changes/mora/tasks.md`, Phase 2, empezando por 2.0 (los cuatro
+   hallazgos no bloqueantes de la revisión).
 3. **S12 (Pantallas) y M2 de `mora`:** cuando Mateo mande las pantallas. Lo que S12 tiene que levantar de S9 a S11 está en las
    notas 9.x a 11.x de `gestion-de-alquileres/tasks.md`.
 4. **Panorama de lo que falta** para el sistema completo (carga inicial, avisos, archivar `gestion-de-alquileres`): pedido el
@@ -86,7 +85,7 @@ dotnet test Inmobiliaria.Core.slnf --configuration Release
 dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure
 ```
 
-Esperado: **1987 pasados, 0 fallas, 0 omitidos**, build sin advertencias y el modelo en sintonía con
+Esperado: **2130 pasados, 0 fallas, 0 omitidos**, build sin advertencias y el modelo en sintonía con
 `20261107213120_HardenClearMustChangePassword`. Si el build de Desktop falla con MSB3027, la aplicación está
 abierta y tiene tomadas sus DLL: cerrarla.
 

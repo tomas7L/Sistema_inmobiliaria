@@ -1,3 +1,5 @@
+using Inmobiliaria.Domain.Leasing;
+
 namespace Inmobiliaria.Domain.Accounts;
 
 /// <summary>
@@ -13,10 +15,22 @@ namespace Inmobiliaria.Domain.Accounts;
 ///
 /// What these figures cover: rent, honorarios contractuales instalments, and recargo. Nothing
 /// else. Tasa municipal, seguros and "Otros Conceptos" are typed when a receipt is closed and
-/// never accrue, so they are absent by design — and whatever eventually displays this owes the
-/// reader that sentence (spec "The Balance Names What It Covers"). There is no screen in this
-/// change; the UI pass owes the label, and this type owes it unambiguous names.
+/// never accrue, so they are absent by design — and whatever displays this owes the reader that
+/// sentence (spec "The Balance Names What It Covers"). The Mora screen says it (mora spec
+/// Requirement 6).
+///
+/// The row names who owes in the cash desk's own words (mora spec Requirement 4): a reminder needs
+/// nothing else to name the debtor, and the desk's search and this list can never disagree on a
+/// name, because both are built by the same code.
 /// </summary>
+/// <param name="ContractShortId">The first eight hex characters of the contract id, as the desk shows it.</param>
+/// <param name="Tenants">The tenants' names, "Last, First", as the recibo prints them.</param>
+/// <param name="Units">The units, as the recibo describes them.</param>
+/// <param name="Status">The contract's status: an ended contract can still owe.</param>
+/// <param name="OldestUnpaidDueDate">
+/// That period's due date: its rent's or its difference's own date, or, for an opening-balance
+/// month, the contract's due day in that month (mora design D1).
+/// </param>
 /// <param name="DaysOverdue">
 /// Counted from the OLDEST unpaid period's due date, which is the one a reminder leads with. The
 /// later periods each keep their own clock inside <paramref name="AmountOwed"/>.
@@ -29,6 +43,10 @@ namespace Inmobiliaria.Domain.Accounts;
 public sealed record MoraAccount(
     Guid AccountId,
     Guid ContractId,
+    string ContractShortId,
+    string Tenants,
+    string Units,
+    ContractStatus Status,
     DateOnly OldestUnpaidPeriod,
     DateOnly OldestUnpaidDueDate,
     int DaysOverdue,

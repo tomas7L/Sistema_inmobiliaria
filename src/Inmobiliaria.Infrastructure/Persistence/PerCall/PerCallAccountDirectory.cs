@@ -24,4 +24,7 @@ internal sealed class PerCallAccountDirectory : IAccountDirectory
 
     public Task<IReadOnlyList<AccountListing>> SearchAsync(string text, CancellationToken ct = default) =>
         PerCall.RunAsync(_factory, context => new AccountDirectory(context, _clock).SearchAsync(text, ct));
+
+    public Task<AccountListing?> FindAsync(Guid accountId, CancellationToken ct = default) =>
+        PerCall.RunAsync(_factory, context => new AccountDirectory(context, _clock).FindAsync(accountId, ct));
 }

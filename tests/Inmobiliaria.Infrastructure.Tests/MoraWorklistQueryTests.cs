@@ -1,5 +1,6 @@
 using Inmobiliaria.Domain.Accounts;
 using Inmobiliaria.Domain.Leasing;
+using Inmobiliaria.Domain.Parties;
 using Inmobiliaria.Domain.Shared;
 using Inmobiliaria.Domain.Units;
 using Inmobiliaria.Infrastructure.Persistence;
@@ -364,5 +365,347 @@ public sealed class MoraWorklistQueryTests
         // January and February accrued; nothing after the end date did.
         Assert.Equal(1_000_000m, row.LedgerBalance);
         Assert.Equal(new DateOnly(2026, 1, 1), row.OldestUnpaidPeriod);
+    }
+
+    // ---- mora change: spec Requirements 1 and 2 ----
+
+    private static readonly DateOnly August = new(2026, 8, 1);
+    private static readonly DateOnly September = new(2026, 9, 1);
+    private static readonly DateOnly MoraCutover = new(2026, 9, 30);
+
+    /// <summary>
+    /// A pre-existing contract that went live on <see cref="MoraCutover"/> owing August and September,
+    /// each typed as a monthly opening balance, exactly as go-live loads a debt month by month. Nothing
+    /// after the cutover is written: the worklist's own materialisation brings October and November.
+    /// </summary>
+    private static async Task<(Contract Contract, ContractAccount Account, AccountMovement[] Opening)> SeedPreExistingAsync(
+        InmobiliariaDbContext context, int dueDay = 10)
+    {
+        var unit = new PropertyUnit(
+            Guid.NewGuid(),
+            new Address("Fake Street", Guid.NewGuid().ToString("N")[..6], "Sunchales", "Santa Fe", "2322"));
+        context.Units.Add(unit);
+
+        var contract = new Contract(
+            Guid.NewGuid(),
+            new DateOnly(2026, 6, 1),
+            new DateOnly(2028, 6, 1),
+            monthlyRent: 500_000m,
+            unitShares: [new UnitShare(unit.Id, 100m)],
+            dueDay: dueDay,
+            cutoverDate: MoraCutover);
+        context.Contracts.Add(contract);
+
+        var account = new ContractAccount(Guid.NewGuid(), contract.Id);
+        var opening = new[]
+        {
+            AccountMovement.OpeningBalance(Guid.NewGuid(), 480_000m, MoraCutover, August),
+            AccountMovement.OpeningBalance(Guid.NewGuid(), 480_000m, MoraCutover, September),
+        };
+        foreach (var movement in opening)
+        {
+            account.Append(movement);
+        }
+
+        context.ContractAccounts.Add(account);
+        await context.SaveChangesAsync();
+
+        return (contract, account, opening);
+    }
+
+    private static async Task SettleAsync(InmobiliariaDbContext context, Guid accountId, DateOnly on, params Guid[] movementIds)
+    {
+        var tracked = await context.ContractAccounts.Include(a => a.Movements).SingleAsync(a => a.Id == accountId);
+        foreach (var id in movementIds)
+        {
+            var movement = tracked.Movements.Single(m => m.Id == id);
+            tracked.Append(AccountMovement.Correction(Guid.NewGuid(), -movement.Amount, on, movement.Id, movement.Period));
+        }
+
+        await context.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// mora spec Test 1, and the reason the change exists (spec Finding F1): an account whose oldest
+    /// unpaid periods are opening-balance months, followed by unpaid rent, appears with August as its
+    /// oldest unpaid period. Before the fix the row was built only from a rent accrual on that period,
+    /// which an opening-balance month never has, so the account most behind dropped off entirely.
+    /// </summary>
+    [SkippableFact]
+    public async Task OpeningBalanceMonthsAtTheFrontOfTheDebt_StillPutTheAccountOnTheList()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var context = _fixture.CreateDbContext();
+        var (_, account, _) = await SeedPreExistingAsync(context);
+
+        var worklist = await QueryOver(context).GetAccountsInMoraAsync(new DateOnly(2026, 11, 20), LeaseTerms);
+
+        var row = Assert.Single(worklist, r => r.AccountId == account.Id);
+        Assert.Equal(August, row.OldestUnpaidPeriod);
+    }
+
+    /// <summary>
+    /// mora spec Test 4: an opening-balance month falls due on that month's due day on the contract,
+    /// computed by the rule rent uses, never from the day the balance was typed.
+    /// </summary>
+    [SkippableTheory]
+    [InlineData(10, 102)]
+    [InlineData(5, 107)]
+    public async Task AnOpeningBalanceMonth_CountsFromItsOwnDueDate(int dueDay, int expectedDays)
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var context = _fixture.CreateDbContext();
+        var (_, account, _) = await SeedPreExistingAsync(context, dueDay);
+
+        var worklist = await QueryOver(context).GetAccountsInMoraAsync(new DateOnly(2026, 11, 20), LeaseTerms);
+
+        var row = Assert.Single(worklist, r => r.AccountId == account.Id);
+        Assert.Equal(new DateOnly(2026, 8, dueDay), row.OldestUnpaidDueDate);
+        Assert.Equal(expectedDays, row.DaysOverdue);
+    }
+
+    /// <summary>
+    /// mora spec Test 3: opening-balance months that are all paid, with nothing else unpaid, do not keep
+    /// the account on the list. Read on 5 October, before October's rent falls due.
+    /// </summary>
+    [SkippableFact]
+    public async Task PaidOpeningBalanceMonths_DoNotKeepTheAccountOnTheList()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var context = _fixture.CreateDbContext();
+        var (_, account, opening) = await SeedPreExistingAsync(context);
+        await SettleAsync(context, account.Id, new DateOnly(2026, 10, 1), opening.Select(m => m.Id).ToArray());
+
+        var worklist = await QueryOver(context).GetAccountsInMoraAsync(new DateOnly(2026, 10, 5), LeaseTerms);
+
+        Assert.DoesNotContain(worklist, r => r.AccountId == account.Id);
+    }
+
+    /// <summary>
+    /// mora spec Test 2: an ended contract whose only unpaid charge is a difference on its last period
+    /// appears, counted from that difference's due date.
+    /// </summary>
+    [SkippableFact]
+    public async Task AnEndedContractOwingOnlyADifference_Appears()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var context = _fixture.CreateDbContext();
+        var (contract, account) = await SeedUnreadAsync(context, new DateOnly(2026, 1, 1));
+        contract.End(EndReason.MutualAgreement, new DateOnly(2026, 2, 20));
+        await context.SaveChangesAsync();
+
+        await new AccountMaterialiser(context).MaterialiseDueAccrualsThroughAsync(account.Id, new DateOnly(2026, 2, 28));
+        var rents = (await context.ContractAccounts.AsNoTracking().Include(a => a.Movements).SingleAsync(a => a.Id == account.Id))
+            .Movements.Select(m => m.Id).ToArray();
+        await SettleAsync(context, account.Id, new DateOnly(2026, 2, 25), rents);
+
+        var tracked = await context.ContractAccounts.Include(a => a.Movements).SingleAsync(a => a.Id == account.Id);
+        tracked.Append(AccountMovement.AdjustmentDifference(Guid.NewGuid(), 40_000m, new DateOnly(2026, 2, 1), new DateOnly(2026, 2, 10)));
+        await context.SaveChangesAsync();
+
+        var worklist = await QueryOver(context).GetAccountsInMoraAsync(new DateOnly(2026, 6, 30), LeaseTerms);
+
+        var row = Assert.Single(worklist, r => r.AccountId == account.Id);
+        Assert.Equal(new DateOnly(2026, 2, 1), row.OldestUnpaidPeriod);
+        Assert.Equal(new DateOnly(2026, 2, 10), row.OldestUnpaidDueDate);
+        Assert.Equal(40_000m, row.LedgerBalance);
+    }
+
+    /// <summary>
+    /// The half of spec Finding F1 that really drops an account: a difference on a period whose charge
+    /// was an opening balance, already paid. That period holds no rent accrual at all, so the row could
+    /// not be built. The difference's OWN date is its due date (spec Requirement 2): here it was charged when the
+    /// contract still fell due on the 12th, and the contract's due day is the 10th today, so the two rules differ.
+    /// </summary>
+    [SkippableFact]
+    public async Task ADifferenceOnAPaidOpeningBalanceMonth_Appears()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var context = _fixture.CreateDbContext();
+        var (_, account, opening) = await SeedPreExistingAsync(context);
+        await SettleAsync(context, account.Id, new DateOnly(2026, 10, 1), opening.Select(m => m.Id).ToArray());
+
+        var tracked = await context.ContractAccounts.Include(a => a.Movements).SingleAsync(a => a.Id == account.Id);
+        tracked.Append(AccountMovement.AdjustmentDifference(Guid.NewGuid(), 30_000m, September, new DateOnly(2026, 9, 12)));
+        await context.SaveChangesAsync();
+
+        var worklist = await QueryOver(context).GetAccountsInMoraAsync(new DateOnly(2026, 10, 5), LeaseTerms);
+
+        var row = Assert.Single(worklist, r => r.AccountId == account.Id);
+        Assert.Equal(September, row.OldestUnpaidPeriod);
+        Assert.Equal(new DateOnly(2026, 9, 12), row.OldestUnpaidDueDate);
+        Assert.Equal(23, row.DaysOverdue);
+    }
+
+    /// <summary>
+    /// mora spec Test 5: on the due date itself the account is not yet in mora; the next day it is,
+    /// with one day.
+    /// </summary>
+    [SkippableFact]
+    public async Task TheDueDateItself_IsNotMora_TheNextDayIs()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var context = _fixture.CreateDbContext();
+        var (_, account) = await SeedUnreadAsync(context, new DateOnly(2026, 1, 1));
+
+        var onTheDay = await QueryOver(context).GetAccountsInMoraAsync(new DateOnly(2026, 1, 10), LeaseTerms);
+        Assert.DoesNotContain(onTheDay, r => r.AccountId == account.Id);
+
+        var nextDay = await QueryOver(context).GetAccountsInMoraAsync(new DateOnly(2026, 1, 11), LeaseTerms);
+        Assert.Equal(1, Assert.Single(nextDay, r => r.AccountId == account.Id).DaysOverdue);
+    }
+
+    // ---- mora change: spec Requirements 3 and 4, and the order (design D4) ----
+
+    /// <summary>An unread contract whose tenant and lessor are named, so its row has text to compare.</summary>
+    private static async Task<(Contract Contract, ContractAccount Account)> SeedNamedAsync(
+        InmobiliariaDbContext context, string tenantLast, DateOnly startDate, int dueDay = 10)
+    {
+        var (contract, account) = await SeedUnreadAsync(context, startDate, dueDay: dueDay);
+
+        var tracked = await context.Contracts.SingleAsync(c => c.Id == contract.Id);
+        var tenant = new Party(Guid.NewGuid(), "Maria", tenantLast);
+        var lessor = new Party(Guid.NewGuid(), "Juan", "Lessor");
+        context.Parties.AddRange(tenant, lessor);
+        tracked.AssignParty(tenant, PartyRole.Tenant);
+        tracked.AssignParty(lessor, PartyRole.Lessor);
+        await context.SaveChangesAsync();
+
+        return (tracked, account);
+    }
+
+    /// <summary>
+    /// mora spec Test 8: a row names the tenant, the units and the short id exactly as the cash desk's directory
+    /// shows that account, and carries the contract's status, an ended one included.
+    /// </summary>
+    [SkippableFact]
+    public async Task ARow_NamesTheDebtorAsTheCashDeskDoes()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var context = _fixture.CreateDbContext();
+        var (_, active) = await SeedNamedAsync(context, "Prueba", new DateOnly(2026, 1, 1));
+        var (endedContract, ended) = await SeedNamedAsync(context, "Terminada", new DateOnly(2026, 1, 1));
+        endedContract.End(EndReason.MutualAgreement, new DateOnly(2026, 2, 20));
+        await context.SaveChangesAsync();
+
+        var asOf = new DateOnly(2026, 3, 20);
+        var worklist = await QueryOver(context).GetAccountsInMoraAsync(asOf, LeaseTerms);
+        var directory = new AccountDirectory(context, new FixedClock(asOf));
+
+        foreach (var accountId in new[] { active.Id, ended.Id })
+        {
+            var row = Assert.Single(worklist, r => r.AccountId == accountId);
+            var listing = await directory.FindAsync(accountId);
+            Assert.NotNull(listing);
+            Assert.Equal(
+                (listing.ContractShortId, listing.Tenants, listing.Units, listing.Status),
+                (row.ContractShortId, row.Tenants, row.Units, row.Status));
+        }
+
+        Assert.Equal("Prueba, Maria", Assert.Single(worklist, r => r.AccountId == active.Id).Tenants);
+        Assert.Equal(ContractStatus.Ended, Assert.Single(worklist, r => r.AccountId == ended.Id).Status);
+    }
+
+    /// <summary>
+    /// mora spec Test 10, order half (design F7): most days overdue first, then the tenant's name folded as the
+    /// desk's search folds it, so "Álvarez" sorts before "Beta" and both before "Zeta".
+    /// </summary>
+    [SkippableFact]
+    public async Task Rows_AreOrderedByDaysOverdue_ThenByTenantName()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var context = _fixture.CreateDbContext();
+        var zeta = await SeedNamedAsync(context, "Zeta", new DateOnly(2026, 3, 1), dueDay: 7);
+        var alvarez = await SeedNamedAsync(context, "Álvarez", new DateOnly(2026, 3, 1), dueDay: 7);
+        var beta = await SeedNamedAsync(context, "Beta", new DateOnly(2026, 3, 1), dueDay: 7);
+        var older = await SeedNamedAsync(context, "Older", new DateOnly(2026, 2, 1), dueDay: 7);
+
+        var worklist = await QueryOver(context).GetAccountsInMoraAsync(new DateOnly(2026, 3, 20), LeaseTerms);
+
+        var ours = new[] { zeta.Account.Id, alvarez.Account.Id, beta.Account.Id, older.Account.Id };
+        Assert.Equal(
+            [older.Account.Id, alvarez.Account.Id, beta.Account.Id, zeta.Account.Id],
+            worklist.Where(r => ours.Contains(r.AccountId)).Select(r => r.AccountId));
+    }
+
+    /// <summary>
+    /// mora spec Test 6: for accounts covering every movement kind, the row's ledger balance and amount owed are the
+    /// cash desk's own figures for that account and day (<see cref="ContractAccount.AmountOwedForPayment"/>), and an
+    /// opening-balance month adds no recargo: the row's recargo is October's and November's only.
+    /// </summary>
+    [SkippableFact]
+    public async Task EveryRowFigure_IsTheCashDesksFigure_AndAnOpeningMonthAddsNoRecargo()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        var asOf = new DateOnly(2026, 11, 20);
+        var october = new DateOnly(2026, 10, 1);
+        var november = new DateOnly(2026, 11, 1);
+
+        await using var context = _fixture.CreateDbContext();
+
+        // Opening balances, rent, a part payment, a charged recargo, a difference and a correction.
+        var (_, mixed, opening) = await SeedPreExistingAsync(context);
+        await new AccountMaterialiser(context).MaterialiseDueAccrualsThroughAsync(mixed.Id, asOf);
+        var tracked = await context.ContractAccounts.Include(a => a.Movements).SingleAsync(a => a.Id == mixed.Id);
+        tracked.Append(AccountMovement.Payment(Guid.NewGuid(), -200_000m, october, new DateOnly(2026, 10, 15)));
+        tracked.Append(AccountMovement.RecargoCharged(Guid.NewGuid(), 10_000m, october, new DateOnly(2026, 10, 15)));
+        tracked.Append(AccountMovement.AdjustmentDifference(Guid.NewGuid(), 25_000m, october, new DateOnly(2026, 10, 10)));
+        tracked.Append(AccountMovement.Correction(Guid.NewGuid(), -30_000m, new DateOnly(2026, 10, 1), opening[1].Id, September));
+        await context.SaveChangesAsync();
+
+        // Honorarios contractuales instalments riding with the rent.
+        var unit = new PropertyUnit(
+            Guid.NewGuid(),
+            new Address("Fake Street", Guid.NewGuid().ToString("N")[..6], "Sunchales", "Santa Fe", "2322"));
+        context.Units.Add(unit);
+        var withPlan = new Contract(
+            Guid.NewGuid(), new DateOnly(2026, 8, 1), new DateOnly(2028, 8, 1), monthlyRent: 400_000m,
+            unitShares: [new UnitShare(unit.Id, 100m)], contractualFeePlan: new ContractualFeePlan(90_000m, 3));
+        context.Contracts.Add(withPlan);
+        var planned = new ContractAccount(Guid.NewGuid(), withPlan.Id);
+        context.ContractAccounts.Add(planned);
+        await context.SaveChangesAsync();
+
+        // A frozen account.
+        var (_, frozenAccount) = await SeedUnreadAsync(context, new DateOnly(2026, 8, 1));
+        await new AccountMaterialiser(context).MaterialiseDueAccrualsThroughAsync(frozenAccount.Id, new DateOnly(2026, 8, 31));
+        var frozen = await context.ContractAccounts.Include(a => a.Movements).SingleAsync(a => a.Id == frozenAccount.Id);
+        frozen.Append(AccountMovement.RecargoFrozen(Guid.NewGuid(), 50_000m, new DateOnly(2026, 9, 1)));
+        await context.SaveChangesAsync();
+
+        var worklist = await QueryOver(context).GetAccountsInMoraAsync(asOf, LeaseTerms);
+
+        await using var fresh = _fixture.CreateDbContext();
+        var kinds = new HashSet<MovementKind>();
+        foreach (var accountId in new[] { mixed.Id, planned.Id, frozenAccount.Id })
+        {
+            var account = await fresh.ContractAccounts.AsNoTracking().Include(a => a.Movements).SingleAsync(a => a.Id == accountId);
+            kinds.UnionWith(account.Movements.Select(m => m.Kind));
+
+            var row = Assert.Single(worklist, r => r.AccountId == accountId);
+            Assert.Equal(account.LedgerBalance(asOf), row.LedgerBalance);
+            Assert.Equal(account.AmountOwedForPayment(asOf, LeaseTerms), row.AmountOwed);
+        }
+
+        Assert.Equal(Enum.GetValues<MovementKind>().Order(), kinds.Order());
+
+        var mixedAccount = await fresh.ContractAccounts.AsNoTracking().Include(a => a.Movements).SingleAsync(a => a.Id == mixed.Id);
+        var mixedRow = Assert.Single(worklist, r => r.AccountId == mixed.Id);
+        Assert.Equal(0m, mixedAccount.RecargoProjectedForPayment(August, asOf, LeaseTerms));
+        Assert.Equal(0m, mixedAccount.RecargoProjectedForPayment(September, asOf, LeaseTerms));
+        Assert.Equal(
+            mixedAccount.RecargoProjectedForPayment(october, asOf, LeaseTerms) + mixedAccount.RecargoProjectedForPayment(november, asOf, LeaseTerms),
+            mixedRow.RecargoAccrued);
+        Assert.True(mixedRow.RecargoAccrued > 0m);
+        Assert.Equal(50_000m, Assert.Single(worklist, r => r.AccountId == frozenAccount.Id).RecargoAccrued);
     }
 }

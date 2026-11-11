@@ -18,6 +18,13 @@ public interface IAccountDirectory
     /// at most fifty. Fewer than two meaningful characters find nothing.
     /// </summary>
     Task<IReadOnlyList<AccountListing>> SearchAsync(string text, CancellationToken ct = default);
+
+    /// <summary>
+    /// The listing the search would show for <paramref name="accountId"/>, read fresh, readiness included, or null when
+    /// there is none: an unknown id, or a contract loaded by mistake, which the search hides too. How a row of the mora
+    /// list opens that account at the desk (mora design D7). Reads and never writes.
+    /// </summary>
+    Task<AccountListing?> FindAsync(Guid accountId, CancellationToken ct = default);
 }
 
 /// <summary>One account the desk can open.</summary>
