@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-10, con S11 terminada, verificada y revisada, entregada sin commitear_
+_Última actualización: 2026-11-11, con la spec de `mora` aprobada y el design revisado, entregados sin commitear_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -8,26 +8,27 @@ _Última actualización: 2026-11-10, con S11 terminada, verificada y revisada, e
 
 ## En qué estamos
 
-**Change activo: `gestion-de-alquileres`**, en `openspec/changes/gestion-de-alquileres/`. Tiene `exploration.md`, `proposal.md`
-`spec.md`, `design.md` y `tasks.md`, que tiene el avance real. La spec cambió cosas de la propuesta: leer sus Findings.
+**Change activo: `mora`**, en `openspec/changes/mora/`. La propuesta entró con el PR #108. `spec.md` (aprobada por Tomás el
+2026-11-11) y `design.md` están sin commitear. Todavía no hay `tasks.md`. `gestion-de-alquileres` sigue abierto, esperando S12;
+S11 entró con el PR #107.
 
 ## Próximos pasos
 
-1. **Tomás commitea S11 y abre el PR**, junto con el commit de las notas de M7 que ya hizo (archivos, commit y PR en el mensaje de
-   entrega de S11, sesión del 2026-11-10). S11 no lleva migración.
-2. **Al arrancar la próxima sesión, armar el panorama de lo que falta** para el sistema completo, leyendo `proposal.md` y el plan
-   general: Tomás lo pidió el 2026-11-10 (carga inicial, mora, avisos, archivar este change). Es barato y da un número con fundamento.
-3. **S12 (Pantallas):** Mateo manda las pantallas con su explicación. El 2026-11-10 se le devolvió `textos_propuestos.md`: en Índices y
-   Ajustes usa los textos que ya están en el código (`AdjustmentRefusalText`, `IndexRefusalText`, `AdjustmentsViewModel`,
-   `IndicesViewModel`); los textos nuevos de Personas, Propiedades y Contratos los revisa Tomás. Lo que S12 tiene que levantar de S9 a
-   S11 está en las notas 9.x a 11.x de `tasks.md` (por ejemplo, los meses de la diferencia en caja, nota 10.11).
+1. **Tomás commitea `spec.md` y `design.md` de `mora`** y abre el PR (texto en la entrega del 2026-11-11). El design lo
+   revisó el asistente contra el código: Tomás no lee designs.
+2. **Escribir `openspec/changes/mora/tasks.md`** y arrancar M1 (design §7): el agujero, los campos, el cargador compartido,
+   `FindAsync`, el registro y el view-model. Los Tests 1, 2 y 4 primero, vistos fallando.
+3. **S12 (Pantallas) y M2 de `mora`:** cuando Mateo mande las pantallas. Lo que S12 tiene que levantar de S9 a S11 está en las
+   notas 9.x a 11.x de `gestion-de-alquileres/tasks.md`.
+4. **Panorama de lo que falta** para el sistema completo (carga inicial, avisos, archivar `gestion-de-alquileres`): pedido el
+   2026-11-10, todavía sin armar.
 
 ## Pendientes / bloqueos
 
 - **El botón de Traer índices todavía no se apretó en una pantalla:** no hay vista hasta S12, `tasks.md` 12.3b. Se probó contra las fuentes reales con un programa temporal.
 - **Precio para la reunión con Nicolás:** sin decidir. Lo discutido está en Engram, sesión del 2026-11-05.
-- **Esperando a Nicolás:** respondió el 2026-11-05 que está complicado y quiere verlo cuando esté más tranquilo, en unas 2 semanas.
-  Lo que queda para esa reunión: la copia del Excel, si no llega antes, y el logo en vector. Nada de este change lo espera.
+- **Reunión con Nicolás: la semana del 2026-11-16** (Tomás, 2026-11-11). Lo que queda para esa reunión: la copia del Excel, si
+  no llega antes, el logo en vector, el precio y las preguntas de abajo. Nada de `mora` la espera.
 - **Para preguntarle a Nicolás en la reunión:** las preguntas N1 a N4 de `spec.md`. N1 y N2 (qué meses y qué día usa en cada índice)
   confirman valores que la spec dejó supuestos.
 - **Falta decidir cómo se cargan los contratos anteriores al sistema en cantidad.** Depende de lo que traiga el Excel:
@@ -65,8 +66,8 @@ _Última actualización: 2026-11-10, con S11 terminada, verificada y revisada, e
 
 | | |
 |---|---|
-| **Docker** | **Sí** para S12 (Testcontainers `postgres:17.6`) |
-| **Supabase** | **No** para S11 (no lleva migración); las bases se pausan solas, y solo Tomás se conecta |
+| **Docker** | **Sí** para M1 de `mora` y para S12 (Testcontainers `postgres:17.6`) |
+| **Supabase** | **No** para `mora` (no lleva migración); las bases se pausan solas, y solo Tomás se conecta |
 | **Límite diario** | Tomás pasa el porcentaje al arrancar; el verificador y la revisión de gentle-ai son lo más caro |
 
 ## Para retomar
