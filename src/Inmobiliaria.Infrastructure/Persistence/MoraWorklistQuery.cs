@@ -135,10 +135,15 @@ public sealed class MoraWorklistQuery : IMoraWorklistQuery
     /// own date, both already the period's due date; else the contract's due day in that month, by the
     /// rule rent itself uses. The last branch is what an opening-balance month takes: it carries no
     /// rent, and before this rule an account whose oldest unpaid period was one dropped off the list
-    /// (mora spec Finding F1). Never the day the balance was typed.
+    /// (mora spec Finding F1). Never the day the balance was typed. Several differences on one period
+    /// (a re-adjustment, or one charged before a due-day correction) take the earliest, so the answer
+    /// never depends on the order the movements were loaded in.
     /// </summary>
     private static DateOnly DueDateOf(ContractAccount account, DateOnly period, int dueDay) =>
         account.Movements.FirstOrDefault(m => m.Kind == MovementKind.RentAccrual && m.Period == period)?.OccurredOn
-        ?? account.Movements.FirstOrDefault(m => m.Kind == MovementKind.AdjustmentDifference && m.Period == period)?.OccurredOn
+        ?? account.Movements
+            .Where(m => m.Kind == MovementKind.AdjustmentDifference && m.Period == period)
+            .Select(m => (DateOnly?)m.OccurredOn)
+            .Min()
         ?? AccrualSchedule.DueDateFor(period, dueDay);
 }
