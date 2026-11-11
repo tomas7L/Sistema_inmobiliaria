@@ -54,48 +54,46 @@ public sealed class MoraWorklistQuery : IMoraWorklistQuery
             .Include(a => a.Movements)
             .ToListAsync(ct);
 
+        // Who owes, in the cash desk's own words, and the due day an opening-balance month is dated by
+        // (mora design D3). Read by the same code the desk's search uses, so the two never disagree.
+        var listings = (await AccountListings.ReadAllAsync(_context, asOf, ct))
+            .ToDictionary(e => e.Listing.AccountId);
+
         var worklist = new List<MoraAccount>();
 
         foreach (var account in accounts)
         {
-            var row = Project(account, asOf, terms);
+            // Every account has a contract (a foreign key), so a missing entry is a bug, never a row to
+            // skip: a skipped row is exactly the failure the worklist exists to prevent.
+            var row = Project(account, listings[account.Id], asOf, terms);
             if (row is not null)
             {
                 worklist.Add(row);
             }
         }
 
-        // Oldest debt first: that is the order somebody chasing payments works in.
+        // Oldest debt first: that is the order somebody chasing payments works in. Ties by tenant name,
+        // folded as the desk's search folds it, then by account so the order never shuffles (mora D4).
         return worklist
             .OrderByDescending(row => row.DaysOverdue)
-            .ThenBy(row => row.ContractId)
+            .ThenBy(row => AccountSearch.Fold(row.Tenants), StringComparer.Ordinal)
+            .ThenBy(row => row.AccountId)
             .ToList();
     }
 
-    private static MoraAccount? Project(ContractAccount account, DateOnly asOf, RecargoTerms terms)
+    private static MoraAccount? Project(ContractAccount account, AccountListingEntry entry, DateOnly asOf, RecargoTerms terms)
     {
-        // An account with no unpaid period is not in mora and does not appear. Note the
-        // consequence, which follows the specification exactly: an opening balance carries no
-        // period and therefore no due date, so it cannot by itself put an account on a list whose
-        // first column is "days overdue". In practice such an account also has periods — the
-        // opening balance is typed at go-live and the first period falls due that same month.
+        // An account with no unpaid period is not in mora and does not appear. A zero opening balance
+        // carries no period and so never makes a period unpaid; a monthly one carries its month.
         var oldest = account.OldestUnpaidPeriod();
         if (oldest is null)
         {
             return null;
         }
 
-        // The period's due date is its accrual's own date. Without an accrual there is nothing to
-        // count days from, so there is no row to build.
-        var accrual = account.Movements
-            .FirstOrDefault(m => m.Kind == MovementKind.RentAccrual && m.Period == oldest.Value);
+        var dueDate = DueDateOf(account, oldest.Value, entry.DueDay);
 
-        if (accrual is null)
-        {
-            return null;
-        }
-
-        var daysOverdue = asOf.DayNumber - accrual.OccurredOn.DayNumber;
+        var daysOverdue = asOf.DayNumber - dueDate.DayNumber;
         if (daysOverdue <= 0)
         {
             return null;
@@ -115,15 +113,32 @@ public sealed class MoraWorklistQuery : IMoraWorklistQuery
 
         var recargo = frozen is not null ? frozen.Amount : owed - ledger;
 
+        var listing = entry.Listing;
         return new MoraAccount(
             AccountId: account.Id,
             ContractId: account.ContractId,
+            ContractShortId: listing.ContractShortId,
+            Tenants: listing.Tenants,
+            Units: listing.Units,
+            Status: listing.Status,
             OldestUnpaidPeriod: oldest.Value,
-            OldestUnpaidDueDate: accrual.OccurredOn,
+            OldestUnpaidDueDate: dueDate,
             DaysOverdue: daysOverdue,
             LedgerBalance: ledger,
             AmountOwed: owed,
             RecargoAccrued: recargo,
             RecargoFrozenOn: frozen?.OccurredOn);
     }
+
+    /// <summary>
+    /// One rule for every unpaid period (mora design D1): its rent's own date, else its difference's
+    /// own date, both already the period's due date; else the contract's due day in that month, by the
+    /// rule rent itself uses. The last branch is what an opening-balance month takes: it carries no
+    /// rent, and before this rule an account whose oldest unpaid period was one dropped off the list
+    /// (mora spec Finding F1). Never the day the balance was typed.
+    /// </summary>
+    private static DateOnly DueDateOf(ContractAccount account, DateOnly period, int dueDay) =>
+        account.Movements.FirstOrDefault(m => m.Kind == MovementKind.RentAccrual && m.Period == period)?.OccurredOn
+        ?? account.Movements.FirstOrDefault(m => m.Kind == MovementKind.AdjustmentDifference && m.Period == period)?.OccurredOn
+        ?? AccrualSchedule.DueDateFor(period, dueDay);
 }

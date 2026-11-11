@@ -16,6 +16,14 @@ internal sealed class FakeAccountDirectory : IAccountDirectory
         Searches.Add(text);
         return Task.FromResult<IReadOnlyList<AccountListing>>(Listings.ToList());
     }
+
+    public List<Guid> Finds { get; } = [];
+
+    public Task<AccountListing?> FindAsync(Guid accountId, CancellationToken ct = default)
+    {
+        Finds.Add(accountId);
+        return Task.FromResult(Listings.SingleOrDefault(l => l.AccountId == accountId));
+    }
 }
 
 /// <summary>A scriptable <see cref="IDueAdjustmentQuery"/> that records the dates it was asked for.</summary>

@@ -177,4 +177,37 @@ public sealed class AccountDirectoryTests
         Assert.Equal(0, await check.AccountMovements.CountAsync());
         Assert.Equal(seeded.AccountId, (await check.ContractAccounts.SingleAsync()).Id);
     }
+
+    /// <summary>
+    /// mora design D7: one account's listing, read fresh, is exactly what the search shows for it; an unknown id and a
+    /// contract loaded by mistake find nothing, as the search hides that contract too. Both roles.
+    /// </summary>
+    [SkippableTheory]
+    [InlineData(UserRole.Admin)]
+    [InlineData(UserRole.Empleado)]
+    public async Task FindAsync_ReturnsTheSearchListing_AndNothingForAnUnknownOrMistakenContract(UserRole role)
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var world = await DeskWorld.CreateAsync(_fixture);
+        var ana = await SeedAsync(world, ("Ana", "Demaría"), ("Juan", "Gómez"), "San Martín");
+        var mistaken = await SeedAsync(world, ("Pedro", "López"), ("Rosa", "Ibáñez"), "Bv. Belgrano");
+
+        await using (var context = world.NewContext())
+        {
+            var contract = await context.Contracts.SingleAsync(c => c.Id == mistaken.ContractId);
+            contract.Cancel(DeskWorld.Today);
+            await context.SaveChangesAsync();
+        }
+
+        await using var asRole = await ContextAsAsync(world, role);
+        var directory = DirectoryOver(asRole);
+
+        var found = await directory.FindAsync(ana.AccountId);
+        Assert.Equal(Assert.Single(await directory.SearchAsync("demaria")), found);
+
+        Assert.Null(await directory.FindAsync(Guid.NewGuid()));
+        Assert.Null(await directory.FindAsync(mistaken.AccountId));
+        Assert.Empty(await directory.SearchAsync("lopez"));
+    }
 }

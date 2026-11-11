@@ -17,7 +17,12 @@ namespace Inmobiliaria.Domain.Accounts;
 public interface IMoraWorklistQuery
 {
     /// <summary>
-    /// Every account in mora as of <paramref name="asOf"/>, oldest debt first.
+    /// Every account in mora as of <paramref name="asOf"/>, oldest debt first; ties by tenant name,
+    /// then by account, so the order never shuffles.
+    ///
+    /// ASK IT ABOUT TODAY ONLY (mora spec Decision 9). The oldest unpaid period is read as the account
+    /// stands now, whatever date is passed, while the balances honour the date: asked about a past
+    /// day, the two would describe different moments.
     ///
     /// IT MATERIALISES BEFORE IT READS. This is the highest-ranked risk of the whole change: with
     /// no scheduler, a period exists only once something has asked about it, so a worklist that
