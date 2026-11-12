@@ -9,6 +9,12 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="EFCore.NamingConventions" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="MailKit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The SMTP seam is internal; its tests throw through it without a real server (notificaciones design §3.4). -->
+    <InternalsVisibleTo Include="Inmobiliaria.Infrastructure.Tests" />
   </ItemGroup>
 
   <ItemGroup>

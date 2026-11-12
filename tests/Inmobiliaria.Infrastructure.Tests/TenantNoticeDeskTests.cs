@@ -16,7 +16,7 @@ namespace Inmobiliaria.Infrastructure.Tests;
 /// preview, through its public port: a notice that disagrees with the receipt is worse than none (spec Decision 9).
 /// </summary>
 [Collection(PostgresCollection.Name)]
-public sealed class TenantNoticeDeskTests
+public sealed partial class TenantNoticeDeskTests
 {
     private readonly PostgresFixture _fixture;
 
@@ -30,7 +30,9 @@ public sealed class TenantNoticeDeskTests
     /// <summary>A difference attached to next month: on the ledger table, but not owed today (design F8 of the adjustments).</summary>
     private const decimal NotYetBegunDifference = 40_000m;
 
-    private static TenantNoticeDesk DeskOver(DeskWorld world) => new(world.NewContext(), new AgencyClock(), DeskWorld.Terms);
+    /// <summary>A desk over a new session, sending through <paramref name="sender"/> (a fake that accepts all, by default).</summary>
+    private static TenantNoticeDesk DeskOver(DeskWorld world, FakeNoticeSender? sender = null) =>
+        new(world.NewContext(), new AgencyClock(), DeskWorld.Terms, sender ?? new FakeNoticeSender());
 
     /// <summary>What a seed wrote: the account, its contract and the tenant's name as the desk prints it.</summary>
     private sealed record Seeded(Guid AccountId, Guid ContractId);
@@ -179,23 +181,23 @@ public sealed class TenantNoticeDeskTests
 
     // ---- Test 4 ---------------------------------------------------------------------------------------------------------
 
-    /// <summary>
-    /// Reading writes no sent row. The mail port half of spec Test 4 holds by construction in this slice: the desk is given no
-    /// sender to call, and Phase 2 re-asserts it with a counting fake once sending takes one.
-    /// </summary>
+    /// <summary>Reading writes no sent row and never calls the mail port: no login, no send.</summary>
     [SkippableFact]
-    public async Task ReadingTheBoard_WritesNoSentRow()
+    public async Task ReadingTheBoard_WritesNoSentRow_AndNeverCallsTheMailPort()
     {
         Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
         await using var world = await DeskWorld.CreateAsync(_fixture);
         await SeedAsync(world, "maria.perez@example.com");
+        var sender = new FakeNoticeSender();
 
-        var first = await DeskOver(world).ReadAsync();
-        var second = await DeskOver(world).ReadAsync();
+        var first = await DeskOver(world, sender).ReadAsync();
+        var second = await DeskOver(world, sender).ReadAsync();
 
         Assert.Single(first.ToSend);
         Assert.Equal(first.ToSend, second.ToSend);
         Assert.Equal(0L, await SentRowsAsync(world));
+        Assert.Equal(0, sender.Opens);
+        Assert.Equal(0, sender.Attempts);
     }
 
     // ---- Test 5 ---------------------------------------------------------------------------------------------------------

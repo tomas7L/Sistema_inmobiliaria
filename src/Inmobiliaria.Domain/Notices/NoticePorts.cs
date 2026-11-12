@@ -13,11 +13,12 @@ public interface ITenantNoticeDesk
     Task<NoticeBoard> ReadAsync(CancellationToken ct = default);
 
     /// <summary>
-    /// Sends <paramref name="notices"/> from the mailbox <paramref name="credentials"/> names, each in its own transaction that
-    /// commits only once the email is accepted (spec Decision 15). A failure on one never stops the next.
+    /// Sends <paramref name="notices"/> from the mailbox <paramref name="credentials"/> names, signed as
+    /// <paramref name="agencyName"/>, each in its own transaction that commits only once the email is accepted (spec Decision
+    /// 15). A failure on one never stops the next.
     /// </summary>
     Task<NoticeSendReport> SendAsync(
-        IReadOnlyList<TenantNotice> notices, MailboxCredentials credentials, CancellationToken ct = default);
+        IReadOnlyList<TenantNotice> notices, MailboxCredentials credentials, string agencyName, CancellationToken ct = default);
 }
 
 /// <summary>One email, already composed.</summary>

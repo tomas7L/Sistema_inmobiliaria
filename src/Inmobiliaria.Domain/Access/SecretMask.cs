@@ -18,6 +18,25 @@ public static partial class SecretMask
         return AssignedPassword().Replace(masked, "${key}=***");
     }
 
+    /// <summary>
+    /// As <see cref="Mask(string)"/>, after removing every occurrence of <paramref name="secret"/> itself, in any case and with or
+    /// without its spaces: a bare app password matches neither pattern (notificaciones design D7, Finding F4).
+    /// </summary>
+    public static string Mask(string text, string secret)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(secret);
+
+        foreach (var form in new[] { secret, secret.Replace(" ", string.Empty, StringComparison.Ordinal) }
+                     .Where(f => f.Length > 0)
+                     .Distinct(StringComparer.Ordinal))
+        {
+            text = text.Replace(form, "***", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return Mask(text);
+    }
+
     [GeneratedRegex(@"(?<key>password)\s*=\s*('[^']*'|""[^""]*""|[^;\s]*)", RegexOptions.IgnoreCase)]
     private static partial Regex AssignedPassword();
 

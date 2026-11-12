@@ -6,6 +6,15 @@ namespace Inmobiliaria.Domain.Tests;
 public class SecretMaskTests
 {
     [Fact]
+    public void ABareSecret_IsMasked_InAnyCase_WithOrWithoutItsSpaces_AndThePatternsStillApply()
+    {
+        var masked = SecretMask.Mask(
+            "login failed for abcd efgh ijkl mnop, ABCDEFGHIJKLMNOP and Password=hunter2", "abcd efgh ijkl mnop");
+
+        Assert.Equal("login failed for ***, *** and Password=***", masked);
+    }
+
+    [Fact]
     public void AConnectionStringPassword_IsMasked_AndTheRestKept()
     {
         var masked = SecretMask.Mask("Host=db.internal;Username=nicolas;Password=hunter2;SSL Mode=Require");
