@@ -26,6 +26,44 @@ Decision needed before apply: No
 
 ## Issues found
 
+- **gentle-ai findings, Phase 2** (2026-11-12, non-blocking; taken up after the review closed, so not reviewed by it):
+  - **`R4-ambiguous-delivery` and `R3-ambiguous-send-failure`, fixed.** A connection lost while an email was travelling read
+    "Gmail no aceptó el correo", and the notice came back to the list, so the operator could send it twice. The adapter now tells
+    the cases apart:
+    - Gmail's own refusal (`SmtpCommandException`) says Gmail did not accept it.
+    - A send never started (`ServiceNotConnectedException`) says it was not sent and can be resent.
+    - A connection lost or timed out mid-send (`IOException`, `TimeoutException`, `OperationCanceledException`,
+      `SmtpProtocolException`) says nobody knows whether it arrived, and asks the operator to check Gmail's Sent folder before
+      resending.
+    - Anything else says it was not sent.
+
+    Pinned by `ASendFailure_SaysWhetherTheEmailMayHaveGoneOut` (six cases).
+  - **`R4-session-no-reconnect`, half taken.** There is no reconnect. Once the connection drops, the rest of the batch says "se
+    perdió la conexión… Se puede volver a enviar" instead of a misleading refusal.
+  - **`R1-001`, fixed.** The desk's catch-all now also removes the bare app password, through the new
+    `SecretMask.Mask(text, secret)` that the adapter shares. Pinned by `AFailureQuotingTheAppPassword_ReachesTheOperatorWithoutIt`
+    and a `SecretMaskTests` case.
+  - **`R3-unrecorded-accept-untested`, fixed.** `AnAcceptedEmailWhoseRowCannotBeCommitted_IsReportedAsFailed_SayingItWentOut`
+    refuses the commit through a `DbTransactionInterceptor`.
+  - **`R3-cancel-mid-batch-drops-report`, for Phase 3.** A press cancelled mid-batch throws and loses the outcomes collected so
+    far. What went out is committed, so nothing is resent. The screen decides whether a send can be cancelled at all.
+  - Each fix was seen failing under its mutation, and every mutation was reverted byte-identical. One mutant first survived:
+    calling every other failure a refusal. A case for that branch was added, and it then failed as it should.
+- **Verifier advisories, Phase 2** (2026-11-12, not blockers):
+  - **(1) Fixed: a press cancelled after Gmail accepted an email rolled back its row.** The commit used the caller's token, so the
+    email went out with no row, and the notice could be sent again. It now commits with `CancellationToken.None`. Pinned by
+    `APressCancelledAfterGmailAcceptedTheEmail_StillRecordsIt`, which fails with the token back.
+  - **(2) Fixed: a cancelled login left the SMTP client open.** It is now closed on every failure. Pinned by
+    `ACancelledLogin_IsRethrown_AndClosesTheClient`, which fails with the old catch filter. Both mutations were reverted
+    byte-identical.
+  - **(3) Left: the scrub misses URL-encoded and base64 forms of the password.** MailKit puts neither in an exception message and
+    no protocol logger is attached, so this is outside realistic input.
+  - **(4) Fixed: a missing period.** "El correo salió, pero no se pudo registrar el envío (…). Revise antes…".
+  - **(5) Left, and it predates Phase 2: fifty centavos print as ",5"**, as `Formats.Money` writes them. It now reaches tenants:
+    to settle in 4.2, with the final wording.
+  - **(6) For Phase 3: re-read the board before sending.** `SendAsync` trusts the notices it is given, so a screen left open past
+    midnight would send yesterday's figures and month.
+
 - **gentle-ai findings, Phase 1** (2026-11-12, non-blocking): **`R3-001`** (WARNING), `TenantNoticeDeskTests.cs:235-239`: the recargo oracle sums every `account_movements` row, so the infrastructure test never seeds an adjustment difference on a month not yet begun, which `LedgerForPayment` excludes; a desk using the unfiltered ledger would still pass. **`R3-002`**, the tests assert against the static `DeskWorld.Today` while the desk reads a live `AgencyClock`: a run crossing midnight or a month boundary can fail. **`R3-003`**, `DeskOver` and Test 7's `AccountDirectory` never dispose their `DbContext`. **`R4-send-throws-not-supported`**, `SendAsync` throws `NotSupportedException` instead of returning outcomes; no caller exists until Phase 2, which implements it.
 - **Taken up after the review closed, so not reviewed by it** (2026-11-12): **`R3-001` fixed.** `EveryNotice_StatesTheDesksFigure_AndTheRecargoInsideIt_FrozenIncluded` now seeds a 40,000 difference on next month and its oracle leaves it out of the ledger. Seen failing with the desk's ledger replaced by every movement (expected 1,054,800, actual 1,014,800), the mutation reverted byte-identical (md5). **`R3-003` is false:** `DeskWorld.NewContext()` records every context in `_contexts` and `DisposeAsync` disposes them all (`CollectionDeskFixture.cs:298`, `:400-405`). **`R3-002` left as it is:** it predates Phase 1, since `DeskWorld.Today` and `NewDesk()` read the live clock across the whole cash desk test family, and fixing only these tests would not close it. Final run: build exit 0, 0 Advertencia(s), 0 Errores; suite exit 0, 2158 passed (Domain 729, Presentation 530, Infrastructure 899), 0 failed, 0 skipped; `TIME_WAIT` 100 before, 3,496 after; `has-pending-model-changes` exit 0.
 - **Verifier advisories, Phase 1** (2026-11-12, not blockers): (1) the already-sent list indexes `byContract[n.ContractId]`; a sent row whose contract had no account would throw `KeyNotFoundException`, unreachable today because every contract has an account; (2) as with the recibo tables, the append-only trigger does not cover a TRUNCATE by the table owner; neither app role holds TRUNCATE (probe P1); (3) the existing Test 7 removes the tenant in the same save that creates the contract; the verifier's probe covered a replacement in a later session.
@@ -38,6 +76,17 @@ Decision needed before apply: No
   isolated one now carry Supabase's table defaults, as production does (design F2). No existing test changed result.
 
 ## Deviations
+
+- **`ITenantNoticeDesk.SendAsync` takes the agency's name** (Phase 2, 2026-11-12; held medium): design D10 names the agency in the email
+  from `AgencyDetails`, which lives in `Presentation` and is read in `App.xaml.cs`, so `Infra` cannot reach it. It travels with the
+  batch, as the credentials do (design §1). The port had no caller yet.
+- **The coverage sentence lives in `Domain/Accounts/BalanceCoverage.cs`** (Phase 2): spec Requirement 2 asks for the Mora screen's
+  words, and the composer in `Domain` cannot read `Presentation`'s `MoraTexts`. `MoraTexts.Coverage` points to it; the text is
+  unchanged.
+- **The email says the amount "puede aumentar" after its date**, not that recargo grows: a frozen account's recargo does not grow,
+  and the notice cannot tell it apart (its recargo figure is zero). Placeholder wording, read by Tomás in 4.2.
+- **An email Gmail accepted whose row then failed to commit is reported as failed, saying the email went out**, so nobody resends
+  it blind (spec Requirement 5, "nothing reported as sent that was not").
 
 - **"Shaped like an address" uses `System.Net.Mail.MailAddress.TryCreate`, not MailKit's `MailboxAddress.TryParse`** (design
   §3.4, §9): MailKit arrives in Phase 2 (task 2.4). A display-name form ("Ana <ana@x.com>") is refused: the parsed address must
@@ -91,14 +140,14 @@ this PR.** Spec tests: 1 to 5, 7, 14, 15, 18. Requirements 1 to 3, 7, 8 (registr
 D5 to D8, D10, §2.1 (`NoticeComposer`), §3.3 (`SendAsync`), §3.4, F4, F6. Risk: item 5 (MailKit, a new dependency). Needs:
 Phase 1 merged.
 
-- [ ] 2.1 **[Second inspection, read-only]** Phase 1 landed; `CollectionDesk.cs:444,456` and `SecretMask.cs:11-27` still as cited
-- [ ] 2.2 **[RED then GREEN, Test 6]** `NoticeComposer` in `Domain/Notices/`
-- [ ] 2.3 **[RED then GREEN, Tests 8 to 11]** `TenantNoticeDesk.SendAsync` (design §3.3) with a fake sender; Test 9 through two connections, the fake waiting until both are in flight
-- [ ] 2.4 **[RED then GREEN, Test 13]** `MailKitTenantNoticeSender` behind `ISmtpTransport`; MailKit in `Directory.Packages.props`
-- [ ] 2.5 **[Prove the guards by making them fail]** Commit before send; the 23505 mapping; the password scrub; the login-first order
-- [ ] 2.6 **[Guardrails]** As Phase 1
-- [ ] 2.7 **[Independent verification and gentle-ai review]** Item 5 named
-- [ ] 2.8 **[Handover]** As Phase 1
+- [x] 2.1 **[Second inspection, read-only]** Phase 1 landed; `CollectionDesk.cs:444,456` and `SecretMask.cs:11-27` still as cited. **Done 2026-11-12**: #115 merged as `e558790`, `ramatomy` equal in content to `develop`, working tree clean; both anchors as cited
+- [x] 2.2 **[RED then GREEN, Test 6]** `NoticeComposer` in `Domain/Notices/`. **Done**: RED, CS0103 (`NoticeComposer` and `BalanceCoverage` missing); GREEN with `NoticeComposerTests` (7 tests), Domain 736 passed. The coverage sentence moved to `Domain/Accounts/BalanceCoverage.cs`, `MoraTexts.Coverage` now points to it (Deviations); Mora's tests unchanged and green
+- [x] 2.3 **[RED then GREEN, Tests 8 to 11]** `TenantNoticeDesk.SendAsync` (design §3.3) with a fake sender; Test 9 through two connections, the fake waiting until both are in flight. **Done**: `TenantNoticeDeskTests.Send.cs` (7 tests: the sent row and its email, a refused login, Test 8 through the desk, Test 9, Test 10, Test 11, a send that throws) and `FakeNoticeSender`; Test 4 now also asserts zero logins and zero sends. Test 9's fake holds the first email until `pg_stat_activity` shows the other session waiting on a lock. RED: with `SendAsync` throwing, the 7 send tests failed; GREEN 38/38 across the notice, MailKit and session tests
+- [x] 2.4 **[RED then GREEN, Test 13]** `MailKitTenantNoticeSender` behind `ISmtpTransport`; MailKit in `Directory.Packages.props`. **Done**: `Infra/Mail/MailKitTenantNoticeSender.cs`, MailKit **4.18.2** (published 2026-10-23; 5.0.0 was two days old and a major version), `InternalsVisibleTo` for the seam; the sender registered as a singleton outside the terms block. `MailKitTenantNoticeSenderTests` (5 tests). RED was not observed before the adapter existed: the scrub's RED is the mutation in 2.5
+- [x] 2.5 **[Prove the guards by making them fail]** Commit before send; the 23505 mapping; the password scrub; the login-first order. **Done**, each reverted byte-identical (md5): commit before send → 5 tests, Test 11 among them; 23505 mapping removed → Test 8 through the desk and Test 9; password scrub removed → both Test 13 tests; a login per notice instead of one first → the sent-row test and Test 11 (`Opens` is 1). A login placed after the insert is not observable: the refused login's rollback leaves the same zero rows
+- [x] 2.6 **[Guardrails]** As Phase 1. **Done 2026-11-12**: build exit 0, 0 Advertencia(s), 0 Errores; suite exit 0, 2177 passed (Domain 736, Presentation 530, Infrastructure 911), 0 failed, 0 skipped; `TIME_WAIT` 2,762 before, 5,395 after; `has-pending-model-changes` exit 0. About 940 changed lines with the tests (175+/31- tracked, 768 new), over the ~350 estimate: the tests are most of it
+- [x] 2.7 **[Independent verification and gentle-ai review]** Item 5 named. **Verifier done 2026-11-12: no blockers**; every Phase 2 spec Test (6, 8, 9, 10, 11, 13) and Requirements 2, 4, 5, 6 pass; build exit 0 with 0 warnings, also with `--no-incremental`; suite exit 0, 2177 passed, 0 failed, 0 skipped; `has-pending-model-changes` exit 0; MailKit 4.18.2 confirmed published and not a prerelease, resolving MimeKit 4.18.2, BouncyCastle.Cryptography 2.7.0 and System.Security.Cryptography.Pkcs 10.0.13, with no vulnerable package (`dotnet list package --vulnerable --include-transitive`); its mutation of the 23505 mapping failed Tests 8 and 9. Six advisories, see Issues found; 1, 2 and 4 fixed before the review. **gentle-ai done 2026-11-12, in one candidate on a scratch clone** (code and tests, no documents; 15 files, 1,002 lines; lenses risk, resilience and reliability): `review-af125732595c8cab`, approved, acknowledged. Six non-blocking findings, see Issues found
+- [x] 2.8 **[Handover]** As Phase 1. **Handed over 2026-11-12**: 18 paths; final run after the review follow-ups: build exit 0, 0 Advertencia(s), 0 Errores; suite exit 0, 2188 passed (Domain 737, Presentation 530, Infrastructure 921), 0 failed, 0 skipped; `TIME_WAIT` 3,107 before, 5,408 after; `has-pending-model-changes` exit 0. No migration
 
 ---
 

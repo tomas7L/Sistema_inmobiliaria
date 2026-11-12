@@ -8,6 +8,7 @@ using Inmobiliaria.Domain.Notices;
 using Inmobiliaria.Domain.Parties;
 using Inmobiliaria.Domain.Units;
 using Inmobiliaria.Infrastructure.IndexSources;
+using Inmobiliaria.Infrastructure.Mail;
 using Inmobiliaria.Infrastructure.Persistence;
 using Inmobiliaria.Infrastructure.Persistence.PerCall;
 using Microsoft.Extensions.DependencyInjection;
@@ -60,6 +61,9 @@ public static class SessionServices
         services.AddSingleton<IAdjustmentDesk>(provider =>
             new PerCallAdjustmentDesk(factory, provider.GetRequiredService<IAgencyClock>(), session.UserId));
 
+        // The mail port holds no state between batches: each send logs in afresh (notificaciones design §3.5, D5).
+        services.AddSingleton<ITenantNoticeSender>(_ => new MailKitTenantNoticeSender());
+
         if (recargo.Terms is { } terms)
         {
             services.AddSingleton<ICollectionDesk>(provider =>
@@ -69,8 +73,8 @@ public static class SessionServices
             services.AddSingleton<IMoraWorklistQuery>(_ => new PerCallMoraWorklistQuery(factory));
 
             // A notice states the desk figure, so it closes with the desk (notificaciones design §3.5).
-            services.AddSingleton<ITenantNoticeDesk>(provider =>
-                new PerCallTenantNoticeDesk(factory, provider.GetRequiredService<IAgencyClock>(), terms));
+            services.AddSingleton<ITenantNoticeDesk>(provider => new PerCallTenantNoticeDesk(
+                factory, provider.GetRequiredService<IAgencyClock>(), terms, provider.GetRequiredService<ITenantNoticeSender>()));
         }
 
         return services;

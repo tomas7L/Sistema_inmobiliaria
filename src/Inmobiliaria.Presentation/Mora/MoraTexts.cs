@@ -6,9 +6,7 @@ namespace Inmobiliaria.Presentation.Mora;
 public static class MoraTexts
 {
     /// <summary>What the figures cover, and what they never do (contract-account "The Balance Names What It Covers").</summary>
-    public const string Coverage =
-        "Los importes incluyen alquiler, cuotas de honorarios y recargo. No incluyen tasa municipal, seguros ni otros conceptos. "
-        + "El total adeudado ya incluye el recargo.";
+    public const string Coverage = Domain.Accounts.BalanceCoverage.Sentence;
 
     public const string Empty = "No hay ninguna cuenta en mora.";
 
