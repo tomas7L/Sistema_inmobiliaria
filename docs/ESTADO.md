@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-11, con M1 de `mora` mergeado (#110)_
+_Última actualización: 2026-11-11 (cierre), con `mora` mergeado hasta la tarea 2.0 (#111) y la exploración de `notificaciones` escrita_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -14,13 +14,14 @@ S11 entró con el PR #107.
 
 ## Próximos pasos
 
-1. **Tomás commitea la tarea 2.0 de `mora`** (los cuatro hallazgos de la revisión de M1; archivos y commit en la entrega del
-   2026-11-11). M1 entró con el PR #110.
-2. **El resto de M2 de `mora`** (`openspec/changes/mora/tasks.md`, Phase 2 desde 2.1) va con las pantallas de Mateo.
-3. **S12 (Pantallas) y M2 de `mora`:** cuando Mateo mande las pantallas. Lo que S12 tiene que levantar de S9 a S11 está en las
+1. **`mora` está completo hasta donde no depende de Mateo** (M1 en #110, la tarea 2.0 en #111). El resto de Phase 2 de
+   `openspec/changes/mora/tasks.md`, desde 2.1, va con sus pantallas.
+2. **S12 (Pantallas) y M2 de `mora`:** cuando Mateo mande las pantallas. Lo que S12 tiene que levantar de S9 a S11 está en las
    notas 9.x a 11.x de `gestion-de-alquileres/tasks.md`.
-4. **Panorama de lo que falta** para el sistema completo (carga inicial, avisos, archivar `gestion-de-alquileres`): pedido el
-   2026-11-10, todavía sin armar.
+3. **`notificaciones`: exploración y propuesta escritas** (`openspec/changes/notificaciones/`). Tomás decidió el 2026-11-12
+   que la opción C se hace sí o sí; lo siguiente es la spec. Si no están en `develop`, Tomás todavía no las commiteó.
+4. **Panorama de lo que falta:** armado el 2026-11-11, en Engram `plan/remaining-work-panorama`. Lo próximo que no espera a
+   Mateo es `carga-inicial`, que espera el Excel de la reunión con Nicolás.
 
 ## Pendientes / bloqueos
 
@@ -28,8 +29,14 @@ S11 entró con el PR #107.
 - **Precio para la reunión con Nicolás:** sin decidir. Lo discutido está en Engram, sesión del 2026-11-05.
 - **Reunión con Nicolás: la semana del 2026-11-16** (Tomás, 2026-11-11). Lo que queda para esa reunión: la copia del Excel, si
   no llega antes, el logo en vector, el precio y las preguntas de abajo. Nada de `mora` la espera.
-- **Para preguntarle a Nicolás en la reunión:** las preguntas N1 a N4 de `spec.md`. N1 y N2 (qué meses y qué día usa en cada índice)
-  confirman valores que la spec dejó supuestos.
+- **Para preguntarle a Nicolás en la reunión:** N1 a N4 de `gestion-de-alquileres/spec.md` (N1 y N2 confirman valores que la spec
+  dejó supuestos), N5 a N11 de `notificaciones/exploration.md` (N11: si ve viable el envío automático sin apretar nada), el
+  Excel, el logo, el precio, Supabase Pro y qué priorizar entre avisos, contratos firmados y liquidación al dueño.
+  **Antes de la reunión, el asistente le muestra a Tomás todas las preguntas, con cómo hacerlas y por qué importa cada una**,
+  para que las estudie (Tomás, 2026-11-12).
+- **Producción no tiene backups:** el plan gratis de Supabase no hace backups automáticos. Pro (USD 25/mes) guarda uno por día
+  durante 7 días; recomendado con convicción fuerte, para llevar a la charla de precio. Detalle en Engram
+  `decisions/notificaciones-c-and-pro`.
 - **Falta decidir cómo se cargan los contratos anteriores al sistema en cantidad.** Depende de lo que traiga el Excel:
   `openspec/domain/respuestas-del-dueno.md`, punto 9, y Engram `decisions/carga-inicial-own-change`.
 - **Al instalar la próxima versión, todas las PC de la inmobiliaria se actualizan juntas** (`tasks.md`, H.5).
@@ -65,8 +72,8 @@ S11 entró con el PR #107.
 
 | | |
 |---|---|
-| **Docker** | **Sí** para M1 de `mora` y para S12 (Testcontainers `postgres:17.6`) |
-| **Supabase** | **No** para `mora` (no lleva migración); las bases se pausan solas, y solo Tomás se conecta |
+| **Docker** | **Sí** para cualquier slice de código: S12, M2 de `mora`, `carga-inicial` (Testcontainers `postgres:17.6`). **No** para armar la lista de preguntas |
+| **Supabase** | **No** para lo próximo (nada lleva migración); las bases se pausan solas, y solo Tomás se conecta |
 | **Límite diario** | Tomás pasa el porcentaje al arrancar; el verificador y la revisión de gentle-ai son lo más caro |
 
 ## Para retomar
