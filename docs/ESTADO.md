@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-11 (cierre), con `mora` mergeado hasta la tarea 2.0 (#111) y la exploración de `notificaciones` escrita_
+_Última actualización: 2026-11-12 (cierre), con `notificaciones` diseñado (#112 a #114) y su Phase 1 escrita, sin commitear, esperando la revisión de gentle-ai_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -8,20 +8,21 @@ _Última actualización: 2026-11-11 (cierre), con `mora` mergeado hasta la tarea
 
 ## En qué estamos
 
-**Change activo: `mora`**, en `openspec/changes/mora/`. La propuesta entró con el PR #108. `spec.md` y `design.md` entraron con el
-PR #109; `tasks.md` tiene el avance. `gestion-de-alquileres` sigue abierto, esperando S12;
-S11 entró con el PR #107.
+**Change activo: `notificaciones`**, en `openspec/changes/notificaciones/`. Exploración y propuesta en #112, spec en #113,
+diseño en #114; `tasks.md` tiene el avance. `mora` y `gestion-de-alquileres` siguen abiertos, esperando las pantallas de Mateo.
 
 ## Próximos pasos
 
-1. **`mora` está completo hasta donde no depende de Mateo** (M1 en #110, la tarea 2.0 en #111). El resto de Phase 2 de
-   `openspec/changes/mora/tasks.md`, desde 2.1, va con sus pantallas.
-2. **S12 (Pantallas) y M2 de `mora`:** cuando Mateo mande las pantallas. Lo que S12 tiene que levantar de S9 a S11 está en las
-   notas 9.x a 11.x de `gestion-de-alquileres/tasks.md`.
-3. **`notificaciones`: exploración y propuesta escritas** (`openspec/changes/notificaciones/`). Tomás decidió el 2026-11-12
-   que la opción C se hace sí o sí; lo siguiente es la spec. Si no están en `develop`, Tomás todavía no las commiteó.
-4. **Panorama de lo que falta:** armado el 2026-11-11, en Engram `plan/remaining-work-panorama`. Lo próximo que no espera a
-   Mateo es `carga-inicial`, que espera el Excel de la reunión con Nicolás.
+1. **`notificaciones` Phase 1 (T1): escrita y verificada, SIN COMMITEAR, en el árbol de trabajo de `ramatomy`.** Falta la
+   **revisión de gentle-ai**, que se dejó para esta sesión porque la anterior era muy larga: `tasks.md` 1.10. Es riesgo alto
+   (item 2) y unas 2.864 líneas con los generados, así que va partida en dos, como `gestion-de-alquileres/tasks.md` 4.9
+   (primero el código sin tests, después los tests encima, en un clon temporal). Necesita el consentimiento de Tomás en cada
+   parte. Después, 1.11: entregar commit y PR, y la migración `20261112160850_AddTenantNotices` para aplicar en PRUEBA.
+2. **`notificaciones` Phase 2 y 3:** después del merge de Phase 1, en orden, según `tasks.md`.
+3. **S12 (Pantallas), M2 de `mora` y Phase 4 de `notificaciones`:** cuando Mateo mande las pantallas. Lo que S12 tiene que
+   levantar de S9 a S11 está en las notas 9.x a 11.x de `gestion-de-alquileres/tasks.md`.
+4. **Panorama de lo que falta:** Engram `plan/remaining-work-panorama`. `carga-inicial` espera el Excel de la reunión con
+   Nicolás. El change que revoca los permisos de la API de Supabase (ver Pendientes) va antes de entregar.
 
 ## Pendientes / bloqueos
 
@@ -77,9 +78,9 @@ S11 entró con el PR #107.
 
 | | |
 |---|---|
-| **Docker** | **Sí** para cualquier slice de código: S12, M2 de `mora`, `carga-inicial` (Testcontainers `postgres:17.6`). **No** para armar la lista de preguntas |
-| **Supabase** | **No** para lo próximo (nada lleva migración); las bases se pausan solas, y solo Tomás se conecta |
-| **Límite diario** | Tomás pasa el porcentaje al arrancar; el verificador y la revisión de gentle-ai son lo más caro |
+| **Docker** | **Sí**: la revisión de gentle-ai de Phase 1 y cualquier slice de código (Testcontainers `postgres:17.6`). **No** para armar la lista de preguntas de la reunión |
+| **Supabase** | **No** para la revisión. **Sí**, despausada, cuando Tomás aplique `20261112160850_AddTenantNotices` a PRUEBA después del merge; solo Tomás se conecta |
+| **Límite diario** | Tomás pasa el porcentaje al arrancar; la revisión de gentle-ai partida en dos es lo más caro de la próxima sesión |
 
 ## Para retomar
 
@@ -97,8 +98,9 @@ dotnet test Inmobiliaria.Core.slnf --configuration Release
 dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure
 ```
 
-Esperado: **2133 pasados, 0 fallas, 0 omitidos**, build sin advertencias y el modelo en sintonía con
-`20261107213120_HardenClearMustChangePassword`. Si el build de Desktop falla con MSB3027, la aplicación está
+Esperado, con Phase 1 de `notificaciones` en el árbol de trabajo: **2158 pasados (Domain 729, Presentation 530,
+Infrastructure 899), 0 fallas, 0 omitidos**, build sin advertencias y el modelo en sintonía con
+`20261112160850_AddTenantNotices`. En `develop` sin Phase 1: 2133 y `20261110150305_AddAdjustmentDifference`. Si el build de Desktop falla con MSB3027, la aplicación está
 abierta y tiene tomadas sus DLL: cerrarla.
 
 **Aplicar una migración** (Tomás, en una ventana de PowerShell aparte, nunca con `!`): `tasks.md` H.3 y H.4; variable `INMOBILIARIA_DB` con
@@ -113,7 +115,8 @@ máquina dotnet responde en español ("Superado", "Con error", "Omitido").
 | Para qué | Dónde |
 |---|---|
 | Cómo trabajamos | `CLAUDE.md` (raíz) |
-| Qué se va a construir | `openspec/changes/gestion-de-alquileres/spec.md` y `proposal.md` |
+| Qué se está construyendo | `openspec/changes/notificaciones/tasks.md`, `design.md` y `spec.md` |
+| Qué falta de alquileres | `openspec/changes/gestion-de-alquileres/spec.md` y `proposal.md` |
 | Qué existe y qué falta | `openspec/changes/gestion-de-alquileres/exploration.md` |
 | Reglas de lo que falta | `openspec/specs/lease-contract`, `party-registry`, `unit-registry`, `economic-index`, `rent-adjustment`, `contract-account` |
 | Lo que dijo el dueño | `openspec/domain/respuestas-del-dueno.md` |

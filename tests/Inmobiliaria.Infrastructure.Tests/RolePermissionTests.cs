@@ -30,16 +30,19 @@ public sealed class RolePermissionTests
         _fixture = fixture;
     }
 
-    /// <summary>All thirteen tables this change's migrations create, by their SQL name.</summary>
+    /// <summary>
+    /// The thirteen tables this change's migrations create, by their SQL name, and notificaciones' <c>tenant_notices</c>
+    /// (spec Test 15), which both roles read.
+    /// </summary>
     private static readonly string[] AllTables =
     [
         "app_users", "parties", "units", "contracts", "contract_parties", "contract_units",
         "contract_documents", "economic_indices", "index_values", "adjustment_clauses",
-        "adjustment_clause_indices", "rent_adjustments", "rent_adjustment_index_values",
+        "adjustment_clause_indices", "rent_adjustments", "rent_adjustment_index_values", "tenant_notices",
     ];
 
     [SkippableFact]
-    public async Task AllThirteenTables_AreSelectableByBothRoles()
+    public async Task AllFourteenTables_AreSelectableByBothRoles()
     {
         Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
 

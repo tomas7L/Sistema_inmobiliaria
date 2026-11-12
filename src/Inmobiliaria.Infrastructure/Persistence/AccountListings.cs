@@ -9,7 +9,11 @@ namespace Inmobiliaria.Infrastructure.Persistence;
 /// <param name="Listing">The text the desk's search shows for the account.</param>
 /// <param name="DueDay">The contract's due day, which the mora worklist needs to date an opening-balance month.</param>
 /// <param name="LoadedByMistake">Whether the contract was cancelled as loaded by mistake; the desk never offers one.</param>
-internal sealed record AccountListingEntry(AccountListing Listing, int DueDay, bool LoadedByMistake);
+/// <param name="TenantEmail">
+/// The current tenant's email as stored, unchecked, or null when none is. A contract has one current tenant, and a removed one is
+/// filtered out of every read, so a notice can never reach a replaced tenant (notificaciones spec Decision 11).
+/// </param>
+internal sealed record AccountListingEntry(AccountListing Listing, int DueDay, bool LoadedByMistake, string? TenantEmail);
 
 /// <summary>
 /// How every account is named, read once for the cash desk's search and for the mora worklist (mora design D3), so the
@@ -75,7 +79,13 @@ internal static class AccountListings
                 // 0% is entered: the same test as the collection planner's.
                 new AccountReadiness(contract.HonorariosPercentage is not null, frozen.Contains(a.Id), startingNumberSet));
 
-            return new AccountListingEntry(listing, contract.DueDay, contract.EndReason == Domain.Leasing.EndReason.LoadedByMistake);
+            var tenantEmail = contract.Parties
+                .Where(p => p.Role == PartyRole.Tenant)
+                .Select(p => parties[p.PartyId].Email)
+                .FirstOrDefault();
+
+            return new AccountListingEntry(
+                listing, contract.DueDay, contract.EndReason == Domain.Leasing.EndReason.LoadedByMistake, tenantEmail);
         }).ToList();
     }
 }

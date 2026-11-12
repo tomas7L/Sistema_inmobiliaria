@@ -5,6 +5,7 @@ using Inmobiliaria.Domain.Collection;
 using Inmobiliaria.Domain.GoLive;
 using Inmobiliaria.Domain.Indices;
 using Inmobiliaria.Domain.Leasing;
+using Inmobiliaria.Domain.Notices;
 using Inmobiliaria.Domain.Parties;
 using Inmobiliaria.Domain.Units;
 using Inmobiliaria.Infrastructure.Access;
@@ -107,6 +108,7 @@ public sealed class SessionServicesTests
 
         Assert.IsAssignableFrom<ICollectionDesk>(provider.GetRequiredService<ICollectionDesk>());
         Assert.IsAssignableFrom<IMoraWorklistQuery>(provider.GetRequiredService<IMoraWorklistQuery>());
+        Assert.IsAssignableFrom<ITenantNoticeDesk>(provider.GetRequiredService<ITenantNoticeDesk>());
         Assert.IsAssignableFrom<IDueAdjustmentQuery>(provider.GetRequiredService<IDueAdjustmentQuery>());
         Assert.IsAssignableFrom<IGoLiveSetup>(provider.GetRequiredService<IGoLiveSetup>());
         Assert.IsAssignableFrom<IUserAdministration>(provider.GetRequiredService<IUserAdministration>());
@@ -169,6 +171,10 @@ public sealed class SessionServicesTests
         // The mora list measures recargo with the same terms, so invalid terms close it too (mora spec Test 14).
         Assert.Null(provider.GetService<IMoraWorklistQuery>());
         Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IMoraWorklistQuery));
+
+        // The notices state the desk figure, so they close with the desk (notificaciones spec Test 18).
+        Assert.Null(provider.GetService<ITenantNoticeDesk>());
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(ITenantNoticeDesk));
         Assert.NotNull(provider.GetRequiredService<IDueAdjustmentQuery>());
         Assert.NotNull(provider.GetRequiredService<IGoLiveSetup>());
         Assert.NotNull(provider.GetRequiredService<IAccountDirectory>());

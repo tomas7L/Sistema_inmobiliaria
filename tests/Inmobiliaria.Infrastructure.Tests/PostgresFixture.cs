@@ -56,21 +56,21 @@ public sealed class PostgresFixture : IAsyncLifetime
 
         await using var context = CreateDbContext();
 
-        // Supabase's API roles, and its default privileges granting them every new function in public: without them, a
-        // migration's REVOKE from those roles is skipped here and proven nowhere. Tables are left out; nothing here needs them.
+        // Supabase's API roles, and its default privileges granting them every new function and table in public (notificaciones
+        // design F2): without them, a migration's REVOKE from those roles is skipped here and proven nowhere.
         await context.Database.ExecuteSqlRawAsync(SupabaseApiRolesSql);
-        await GrantFunctionsLikeSupabaseAsync(context);
+        await GrantLikeSupabaseAsync(context);
         await context.Database.MigrateAsync();
     }
 
-    /// <summary>The roles Supabase's API connects as, which its default privileges grant every new function.</summary>
+    /// <summary>The roles Supabase's API connects as, which its default privileges grant every new function and table.</summary>
     public static readonly IReadOnlyList<string> SupabaseApiRoles = ["anon", "authenticated", "service_role"];
 
     /// <summary>
     /// Supabase's default privileges on the database <paramref name="context"/> points at, before it is migrated. Roles belong to the
     /// server, created once above, but default privileges belong to each database: a test that migrates a database of its own calls this.
     /// </summary>
-    public static Task GrantFunctionsLikeSupabaseAsync(InmobiliariaDbContext context) =>
+    public static Task GrantLikeSupabaseAsync(InmobiliariaDbContext context) =>
         context.Database.ExecuteSqlRawAsync(SupabaseDefaultPrivilegesSql);
 
     private const string SupabaseApiRolesSql = """
@@ -79,8 +79,10 @@ public sealed class PostgresFixture : IAsyncLifetime
         CREATE ROLE service_role NOLOGIN;
         """;
 
-    private const string SupabaseDefaultPrivilegesSql =
-        "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;";
+    private const string SupabaseDefaultPrivilegesSql = """
+        ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
+        """;
 
     /// <summary>Builds a fresh <see cref="InmobiliariaDbContext"/> against the running container.</summary>
     public InmobiliariaDbContext CreateDbContext()
