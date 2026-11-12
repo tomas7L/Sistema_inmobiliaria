@@ -34,6 +34,11 @@ S11 entró con el PR #107.
   Excel, el logo, el precio, Supabase Pro y qué priorizar entre avisos, contratos firmados y liquidación al dueño.
   **Antes de la reunión, el asistente le muestra a Tomás todas las preguntas, con cómo hacerlas y por qué importa cada una**,
   para que las estudie (Tomás, 2026-11-12).
+- **Permisos de más en producción, verificado el 2026-11-12:** las 23 tablas, `app_users` incluida, tienen todos los
+  permisos para los roles de la API de Supabase (`anon`, `authenticated`, `service_role`), y ninguna tiene seguridad por fila.
+  **Hoy no se pueden usar:** la Data API está apagada en producción y en prueba (Tomás lo comprobó). **Nunca prenderla.**
+  Arreglo definitivo, antes de entregar: un change propio que revoque tablas y permisos por defecto. Detalle en
+  `openspec/changes/notificaciones/design.md`, Finding F2.
 - **Producción no tiene backups:** el plan gratis de Supabase no hace backups automáticos. Pro (USD 25/mes) guarda uno por día
   durante 7 días; recomendado con convicción fuerte, para llevar a la charla de precio. Detalle en Engram
   `decisions/notificaciones-c-and-pro`.
