@@ -4,6 +4,7 @@ using Inmobiliaria.Domain.Collection;
 using Inmobiliaria.Domain.GoLive;
 using Inmobiliaria.Domain.Indices;
 using Inmobiliaria.Domain.Leasing;
+using Inmobiliaria.Domain.Notices;
 using Inmobiliaria.Domain.Parties;
 using Inmobiliaria.Domain.Units;
 using Inmobiliaria.Infrastructure.IndexSources;
@@ -23,9 +24,9 @@ namespace Inmobiliaria.Infrastructure.Access;
 public static class SessionServices
 {
     /// <summary>
-    /// Registers the clock, the session and one per-call wrapper for each port a screen needs. The desk and
-    /// the mora list are registered only when <paramref name="recargo"/> is valid: invalid terms close the desk, voiding and Mora
-    /// instead of falling back to a default (design D16); the shell reads the same settings to say why.
+    /// Registers the clock, the session and one per-call wrapper for each port a screen needs. The desk, the
+    /// mora list and the notices are registered only when <paramref name="recargo"/> is valid: invalid terms close the desk,
+    /// voiding, Mora and the notices instead of falling back to a default (design D16); the shell reads the same settings to say why.
     /// </summary>
     public static IServiceCollection AddSessionServices(
         this IServiceCollection services,
@@ -66,6 +67,10 @@ public static class SessionServices
 
             // The mora list measures recargo with the same terms, so it closes with the desk (mora design D6).
             services.AddSingleton<IMoraWorklistQuery>(_ => new PerCallMoraWorklistQuery(factory));
+
+            // A notice states the desk figure, so it closes with the desk (notificaciones design §3.5).
+            services.AddSingleton<ITenantNoticeDesk>(provider =>
+                new PerCallTenantNoticeDesk(factory, provider.GetRequiredService<IAgencyClock>(), terms));
         }
 
         return services;

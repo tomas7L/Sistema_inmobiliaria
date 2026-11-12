@@ -319,14 +319,7 @@ public sealed class ContractAccount
     {
         ArgumentNullException.ThrowIfNull(terms);
 
-        // A late adjustment's difference counts from the 1st of its month, when its period can be paid (design F8): attached to a
-        // month not yet begun, it is not owed today, whatever its own date says.
-        var notYetBegun = _movements
-            .Where(m => m.Kind == MovementKind.AdjustmentDifference && m.Period > receivedOn)
-            .SelectMany(m => DifferenceMovements(m.Period!.Value, asOf: null))
-            .Select(m => m.Id)
-            .ToHashSet();
-        var ledger = _movements.Where(m => !notYetBegun.Contains(m.Id)).Sum(m => m.Amount);
+        var ledger = LedgerForPayment(receivedOn);
 
         if (IsFrozen(receivedOn))
         {
@@ -340,6 +333,24 @@ public sealed class ContractAccount
             .Sum(period => RecargoProjectedForPayment(period, receivedOn, terms));
 
         return ledger + projected;
+    }
+
+    /// <summary>
+    /// The ledger half of <see cref="AmountOwedForPayment"/>: every movement as it stands, less a difference attached to a month
+    /// not yet begun on <paramref name="receivedOn"/>. The desk figure minus this is the recargo the desk projects that day, which
+    /// is how a notice names it apart (notificaciones design D2); zero on a frozen account, whose recargo is already a movement.
+    /// </summary>
+    public decimal LedgerForPayment(DateOnly receivedOn)
+    {
+        // A late adjustment's difference counts from the 1st of its month, when its period can be paid (design F8): attached to a
+        // month not yet begun, it is not owed today, whatever its own date says.
+        var notYetBegun = _movements
+            .Where(m => m.Kind == MovementKind.AdjustmentDifference && m.Period > receivedOn)
+            .SelectMany(m => DifferenceMovements(m.Period!.Value, asOf: null))
+            .Select(m => m.Id)
+            .ToHashSet();
+
+        return _movements.Where(m => !notYetBegun.Contains(m.Id)).Sum(m => m.Amount);
     }
 
     /// <summary>

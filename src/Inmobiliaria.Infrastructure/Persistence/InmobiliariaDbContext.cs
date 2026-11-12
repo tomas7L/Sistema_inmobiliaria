@@ -66,6 +66,9 @@ public sealed class InmobiliariaDbContext : DbContext
     /// <summary>What every change to an index level overwrote, and who did it (gestion-de-alquileres spec Decision 42). A property bag, written only by the database's own trigger.</summary>
     public DbSet<Dictionary<string, object>> IndexValueCorrections => Set<Dictionary<string, object>>(IndexValueCorrectionConfiguration.EntityName);
 
+    /// <summary>The notices sent to tenants (notificaciones design D4): append-only, one per contract, kind and month.</summary>
+    public DbSet<TenantNoticeEntry> TenantNotices => Set<TenantNoticeEntry>();
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         // Applied here, not only at the call site that builds the options, so the

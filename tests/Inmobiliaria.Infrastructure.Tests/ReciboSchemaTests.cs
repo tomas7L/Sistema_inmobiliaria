@@ -960,7 +960,7 @@ internal sealed class IsolatedDatabase : IAsyncDisposable
             .Options;
 
         var context = new InmobiliariaDbContext(options);
-        await PostgresFixture.GrantFunctionsLikeSupabaseAsync(context);
+        await PostgresFixture.GrantLikeSupabaseAsync(context);
         await context.Database.MigrateAsync();
 
         return new IsolatedDatabase(admin, name, context);

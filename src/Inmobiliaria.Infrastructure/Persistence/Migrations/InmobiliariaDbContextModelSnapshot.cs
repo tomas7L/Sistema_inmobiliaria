@@ -705,6 +705,66 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
                     b.UseTphMappingStrategy();
                 });
 
+            modelBuilder.Entity("Inmobiliaria.Infrastructure.Persistence.TenantNoticeEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("contract_id");
+
+                    b.Property<DateOnly>("FiguresOn")
+                        .HasColumnType("date")
+                        .HasColumnName("figures_on");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("kind");
+
+                    b.Property<DateOnly>("NoticeMonth")
+                        .HasColumnType("date")
+                        .HasColumnName("notice_month");
+
+                    b.Property<decimal>("Recargo")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("recargo");
+
+                    b.Property<string>("Recipient")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("recipient");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("recorded_at");
+
+                    b.Property<string>("RecordedBy")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("name")
+                        .HasColumnName("recorded_by");
+
+                    b.Property<decimal>("Total")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("total");
+
+                    b.HasKey("Id")
+                        .HasName("pk_tenant_notices");
+
+                    b.HasIndex("ContractId", "Kind", "NoticeMonth")
+                        .IsUnique()
+                        .HasDatabaseName("ux_tenant_notices_contract_kind_month");
+
+                    b.ToTable("tenant_notices", (string)null);
+                });
+
             modelBuilder.Entity("collections", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1254,6 +1314,16 @@ namespace Inmobiliaria.Infrastructure.Persistence.Migrations
 
                     b.Navigation("Address")
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Inmobiliaria.Infrastructure.Persistence.TenantNoticeEntry", b =>
+                {
+                    b.HasOne("Inmobiliaria.Domain.Leasing.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_tenant_notices_contracts_contract_id");
                 });
 
             modelBuilder.Entity("collections", b =>
