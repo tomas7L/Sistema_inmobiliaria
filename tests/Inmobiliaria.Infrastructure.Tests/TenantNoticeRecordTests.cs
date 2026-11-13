@@ -156,15 +156,13 @@ public sealed class TenantNoticeRecordTests
     /// <summary>
     /// design D4, Finding F2: Supabase grants every new table in public to its API roles, and this table is revoked from them.
     /// Proven only because <see cref="PostgresFixture"/> creates those roles and grants them tables as Supabase does; without
-    /// that, the migration's guarded revoke would be skipped and this would pass for nothing.
+    /// that, the migration's guarded revoke would be skipped and this would pass for nothing. That the fixture really
+    /// grants is checked before any revocation, by <see cref="SupabaseApiRoleRevocationTests"/> Test 1 (revocar-permisos-api).
     /// </summary>
     [SkippableFact]
     public async Task SupabasesApiRoles_HoldNothing_OnTheSentRecord()
     {
         Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
-
-        // The fixture really does grant tables to those roles: another table, never revoked, holds them all.
-        Assert.Equal(string.Join(",", EveryTablePrivilege.Order(StringComparer.Ordinal)), await HeldAsync("anon", "contract_events"));
 
         foreach (var role in PostgresFixture.SupabaseApiRoles.Append("public"))
         {
