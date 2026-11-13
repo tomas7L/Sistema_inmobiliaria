@@ -25,6 +25,8 @@
     <PackageVersion Include="Xunit.SkippableFact" Version="1.4.13" />
     <!-- notificaciones design §3.4: Microsoft points to MailKit for new SMTP code. -->
     <PackageVersion Include="MailKit" Version="4.18.2" />
+    <!-- notificaciones design D9: the app password lives in Windows Credential Manager, in Desktop only. -->
+    <PackageVersion Include="Meziantou.Framework.Win32.CredentialManager" Version="3.0.8" />
   </ItemGroup>
 
 </Project>

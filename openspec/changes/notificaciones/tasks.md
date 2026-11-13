@@ -26,6 +26,30 @@ Decision needed before apply: No
 
 ## Issues found
 
+- **gentle-ai findings, Phase 3** (2026-11-12, non-blocking; taken up after the review closed, so not reviewed by it):
+  - **`R4-unreadable-credential-reads-as-not-configured`, fixed.** A credential Windows could not read showed "no está
+    configurada", and a press read the store twice, logging the failure twice. It now says `NoticesTexts.MailboxUnreadable`, and a
+    press reads the store once (plus once in the re-read after it). Pinned by
+    `AnUnreadableMailbox_DisablesSendingSayingItCouldNotBeRead_AndAPressReadsTheStoreOnce`, which failed first on the double read
+    and then under the mutation calling it missing.
+  - **`R3-001`, fixed.** `LoadAgencyName` now turns an unreadable or malformed `appsettings.json` into "no name" (sending disabled),
+    never a startup failure. Untested: `Desktop` has no CI tests; the recargo loader parses the same file first, so the realistic
+    exposure was already nil.
+- **Verifier findings, Phase 3** (2026-11-12): every Phase 3 spec item met; no path found for the app password into a log, a
+  message or a binding.
+  - **(B1) Fixed, the one blocker: a notice another PC sent between the read and the press vanished from the report.** The press
+    keeps only the chosen rows still due, so it was neither sent nor counted; the screen said "Ya enviados antes: 0" against
+    Requirements 4 and 5. It now counts it as already sent, and names a row that no longer owes apart. Pinned by
+    `APress_ReportsANoticeSentMeanwhileAsAlreadySent_AndOneNoLongerOwedApart`.
+  - **(1) Fixed: a failed press or save showed the cash desk's text** ("puede que el cobro se haya registrado…"). They now say
+    `NoticesTexts.SendFailed` and `SaveFailed`. Pinned by `AFailedPress_SaysToReadTheListAgain` and the failed-save test.
+  - **(2) Left: password copies in memory** (each load reads the credential to test for it; a typed, unsaved password stays in the
+    setup until the app closes). Inherent to string APIs; low risk.
+  - **(3) Settled 2026-11-13 by the real send (3.7): Gmail accepts the app password with its spaces.** The stored secret was
+    19 characters with 3 spaces (only its length and space count were read, never the value), and the send succeeded.
+  - Each fix failed its test under mutation (sent-meanwhile not counted, no-longer-owed dropped, cash desk wording), all reverted
+    byte-identical. Presentation 552 passed, Desktop build 0 warnings.
+
 - **gentle-ai findings, Phase 2** (2026-11-12, non-blocking; taken up after the review closed, so not reviewed by it):
   - **`R4-ambiguous-delivery` and `R3-ambiguous-send-failure`, fixed.** A connection lost while an email was travelling read
     "Gmail no aceptó el correo", and the notice came back to the list, so the operator could send it twice. The adapter now tells
@@ -76,6 +100,17 @@ Decision needed before apply: No
   isolated one now carry Supabase's table defaults, as production does (design F2). No existing test changed result.
 
 ## Deviations
+
+- **Phase 3 ships a working Avisos screen, unstyled** (Tomás, 2026-11-12: "Bueno, suma esa pantalla"): tasks 3.4 and 3.7 need the
+  mailbox set up and one real notice sent by hand, which no screen allowed until Phase 4. `Desk/Views/NoticesView.xaml` shows the
+  three lists, Quitar, Enviar avisos with the report, and the Gmail setup for an Admin. Phase 4 replaces its layout with Mateo's;
+  the bindings stay. It is XAML that CI does not test.
+- **Sending is also disabled when `Agency:Name` is missing** (Phase 3; held medium): the email is signed with it (D10), and an
+  unsigned notice is worse than none. Read apart from the rest of `Agency`, so a missing logo stops printing, not notices.
+- **`NoticesViewModel` takes no error log** (design §4.1 named one): it uses the application's, as `MoraViewModel` does. The
+  mailbox setup takes one, so its test can prove a failed save reaches the log without the password.
+- **A press re-reads the list and the mailbox, and cannot be cancelled** (Phase 2 verifier advisory 6 and review
+  `R3-cancel-mid-batch-drops-report`, both settled here): only rows still due are sent, in the figures read at the press.
 
 - **`ITenantNoticeDesk.SendAsync` takes the agency's name** (Phase 2, 2026-11-12; held medium): design D10 names the agency in the email
   from `AgencyDetails`, which lives in `Presentation` and is read in `App.xaml.cs`, so `Infra` cannot reach it. It travels with the
@@ -156,13 +191,13 @@ Phase 1 merged.
 **Docker: yes for the full suite. Supabase: no. Model change: no.** Spec tests: 12, 16, 17. Requirements 1, 5, 8 (on the
 view-model). Design anchors: D9, D11, §4. Risk: item 5 (the Credential Manager package). Needs: Phase 2 merged.
 
-- [ ] 3.1 **[Second inspection, read-only]** Phase 2 landed; `ShellViewModel.cs:43-52` and `App.xaml.cs:146-151` still as cited
-- [ ] 3.2 **[RED then GREEN, Tests 12 and 17]** `NoticesViewModel`, `NoticesTexts`
-- [ ] 3.3 **[RED then GREEN, Test 16]** `MailboxSetupViewModel`; `NavigationTarget.Notices` for both roles, disabled with the recargo reason
-- [ ] 3.4 **[Windows store]** `CredentialManagerMailboxStore` in `Desk`, built in `App.xaml.cs`; checked by hand on this PC
-- [ ] 3.5 **[Guardrails]** As Phase 1, plus the Desktop build
-- [ ] 3.6 **[Independent verification and gentle-ai review]** Item 5 named
-- [ ] 3.7 **[Handover]** As Phase 1, plus Tomás's real send from a test Gmail account to himself
+- [x] 3.1 **[Second inspection, read-only]** Phase 2 landed; `ShellViewModel.cs:43-52` and `App.xaml.cs:146-151` still as cited. **Done 2026-11-12:** #116 merged as `fb5287e`, its tree identical to `cfc7de5`, CI build and core green; both citations hold. Mora has no shell entry yet (S12), so Avisos sits after Anular un cobro
+- [x] 3.2 **[RED then GREEN, Tests 12 and 17]** `NoticesViewModel`, `NoticesTexts`. **Done 2026-11-12:** RED was the missing types; GREEN 550 Presentation tests (20 new). A press re-reads the list and the store first (verifier advisory 6) and cannot be cancelled (R3-cancel-mid-batch-drops-report). Mutations, each failing its test and reverted byte-identical: no re-read before sending, removed rows still sent
+- [x] 3.3 **[RED then GREEN, Test 16]** `MailboxSetupViewModel`; `NavigationTarget.Notices` for both roles, disabled with the recargo reason. **Done 2026-11-12.** Mutations failing their tests: setup offered to every role, Avisos always available, the store's failure logged unscrubbed
+- [x] 3.4 **[Windows store]** `CredentialManagerMailboxStore` in `Desk`, built in `App.xaml.cs`; checked by hand on this PC. **Class written 2026-11-12** with `Meziantou.Framework.Win32.CredentialManager` 3.0.8 (published 2026-10-28, no dependencies; 3.0.9 and 3.0.10 are under two weeks old); Desktop build 0 warnings. Wired in `App.xaml.cs` beside the clipboard, with the working screen (see Deviations); Desktop build 0 warnings. **Hand check done 2026-11-13:** after saving from Avisos, `cmdkey /list` shows `LegacyGeneric:target=SistemaInmobiliaria/Gmail`, generic, user the Gmail address, persistence local machine; the screen then reads "Los avisos se envían desde …" and the password box clears
+- [x] 3.5 **[Guardrails]** As Phase 1, plus the Desktop build. **Done 2026-11-12:** Docker 29.9.3; build exit 0, 0 warnings; suite exit 0, 2208 passed (Domain 737, Presentation 550, Infrastructure 921), 0 failed, 0 skipped; TIME_WAIT 1 before, 2,908 after; `has-pending-model-changes` exit 0; Desktop build 0 warnings; no vulnerable package in Desktop. After the verifier's fixes: Presentation 552, Desktop 0 warnings
+- [x] 3.6 **[Independent verification and gentle-ai review]** Item 5 named. **Done 2026-11-12.** Verifier: one blocker (B1), fixed; see Issues found. gentle-ai, on a scratch clone in one candidate (16 files, 1,122 lines; lenses risk, resilience and reliability): `review-1f976694ce81b65e`, approved, acknowledged; two non-blocking findings, both taken up afterwards. Presentation 553 passed, Desktop 0 warnings; Domain and Infrastructure untouched since the full run in 3.5
+- [x] 3.7 **[Handover]** As Phase 1, plus Tomás's real send from a test Gmail account to himself. **Done 2026-11-13** on the test database, after Tomás applied `20261112160850_AddTenantNotices` there (the only pending migration). The fictitious tenant had no email, so it sat under "Sin correo: llamar"; Tomás set `parties.email` by hand in the SQL editor (one row checked first). After Actualizar, one notice; Enviar avisos delivered it at once. The email's total, $ 5.148.000, equals the cash desk's "Saldo anterior" for the same contract on the same day; its recargo total, $ 2.898.000, spans several periods and the desk shows only the oldest (07/2026, $ 1.134.000), so it was not compared line by line. Findings for 4.2, none blocking: see there. Before launching, the compiled `appsettings.json` was found pointing at production and was repointed to the test database
 
 ---
 
@@ -172,6 +207,6 @@ view-model). Design anchors: D9, D11, §4. Risk: item 5 (the Credential Manager 
 Needs: Phase 3 merged, Mateo's screens.
 
 - [ ] 4.1 **[Second inspection, read-only]** Phase 3 landed; S12's and Mora's navigation entries checked for where Avisos sits
-- [ ] 4.2 **[View]** Mateo's layout; `NoticesTexts` and the email's final wording, read by Tomás on one real notice
+- [ ] 4.2 **[View]** Mateo's layout; `NoticesTexts` and the email's final wording, read by Tomás on one real notice. **From the 3.7 send (2026-11-13):** (a) the greeting reads "Hola, Prueba, Maria:" because `NoticeComposer.cs:30` uses the list's "Last, First" name; a greeting wants "Maria Prueba". (b) "El total adeudado ya incluye el recargo" is said twice (the total's paragraph and `BalanceCoverage.cs:11`). (c) The recargo exceeded the debt, from the configured `Recargo:DailyRate` 0.02; the real rate is for Nicolás, not a text fix
 - [ ] 4.3 **[Guardrails]** As Phase 3
 - [ ] 4.4 **[Handover]** As Phase 1
