@@ -151,15 +151,15 @@ public sealed partial class NoticesViewModel : ObservableObject
             {
                 var current = await _desk.ReadAsync();
                 var stillDue = current.ToSend.ToDictionary(notice => notice.ContractId);
-                var sentShortIds = current.AlreadySent.Select(sent => sent.ContractShortId).ToHashSet(StringComparer.Ordinal);
+                var sentContracts = current.AlreadySent.Select(sent => sent.ContractId).ToHashSet();
 
                 var notices = chosen.Where(row => stillDue.ContainsKey(row.ContractId)).Select(row => stillDue[row.ContractId]).ToList();
                 var left = chosen.Where(row => !stillDue.ContainsKey(row.ContractId)).ToList();
 
                 // A row another PC sent meanwhile is already sent; one that no longer owes is said apart, never dropped silently
                 // (spec Requirements 4 and 5).
-                var sentMeanwhile = left.Count(row => sentShortIds.Contains(row.ContractShortId));
-                var noLongerOwed = left.Where(row => !sentShortIds.Contains(row.ContractShortId)).ToList();
+                var sentMeanwhile = left.Count(row => sentContracts.Contains(row.ContractId));
+                var noLongerOwed = left.Where(row => !sentContracts.Contains(row.ContractId)).ToList();
                 var report = await _desk.SendAsync(notices, credentials, _agencyName);
                 return (Report: report, SentMeanwhile: sentMeanwhile, NoLongerOwed: noLongerOwed);
             },

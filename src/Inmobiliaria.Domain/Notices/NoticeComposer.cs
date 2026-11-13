@@ -27,8 +27,9 @@ public static class NoticeComposer
 
         var body = string.Join(
             "\n\n",
-            $"Hola, {notice.Tenant}:",
-            $"Le escribimos de {agencyName} por el contrato {notice.ContractShortId} ({notice.Units}).",
+            // The desk's name reads "Last, First" (spec Requirement 3), so it goes in the contract's sentence, never the greeting.
+            "Hola:",
+            $"Le escribimos de {agencyName} por el contrato {notice.ContractShortId} de {notice.Tenant} ({notice.Units}).",
             $"Al {day}, el total adeudado es de {Money(notice.Total)}.{recargo}",
             "Después de esa fecha el importe puede aumentar, porque el recargo por mora crece cada día de atraso.",
             BalanceCoverage.Sentence,
