@@ -6,6 +6,7 @@ public enum NavigationTarget
     CashDesk,
     RecentCollections,
     Voiding,
+    Notices,
     GoLive,
     Users,
 }
@@ -16,6 +17,7 @@ public static class NavigationTitles
     public const string CashDesk = "Caja de cobranza";
     public const string RecentCollections = "Cobros recientes";
     public const string Voiding = "Anular un cobro";
+    public const string Notices = "Avisos";
     public const string GoLive = "Puesta en marcha";
     public const string Users = "Usuarios";
 }

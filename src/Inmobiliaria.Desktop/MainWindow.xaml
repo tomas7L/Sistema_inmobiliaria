@@ -71,6 +71,10 @@
                                          Value="{x:Static shell:NavigationTarget.Users}">
                                 <Setter Property="Visibility" Value="Collapsed" />
                             </DataTrigger>
+                            <DataTrigger Binding="{Binding SelectedItem.Target, ElementName=NavigationList}"
+                                         Value="{x:Static shell:NavigationTarget.Notices}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
                         </Style.Triggers>
                     </Style>
                 </TextBlock.Style>
@@ -131,6 +135,20 @@
                     </Style>
                 </views:GoLiveView.Style>
             </views:GoLiveView>
+
+            <views:NoticesView x:Name="NoticesScreen">
+                <views:NoticesView.Style>
+                    <Style TargetType="views:NoticesView">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding SelectedItem.Target, ElementName=NavigationList}"
+                                         Value="{x:Static shell:NavigationTarget.Notices}">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </views:NoticesView.Style>
+            </views:NoticesView>
 
             <views:UsersView x:Name="UsersScreen">
                 <views:UsersView.Style>

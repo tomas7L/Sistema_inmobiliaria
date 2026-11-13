@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-12 (cierre), con `notificaciones` diseñado (#112 a #114) y su Phase 1 escrita, sin commitear, esperando la revisión de gentle-ai_
+_Última actualización: 2026-11-12 (cierre), con `notificaciones` Phase 1 y 2 mergeadas (#115, #116) y Phase 3 escrita, sin commitear, esperando que Tomás la commitee y la pruebe a mano_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -8,19 +8,22 @@ _Última actualización: 2026-11-12 (cierre), con `notificaciones` diseñado (#1
 
 ## En qué estamos
 
-**Change activo: `notificaciones`**, en `openspec/changes/notificaciones/`. Exploración y propuesta en #112, spec en #113,
-diseño en #114; `tasks.md` tiene el avance. `mora` y `gestion-de-alquileres` siguen abiertos, esperando las pantallas de Mateo.
+**Change activo: `notificaciones`**, en `openspec/changes/notificaciones/`. `tasks.md` tiene el avance. `mora` y
+`gestion-de-alquileres` siguen abiertos, esperando las pantallas de Mateo.
 
 ## Próximos pasos
 
-1. **`notificaciones` Phase 1 (T1): escrita y verificada, SIN COMMITEAR, en el árbol de trabajo de `ramatomy`.** Falta la
-   **revisión de gentle-ai**, que se dejó para esta sesión porque la anterior era muy larga: `tasks.md` 1.10. Es riesgo alto
-   (item 2) y unas 2.864 líneas con los generados, así que va partida en dos, como `gestion-de-alquileres/tasks.md` 4.9
-   (primero el código sin tests, después los tests encima, en un clon temporal). Necesita el consentimiento de Tomás en cada
-   parte. Después, 1.11: entregar commit y PR, y la migración `20261112160850_AddTenantNotices` para aplicar en PRUEBA.
-2. **`notificaciones` Phase 2 y 3:** después del merge de Phase 1, en orden, según `tasks.md`.
-3. **S12 (Pantallas), M2 de `mora` y Phase 4 de `notificaciones`:** cuando Mateo mande las pantallas. Lo que S12 tiene que
-   levantar de S9 a S11 está en las notas 9.x a 11.x de `gestion-de-alquileres/tasks.md`.
+1. **`notificaciones` Phase 3: escrita, verificada y revisada por gentle-ai, SIN COMMITEAR, en el árbol de trabajo de
+   `ramatomy`** (16 rutas: `git status --porcelain`). El commit y el PR ya se le entregaron a Tomás en el chat; si se
+   perdieron, se rearman desde `tasks.md` (Phase 3, Deviations e Issues found). Tomás commitea, abre el PR y mergea.
+2. **Prueba a mano de Tomás, `tasks.md` 3.4 y 3.7:** con Supabase PRUEBA despausada y `20261112160850_AddTenantNotices`
+   aplicada (H.3 de `gestion-de-alquileres/tasks.md`, todavía pendiente), un contrato de prueba con su correo y deuda.
+   Como Admin: Avisos → guardar un Gmail de prueba y su contraseña de aplicación → ver `SistemaInmobiliaria/Gmail` en el
+   Administrador de credenciales de Windows → Enviar avisos → comparar el mail con la Caja → probar la contraseña con espacios.
+   El resultado se anota en 3.4 y 3.7.
+3. **Phase 4 de `notificaciones`, S12 (Pantallas) y M2 de `mora`:** cuando Mateo mande las pantallas. Phase 4 incluye el
+   texto final del mail (los centavos ",5"). Lo que S12 tiene que levantar de S9 a S11 está en las notas 9.x a 11.x de
+   `gestion-de-alquileres/tasks.md`.
 4. **Panorama de lo que falta:** Engram `plan/remaining-work-panorama`. `carga-inicial` espera el Excel de la reunión con
    Nicolás. El change que revoca los permisos de la API de Supabase (ver Pendientes) va antes de entregar.
 
@@ -78,9 +81,10 @@ diseño en #114; `tasks.md` tiene el avance. `mora` y `gestion-de-alquileres` si
 
 | | |
 |---|---|
-| **Docker** | **Sí**: la revisión de gentle-ai de Phase 1 y cualquier slice de código (Testcontainers `postgres:17.6`). **No** para armar la lista de preguntas de la reunión |
-| **Supabase** | **No** para la revisión. **Sí**, despausada, cuando Tomás aplique `20261112160850_AddTenantNotices` a PRUEBA después del merge; solo Tomás se conecta |
-| **Límite diario** | Tomás pasa el porcentaje al arrancar; la revisión de gentle-ai partida en dos es lo más caro de la próxima sesión |
+| **Docker** | **No** para la prueba a mano. **Sí** para la segunda inspección con la suite completa, y para cualquier slice de código (Testcontainers `postgres:17.6`) |
+| **Supabase** | **Sí**, PRUEBA despausada, para aplicar `AddTenantNotices` y mandar el aviso real; solo Tomás se conecta |
+| **Gmail** | Una cuenta de prueba con verificación en dos pasos y una contraseña de aplicación; la carga Tomás, el asistente nunca la ve |
+| **Límite diario** | Tomás pasa el porcentaje al arrancar |
 
 ## Para retomar
 
@@ -98,9 +102,9 @@ dotnet test Inmobiliaria.Core.slnf --configuration Release
 dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure
 ```
 
-Esperado, con Phase 1 de `notificaciones` en el árbol de trabajo: **2158 pasados (Domain 729, Presentation 530,
-Infrastructure 899), 0 fallas, 0 omitidos**, build sin advertencias y el modelo en sintonía con
-`20261112160850_AddTenantNotices`. En `develop` sin Phase 1: 2133 y `20261110150305_AddAdjustmentDifference`. Si el build de Desktop falla con MSB3027, la aplicación está
+Esperado, con Phase 3 de `notificaciones` en el árbol de trabajo: **2211 pasados (Domain 737, Presentation 553,
+Infrastructure 921), 0 fallas, 0 omitidos**, build sin advertencias y el modelo en sintonía con
+`20261112160850_AddTenantNotices`. Después del merge de Phase 3, `develop` debe dar lo mismo. Si el build de Desktop falla con MSB3027, la aplicación está
 abierta y tiene tomadas sus DLL: cerrarla.
 
 **Aplicar una migración** (Tomás, en una ventana de PowerShell aparte, nunca con `!`): `tasks.md` H.3 y H.4; variable `INMOBILIARIA_DB` con
@@ -125,7 +129,7 @@ máquina dotnet responde en español ("Superado", "Con error", "Omitido").
 ### Herramientas
 
 gentle-ai **4.3.1** (en Windows se actualiza con `go install github.com/gentleman-programming/gentle-ai/v4/cmd/gentle-ai@<versión>`
-y después `gentle-ai sync`), engram **3.6.2** (backup en `~/.engram/backup-20261104-pre-3.6.2/`), Docker 29.9.2 con
+y después `gentle-ai sync`), engram **3.6.2** (backup en `~/.engram/backup-20261104-pre-3.6.2/`), Docker 29.9.3 con
 `postgres:17.6`, `gh` 2.102.0 en `C:\Program Files\GitHub CLI\gh.exe`, logueado como `tomas7L`. En la herramienta Bash, las
 ediciones de C# van con scripts de Python escritos al scratchpad: los heredocs se rompen con los apóstrofes. Para
 `docker exec` desde Git Bash, `MSYS_NO_PATHCONV=1`. La revisión de gentle-ai necesita `--untracked-scope=select`, el hash del

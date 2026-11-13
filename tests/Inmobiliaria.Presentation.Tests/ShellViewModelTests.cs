@@ -34,12 +34,12 @@ public sealed class ShellViewModelTests
     }
 
     [Fact]
-    public void AnEmpleadosNavigation_HasTheDeskTheRecentListAndVoiding_AndNoGoLiveOrUsers()
+    public void AnEmpleadosNavigation_HasTheDeskTheRecentListVoidingAndAvisos_AndNoGoLiveOrUsers()
     {
         var shell = ShellFor(UserRole.Empleado);
 
         Assert.Equal(
-            [NavigationTarget.CashDesk, NavigationTarget.RecentCollections, NavigationTarget.Voiding],
+            [NavigationTarget.CashDesk, NavigationTarget.RecentCollections, NavigationTarget.Voiding, NavigationTarget.Notices],
             TargetsOf(shell));
         Assert.DoesNotContain(NavigationTarget.GoLive, TargetsOf(shell));
         Assert.DoesNotContain(NavigationTarget.Users, TargetsOf(shell));
@@ -54,7 +54,7 @@ public sealed class ShellViewModelTests
         Assert.Equal(
             [
                 NavigationTarget.CashDesk, NavigationTarget.RecentCollections, NavigationTarget.Voiding,
-                NavigationTarget.GoLive, NavigationTarget.Users,
+                NavigationTarget.Notices, NavigationTarget.GoLive, NavigationTarget.Users,
             ],
             TargetsOf(shell));
         Assert.Equal("Usuarios", shell.Navigation.Single(e => e.Target == NavigationTarget.Users).Title);
@@ -88,5 +88,23 @@ public sealed class ShellViewModelTests
         Assert.True(byTarget[NavigationTarget.RecentCollections].IsAvailable);
         Assert.True(byTarget[NavigationTarget.GoLive].IsAvailable);
         Assert.Equal(["Recargo:DailyRate falta."], shell.SettingsProblems);
+    }
+
+    /// <summary>
+    /// notificaciones spec Test 16: both roles reach Avisos, and with invalid recargo settings it is disabled with Caja de
+    /// cobranza's reason, because the desk figure needs them. Only an Admin is offered the mailbox setup: see
+    /// <c>NoticesViewModelTests.OnlyAnAdmin_IsOfferedTheMailboxSetup</c>.
+    /// </summary>
+    [Theory]
+    [InlineData(UserRole.Admin)]
+    [InlineData(UserRole.Empleado)]
+    public void BothRolesReachAvisos_AndInvalidRecargoTermsDisableItWithTheDesksReason(UserRole role)
+    {
+        var valid = ShellFor(role).Navigation.Single(e => e.Target == NavigationTarget.Notices);
+        Assert.Equal(("Avisos", true, null), (valid.Title, valid.IsAvailable, valid.UnavailableReason));
+
+        var byTarget = ShellFor(role, "Recargo:DailyRate falta.").Navigation.ToDictionary(entry => entry.Target);
+        Assert.False(byTarget[NavigationTarget.Notices].IsAvailable);
+        Assert.Equal(byTarget[NavigationTarget.CashDesk].UnavailableReason, byTarget[NavigationTarget.Notices].UnavailableReason);
     }
 }

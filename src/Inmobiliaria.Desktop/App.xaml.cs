@@ -6,12 +6,14 @@ using Inmobiliaria.Domain.Accounts;
 using Inmobiliaria.Domain.Collection;
 using Inmobiliaria.Domain.GoLive;
 using Inmobiliaria.Domain.Leasing;
+using Inmobiliaria.Domain.Notices;
 using Inmobiliaria.Infrastructure.Access;
 using Inmobiliaria.Infrastructure.IndexSources;
 using Inmobiliaria.Presentation.CashDesk;
 using Inmobiliaria.Presentation.Common;
 using Inmobiliaria.Desktop.Printing;
 using Inmobiliaria.Presentation.GoLive;
+using Inmobiliaria.Presentation.Notices;
 using Inmobiliaria.Presentation.Printing;
 using Inmobiliaria.Presentation.Recibos;
 using Inmobiliaria.Presentation.Voiding;
@@ -181,7 +183,16 @@ public partial class App : Application
                 }
             }, canVoid: voidingViewModel is not null, printing: printing);
 
-            mainWindow = new MainWindow(shellViewModel, cashDeskViewModel, recentViewModel, voidingViewModel, goLiveViewModel, usersViewModel);
+            // Avisos needs the desk's recargo terms, so it exists only with them (notificaciones spec Requirement 8). The
+            // mailbox lives in this PC's Credential Manager, built here as the clipboard is, never in the session's
+            // services (design D9).
+            var noticesViewModel = _sessionProvider.GetService<ITenantNoticeDesk>() is { } noticeDesk
+                ? new NoticesViewModel(noticeDesk, new CredentialManagerMailboxStore(), session.Role, LoadAgencyName())
+                : null;
+
+            mainWindow = new MainWindow(
+                shellViewModel, cashDeskViewModel, recentViewModel, voidingViewModel, goLiveViewModel, usersViewModel,
+                noticesViewModel);
             MainWindow = mainWindow;
             // ShutdownMode is OnExplicitShutdown (App.xaml) precisely so that closing
             // LoginWindow or ChangePasswordWindow mid-bootstrap never ends the process before
@@ -250,6 +261,33 @@ public partial class App : Application
         }
 
         return new ReciboPrinting(reader, new FlowDocumentReciboPrinter(read.Details is null ? "missing" : logo), read);
+    }
+
+    /// <summary>
+    /// <c>Agency:Name</c>, which notices are signed with, or null when it is not set: the Avisos screen then says so and
+    /// does not send (notificaciones). Read apart from the rest of the section, so a missing logo does not stop notices.
+    /// </summary>
+    private static string? LoadAgencyName()
+    {
+        try
+        {
+            var path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+            using var document = JsonDocument.Parse(File.ReadAllText(path));
+
+            return document.RootElement.TryGetProperty(AgencyDetails.Section, out var agency)
+                   && agency.ValueKind == JsonValueKind.Object
+                   && agency.TryGetProperty("Name", out var name)
+                   && name.ValueKind == JsonValueKind.String
+                ? name.GetString()
+                : null;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
+        {
+            // An unreadable file only disables sending, as a missing name does; it never stops the application
+            // (gentle-ai review, R3-001).
+            OperationRunner.DefaultErrorLog.Record("Agency:Name", exception);
+            return null;
+        }
     }
 
     /// <summary>

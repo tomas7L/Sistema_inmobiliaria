@@ -1,6 +1,7 @@
 ﻿using System.Windows;
 using Inmobiliaria.Presentation.CashDesk;
 using Inmobiliaria.Presentation.GoLive;
+using Inmobiliaria.Presentation.Notices;
 using Inmobiliaria.Presentation.Recibos;
 using Inmobiliaria.Presentation.Shell;
 using Inmobiliaria.Presentation.Users;
@@ -21,7 +22,8 @@ public partial class MainWindow : Window
         RecentCollectionsViewModel recentCollections,
         VoidingViewModel? voiding,
         GoLiveViewModel? goLive,
-        UsersViewModel? users)
+        UsersViewModel? users,
+        NoticesViewModel? notices)
     {
         ArgumentNullException.ThrowIfNull(viewModel);
         ArgumentNullException.ThrowIfNull(recentCollections);
@@ -33,6 +35,7 @@ public partial class MainWindow : Window
         VoidingViewScreen.DataContext = voiding;
         GoLiveScreen.DataContext = goLive;
         UsersScreen.DataContext = users;
+        NoticesScreen.DataContext = notices;
     }
 
     /// <summary>Selects a screen's navigation entry, when it is offered and available.</summary>
