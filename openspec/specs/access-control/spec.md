@@ -217,6 +217,120 @@ This is stated so no reader assumes database enforcement that does not exist.
 - WHEN it is reverted
 - THEN the previous trigger function MUST be restored, and no data MUST change
 
+> **The five requirements below come from `revocar-permisos-api`**, in the order of its Requirements 1 to 5. Those numbers, its Decisions, its `P` parameters, its Findings and the Test numbers they cite are in `openspec/changes/archive/2026-11-13-revocar-permisos-api/spec.md`.
+
+### Requirement: Supabase's API Roles Hold Nothing on Any Table
+
+After the migration, none of `anon`, `authenticated` and `service_role` MAY hold any privilege on any table in `public`
+(Decision 6). The group roles' privileges on every table MUST be exactly what they were before the migration. Where the
+API roles do not exist, as in a plain Postgres, the migration MUST run without error and change nothing.
+
+#### Scenario: An existing table is closed
+
+- GIVEN `contracts`, granted to the API roles as Supabase grants every table
+- WHEN the migration has run
+- THEN none of the three API roles MAY hold `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `TRUNCATE`, `REFERENCES`, `TRIGGER` or
+  `MAINTAIN` on it (`MAINTAIN` is Postgres 17's, the `m` in production's `arwdDxtm`, and `information_schema` does not list it)
+
+#### Scenario: The users table and the migrations history are closed too
+
+- GIVEN `app_users` and `__EFMigrationsHistory`
+- WHEN the migration has run
+- THEN none of the three API roles MAY hold any privilege on either
+
+#### Scenario: The group roles keep what they had
+
+- GIVEN every privilege both group roles hold on every table before the migration
+- WHEN the migration has run
+- THEN they MUST hold exactly the same privileges, no more and no fewer
+
+#### Scenario: A database without the API roles
+
+- GIVEN a database where none of the three API roles exists
+- WHEN the migration runs
+- THEN it MUST succeed and grant or revoke nothing
+
+### Requirement: A Table Created Later Is Not Granted to Them
+
+After the migration, a table, function or sequence that the migrating role creates in `public` MUST NOT be granted to any
+API role (Decision 7). A table created later MUST still be readable by both group roles, as today.
+
+#### Scenario: A later table is closed from birth
+
+- GIVEN the migration has run
+- WHEN the migrating role creates a new table in `public`
+- THEN none of the three API roles MAY hold any privilege on it
+- AND both group roles MUST hold `SELECT` on it
+
+#### Scenario: A later function is not granted to them by default
+
+- GIVEN the migration has run
+- WHEN the migrating role creates a new function in `public`
+- THEN none of the three API roles MAY hold an explicit `EXECUTE` grant on it from the default privileges
+
+### Requirement: The Functions Operators Call Are Closed to Everyone but Their Roles
+
+After the migration, no API role MAY be able to execute any operator function, and neither MAY `PUBLIC` (Decisions 8 and
+9). Each group role MUST keep exactly the `EXECUTE` it holds today:
+
+| Function | `inmobiliaria_admin` | `inmobiliaria_empleado` |
+|---|---|---|
+| `app_set_role_password` | Yes | Yes |
+| `app_clear_must_change_password` | Yes | Yes |
+| `app_replace_clause_indices` | Yes | Yes |
+| `app_create_login_role` | Yes | No |
+| `app_set_role_login` | Yes | No |
+
+Trigger functions are outside this requirement unless design closes them under P4, with Test 9.
+
+#### Scenario: An API role cannot create a login
+
+- GIVEN the migration has run
+- WHEN `anon` is asked whether it may execute `app_create_login_role`
+- THEN the answer MUST be no, and the same for `authenticated` and `service_role`, and for the other four operator functions
+
+#### Scenario: An Empleado still changes their own password
+
+- GIVEN an Empleado login after the migration
+- WHEN they change their password through the application
+- THEN it MUST succeed, as it does today
+
+#### Scenario: An Admin still creates and disables logins
+
+- GIVEN an Admin login after the migration
+- WHEN they create an Empleado and then disable them
+- THEN both MUST succeed, as they do today
+
+#### Scenario: An Empleado is still refused the Admin's functions
+
+- GIVEN an Empleado login after the migration
+- WHEN they try to create a login or disable one
+- THEN the database MUST refuse, as it does today
+
+### Requirement: A New Operator Function Ships Closed
+
+Any migration that adds an operator function after this change MUST, in that same migration, revoke its `EXECUTE` from
+`PUBLIC` and grant it only to the group roles that call it (Decision 10). Like "Every New Table Ships With Its GRANTs in
+the Same Migration" (`access-control/spec.md:107`), this is checked by a test, so a migration that forgets it fails the
+suite.
+
+#### Scenario: An open operator function fails the suite
+
+- GIVEN a function in `public` that is not a trigger function
+- WHEN `PUBLIC` or an API role can execute it
+- THEN Test 8 MUST fail, naming the function
+
+### Requirement: Rolling Back Does Not Reopen Anything
+
+Reverting the migration MUST NOT grant anything to the API roles, nor give `PUBLIC` back `EXECUTE` on an operator
+function (P3).
+
+#### Scenario: Down leaves the API roles with nothing
+
+- GIVEN the migration has run
+- WHEN it is reverted
+- THEN the three API roles MUST still hold no privilege on any table, and no operator function MUST be executable by them
+
 ## Tests
 
 Derived from the requirements above, not generic CRUD coverage. Each names the requirement it proves. Integration tests require a real Postgres (`postgres:17.6` via Testcontainers) connecting as each application role in turn; permission and trigger behavior cannot be validated against a fake.
@@ -241,3 +355,21 @@ Derived from the requirements above, not generic CRUD coverage. Each names the r
 34. **The migration's `Down` restores the previous function body.** *(Infrastructure.Tests)*
 35. **`dotnet ef migrations has-pending-model-changes` reports no pending change after the migration.**
     *(Run by the assistant; needs no database or Docker)*
+
+Tests 36 to 44 come from `revocar-permisos-api` (its Tests 1 to 8 and 10; its Test 9 was conditional on closing trigger functions, which design did not do). `R`, Decision and Finding references in them refer to its archived spec. All run in `Inmobiliaria.Infrastructure.Tests` against `postgres:17.6`; Test 40 uses a plain container with no API roles.
+
+36. **Before the migration runs, the fixture's API roles hold every table privilege on a table it created, and `EXECUTE` on
+    a function it created.** Proves the fixture imitates Supabase, so the other tests prove something. Finding F4
+37. **After the migration, no API role holds any privilege on any table in `public`.** Proven failing with the revoke
+    removed. R1
+38. **`app_users` and `__EFMigrationsHistory` are among the tables checked, and are closed.** R1
+39. **Both group roles' privileges on every table are identical before and after the migration.** R1
+40. **The migration runs without error on a database where the API roles do not exist.** R1
+41. **A table created after the migration grants nothing to the API roles, and `SELECT` to both group roles; a function
+    created after it carries no default `EXECUTE` grant to the API roles.** Proven failing with the default revoke removed.
+    R2
+42. **No API role and not `PUBLIC` can execute any operator function; each group role's `EXECUTE` matches Requirement 3's
+    table exactly.** R3
+43. **No function in `public` other than a trigger function is executable by `PUBLIC` or an API role**, naming any that is.
+    Shown failing on a function added without the revoke. R4
+44. **After `Down`, the API roles still hold nothing on any table and cannot execute any operator function.** R5
