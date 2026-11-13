@@ -56,7 +56,7 @@ public sealed class PostgresFixture : IAsyncLifetime
 
         await using var context = CreateDbContext();
 
-        // Supabase's API roles, and its default privileges granting them every new function and table in public (notificaciones
+        // Supabase's API roles, and its default privileges granting them every new function, table and sequence in public (notificaciones
         // design F2): without them, a migration's REVOKE from those roles is skipped here and proven nowhere.
         await context.Database.ExecuteSqlRawAsync(SupabaseApiRolesSql);
         await GrantLikeSupabaseAsync(context);
@@ -82,6 +82,7 @@ public sealed class PostgresFixture : IAsyncLifetime
     private const string SupabaseDefaultPrivilegesSql = """
         ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;
         ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
         """;
 
     /// <summary>Builds a fresh <see cref="InmobiliariaDbContext"/> against the running container.</summary>

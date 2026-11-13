@@ -147,7 +147,7 @@ with the `PUBLIC` revokes removed. Each mutation is reverted byte-identical.
 
 | # | Finding | Consequence |
 |---|---|---|
-| F1 | **Revoking what one does not own is a warning, not an error.** If Supabase ever puts a table or function owned by another role in `public`, `REVOKE ALL ON ALL ... IN SCHEMA public` skips it with a warning and the migration still succeeds | The F2 query after applying would then show it, which is why Decision 11 of the spec checks production by query, not by trusting the migration |
+| F1 | **Revoking on an object one does not own depends on what one holds on it** (corrected 2026-11-13 by the verifier's probe). If the migrating role holds some privilege on it, Postgres skips what it cannot revoke with a warning and the migration succeeds. If it holds none, Postgres refuses the statement (`permission denied for table ...`) and the whole migration rolls back | Either way nothing is left half-done: a warning leaves the object visible to the F2 query after applying, and a refusal changes nothing and names the object. Production's F2 rows are all this system's tables, owned by `postgres`, so neither is expected. That is why Decision 11 of the spec checks production by query, not by trusting the migration |
 | F2 | **`has_function_privilege('public', ...)` is valid**: `public` is accepted as a role name by Postgres's privilege functions, and `ClauseCorrectionTests` already checks `public` that way (`ITests/ClauseCorrectionTests.cs:447-449`) | Test 7 needs no special case |
 | F3 | **The migration before this one is `20261112160850_AddTenantNotices`.** Tests name it as the "before" target | If another migration lands first, the tests' target moves with it |
 
