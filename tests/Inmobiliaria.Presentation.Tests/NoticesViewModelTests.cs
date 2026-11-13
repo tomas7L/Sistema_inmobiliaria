@@ -219,13 +219,34 @@ public class NoticesViewModelTests
         desk.Board = new([sentElsewhere, paid, due], [], []);
         await notices.LoadCommand.ExecuteAsync(null);
 
-        desk.Board = new([due], [], [new SentNotice("aa000001", "Pérez, María", "maria", DateTimeOffset.UtcNow)]);
+        desk.Board = new([due], [], [new SentNotice(sentElsewhere.ContractId, "aa000001", "Pérez, María", "maria", DateTimeOffset.UtcNow)]);
         await notices.SendCommand.ExecuteAsync(null);
 
         Assert.Equal([due], Assert.Single(desk.Sends).Notices);
         Assert.Equal((1, 1), (notices.SentCount, notices.AlreadySentCount));
         Assert.Empty(notices.Failures);
         Assert.Equal(NoticesTexts.Report(1, 1, 0) + " " + NoticesTexts.NoLongerOwed(["aa000002 (Gómez, Luis)"]), notices.ReportText);
+    }
+
+    /// <summary>
+    /// Two contracts can share a short id: the one sent elsewhere is already sent, and the other, paid meanwhile, is still said
+    /// apart, because a press tells them by contract, never by short id (second gentle-ai review, R3-sent-meanwhile-matched-by-short-id).
+    /// </summary>
+    [Fact]
+    public async Task APress_TellsTwoContractsSharingAShortIdApart()
+    {
+        var (notices, desk, _) = Build(stored: Mailbox);
+        var sentElsewhere = Notice("aa000001", "Pérez, María");
+        var paid = Notice("aa000001", "Gómez, Luis");
+        desk.Board = new([sentElsewhere, paid], [], []);
+        await notices.LoadCommand.ExecuteAsync(null);
+
+        desk.Board = new([], [], [new SentNotice(sentElsewhere.ContractId, "aa000001", "Pérez, María", "maria", DateTimeOffset.UtcNow)]);
+        await notices.SendCommand.ExecuteAsync(null);
+
+        Assert.Empty(Assert.Single(desk.Sends).Notices);
+        Assert.Equal((0, 1), (notices.SentCount, notices.AlreadySentCount));
+        Assert.Equal(NoticesTexts.Report(0, 1, 0) + " " + NoticesTexts.NoLongerOwed(["aa000001 (Gómez, Luis)"]), notices.ReportText);
     }
 
     /// <summary>A failed press says what to do in this screen's words, not the cash desk's (Phase 3 verifier, advisory 1).</summary>
@@ -278,7 +299,7 @@ public class NoticesViewModelTests
     public async Task TheAlreadySentList_NamesWhoSentItAndWhen()
     {
         var (notices, desk, _) = Build(stored: Mailbox);
-        desk.Board = new([], [], [new SentNotice("aa000001", "Pérez, María", "nicolas", new DateTimeOffset(2026, 12, 2, 10, 30, 0, TimeSpan.FromHours(-3)))]);
+        desk.Board = new([], [], [new SentNotice(Guid.NewGuid(), "aa000001", "Pérez, María", "nicolas", new DateTimeOffset(2026, 12, 2, 10, 30, 0, TimeSpan.FromHours(-3)))]);
 
         await notices.LoadCommand.ExecuteAsync(null);
 

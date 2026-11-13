@@ -51,6 +51,19 @@ public class NoticeComposerTests
         Assert.EndsWith(Agency, mail.Body.TrimEnd());
     }
 
+    /// <summary>
+    /// The greeting names nobody, and the tenant is named in the contract's sentence in the desk search's text (spec
+    /// Requirement 3), so "Hola, Perez, Maria:" never reads as a greeting (tasks 4.2, Tomás 2026-11-13).
+    /// </summary>
+    [Fact]
+    public void TheGreeting_NamesNobody_AndTheContractSentence_NamesTheTenant()
+    {
+        var mail = NoticeComposer.Compose(NoticeOn(new DateOnly(2026, 12, 3)), Agency);
+
+        Assert.StartsWith("Hola:\n\n", mail.Body);
+        Assert.Contains($"Le escribimos de {Agency} por el contrato C-1A2B de Perez, Maria (Belgrano 123, Depto 2).", mail.Body);
+    }
+
     [Fact]
     public void TheEmail_NamesWhatTheFiguresCover_InTheMoraScreensWords()
     {

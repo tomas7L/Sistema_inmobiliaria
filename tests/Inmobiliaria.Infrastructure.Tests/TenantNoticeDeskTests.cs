@@ -317,6 +317,7 @@ public sealed partial class TenantNoticeDeskTests
         Assert.Equal(sentLastMonth.AccountId, offered.AccountId);
 
         var sent = Assert.Single(board.AlreadySent);
+        Assert.Equal(sentNow.ContractId, sent.ContractId);
         Assert.Equal(sentNow.ContractId.ToString("N")[..8], sent.ContractShortId);
         Assert.Equal("Alvarez, Maria", sent.Tenant);
         Assert.Equal("inmobiliaria_test", sent.RecordedBy);

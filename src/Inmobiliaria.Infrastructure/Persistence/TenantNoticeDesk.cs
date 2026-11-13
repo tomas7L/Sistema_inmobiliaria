@@ -99,7 +99,7 @@ public sealed class TenantNoticeDesk : ITenantNoticeDesk
         var byContract = listings.Values.ToDictionary(e => e.Listing.ContractId, e => e.Listing);
         var alreadySent = sent
             .OrderBy(n => n.RecordedAt)
-            .Select(n => new SentNotice(byContract[n.ContractId].ContractShortId, byContract[n.ContractId].Tenants, n.RecordedBy, n.RecordedAt))
+            .Select(n => new SentNotice(n.ContractId, byContract[n.ContractId].ContractShortId, byContract[n.ContractId].Tenants, n.RecordedBy, n.RecordedAt))
             .ToList();
 
         // The Mora list's order: oldest debt first, then the tenant as the desk's search folds it.

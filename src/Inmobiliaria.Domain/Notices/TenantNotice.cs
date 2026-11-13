@@ -42,7 +42,8 @@ public sealed record TenantNotice(
 public sealed record UnreachableTenant(string ContractShortId, string Tenant, string Units);
 
 /// <summary>A notice already sent for the month, with who sent it and when, as the database stamped them.</summary>
-public sealed record SentNotice(string ContractShortId, string Tenant, string RecordedBy, DateTimeOffset RecordedAt);
+/// <param name="ContractId">The contract, which tells apart two contracts whose short ids coincide.</param>
+public sealed record SentNotice(Guid ContractId, string ContractShortId, string Tenant, string RecordedBy, DateTimeOffset RecordedAt);
 
 /// <summary>Today's notices in three lists (spec Requirement 1): to send, no email, already sent.</summary>
 public sealed record NoticeBoard(
