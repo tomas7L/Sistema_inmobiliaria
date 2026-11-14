@@ -8,6 +8,12 @@
          window before authentication, which spec "No Database Access Before Authentication"
          forbids in spirit even for a window that does nothing yet. -->
     <Application.Resources>
-
+        <!-- The designer's theme: the palette, then the named styles that read it (Themes/Controls.xaml). -->
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Themes/Palette.Light.xaml" />
+                <ResourceDictionary Source="Themes/Controls.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
     </Application.Resources>
 </Application>

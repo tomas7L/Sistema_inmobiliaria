@@ -23,6 +23,7 @@ choices and the exact Spanish wording are design's. Where a parameter is design'
 | **Decisions** table, rows 15 to 41 | The calls this spec made. The **weak** and **medium** rows are where you can change my mind. |
 | Requirement 16 (the difference) | Decision P4 written as behaviour, with a worked example. |
 | **Questions** near the end | Four to raise with Nicolás when he answers. None blocks design. |
+| Decisions 43 to 55 and Requirements 26 to 30 (added 2026-11-14) | What every field the operator types accepts, which are required, and every error at once. From Tomás's review of the Personas screen and an audit of every input. |
 
 **Skip** the Tests section and "Parameters Left to Design". **Skim** the rest; scenarios are there so a test can be written from
 each one.
@@ -83,6 +84,19 @@ this spec's.
 | 40 | **A "bring values" button fetches ICL and IPC; RIPTE stays typed.** It proposes the months the worklist is missing, and the operator may name another month. It shows what it found, and nothing is stored until the operator confirms. A failure shows its own message and manual entry keeps working. It never runs on its own, and never overwrites a stored level. | Tomás asked for it, 2026-11-05. Finding F11. Replaces the "fetching automatically" row of `proposal.md` §2 for these two indices. `economic-index/spec.md:39` already says retrieval must fill the same table | **Medium** |
 | 41 | **ICL is stored as its value on the 1st of each month. No free choice of day.** | SPEC CALL. An adjustment reads two values, and adjustments fall on the 1st (`rent-adjustment/spec.md:59`), as do contract starts (Decision P14). The table is shared by every contract, and one day's gap moves a rent: on 500,000, 1 January against 1 July gives 582,511, and 2 January gives 581,917 | **Medium**, until N2 |
 | 42 | **Every change to a stored index level leaves a permanent record: who, when, the previous level and the new one.** The database writes it, so no correction can skip it, and nobody can change or delete it. No written reason is asked for. | Asked for by Tomás on 2026-11-06. A wrong level misprices every contract reading that period, and overwriting it left no way to tell what happened | Medium |
+| 43 | **Each field of a person accepts only what it can hold.** First and last name: letters, accented ones, ñ and ü included, plus space, apostrophe, hyphen and dot, with at least one letter and at most 60 characters each, so "D'Angelo", "Pérez-Gómez" and "Ma. José" pass and "2432342" does not. DNI: as Decision 28, and any letter refused. Phone: digits, spaces, a leading `+`, hyphens and parentheses, with 8 to 15 digits. Email: Decision 54. Domicile: free text, at most 120 characters. | Asked for by Tomás on 2026-11-14 on the first Personas screen: "que en el nombre y apellido no se puedan poner otra cosa que letras, en los dni y cuils solo numeros, telefonos solo numeros, guines y +, y asi en cada cosa". The DNI prints up to 35 characters for each of name and surname ([RENAPER, Disp. 55/2026](https://www.colegio-escribanos.org.ar/noticias/2026-01-30-RENAPER-Disp-55-26-Anexo-1.pdf)), a print limit, not a legal one, so 60 leaves room. Phone: area code and number add up to 10 digits in Argentina, the 15 and the country code aside ([numbering plan](https://en.wikipedia.org/wiki/Telephone_numbers_in_Argentina)), and 15 is the international maximum. No source fixes an address length | **Strong**; **medium** on 60; **weak** on 120 |
+| 44 | **Every form shows at once every error it can find on its own, each beside its field, under one summary that says nothing was saved.** Personas, Propiedades, Contratos, Caja, Índices, Usuarios and Cambiar contraseña alike. An error that needs the database, such as a DNI already taken or an identical address, comes after the form's own errors are fixed, still beside its field. | Asked for by Tomás on 2026-11-14: "me deberian salir un mensaje por todos los erroes y solo sale uno que no indica nada". He set the same rule for the contract form on 2026-11-13 (`tasks.md` 12.3d). The audit of 2026-11-14 found every form stopping at the first error | **Strong** |
+| 45 | **One field reads "CUIL o CUIT", with Decision 28's rules; no second field.** For a person, the CUIL becomes the CUIT when they register with ARCA: the same eleven digits, their DNI in the middle and the same check digit. A second field would hold one number twice. The prefix is not checked: Resolution 286/2021 allows "20, 23, 24, 27 u otros que se determinen". | Tomás asked on 2026-11-14 whether a self-employed person needs a CUIT field. [Rankia](https://www.rankia.com.ar/blog/afip-y-anses/4284443-cual-diferencia-cuit-cuil), [El Economista](https://eleconomista.com.ar/economia/cual-diferencia-cuil-cuit-argentina-n81275), [Res. 286/2021](https://www.boletinoficial.gob.ar/detalleAviso/primera/245180/20210602). Secondary sources on the same number; none says a person holds two. A company's CUIT is Finding F10 and N3 | **Strong** |
+| 46 | **When both are given and the CUIL or CUIT does not carry the DNI as its eight middle digits, the form warns and asks to check both; saving again keeps them.** The DNI is read with zeros on the left. | Tomás proposed the warning on 2026-11-14, in place of a refusal: the sources say the middle "generalmente coincide" with the DNI, so a real person could be the exception, while a mismatch is almost always a typing error | **Strong** |
+| 47 | **Which fields of a person are required.** First and last name. DNI and CUIL stay optional, with Decision 28's warning when both are missing, and a warning too when a DNI comes without a CUIL, since nearly every Argentine has both. At least one of phone and email. Domicile is optional. | SPEC CALL, accepted by Tomás on 2026-11-14: "si tú dices que no deberian ser obligatorios, confío en tí". Requiring both identifiers would shut out a foreign tenant with only a passport; requiring an email, an owner who does not use one. Personas is one list for owners, tenants and codeudores | **Medium**, until N12 |
+| 48 | **Every free text has a maximum length, said by its field's own error.** Street 80, number 10 (so "S/N" fits), city 60, postal code 10, floor and apartment 20 each, a reason for ending, cancelling or undoing 200. The voiding reason's maximum is the one that fits both halves of the printed recibo, fixed in design. Floor and apartment stay free text. | The audit of 2026-11-14 found no length limit anywhere: every column is `text`, and a long voiding reason prints past the recibo (`cash-desk/spec.md:546`). Tomás on 2026-11-14 wanted floor and apartment written as the operator likes; no norm fixes their format, and [ARCA](https://www.arca.gob.ar/genericos/organismosSegSocial/archivos/SimplificacionDomiciliosExplotacion.pdf) keeps them as separate free fields | **Medium**; the numbers are choices, not sources |
+| 49 | **A property's province is chosen from a fixed list of the 24 jurisdictions, with Santa Fe preselected, and cannot be typed.** The postal code stays free text and required, within Decision 48's length. | Tomás on 2026-11-14: "Que eso no se pueda escribir, nos evitamos ese error, que sea una lista desplegable con todas las provincias de argentina", and of the postal code, "Dejalo como está". The audit found "Sta Fe", "santa fe" and "SF" stored as three provinces | **Strong** |
+| 50 | **Each refusal names its own problem.** A CUIL of the wrong length says so, not that its last digit is wrong. Each way a clause fails has its own text. A share that cannot be read says so, not that the shares must add up to 100%. A password of only spaces is refused with its own text instead of failing. | The audit of 2026-11-14: `IPartyRegistry.cs:102`, `IContractRegistry.cs:339`, `ContractFormViewModel.cs:354-357`, `PostgresPasswordService.cs:31-32`. Already owed by `tasks.md` 12.4 | **Strong** |
+| 51 | **A contract's parties and dates hold together.** The tenant cannot also be a codeudor of the same contract. The end date is after the start date, and at most 50 years after it, the legal ceiling for any lease; housing's is 20, but the system cannot tell a dwelling from a shop. A notice dated before the start is refused. The fee plan amount is in whole pesos, as `lease-contract/spec.md:359` already says. When the tenant has no email, the form warns that notices will not reach them. | The audit of 2026-11-14: `Contract.cs:377-387` checks only the same role twice, `ContractDraft.cs:121-124` takes an end equal to the start, `ContractLifecycleRules.cs:23-37` takes an early notice, `ContractDraft.cs:52,163` takes cents. [Civil and Commercial Code, art. 1197](https://leyfacil.com.ar/codigo-civil-y-comercial/articulo-1197/) | **Strong**; **medium** on the email warning, until N12 |
+| 52 | **Money is typed the way the screens show it.** A leading "$" and spaces are ignored, and a percentage field takes a trailing "%". An amount with cents typed on a recibo line is refused, saying it goes in whole pesos, instead of being cut. Every money field has the canon's upper bound, said by its own text, so none reaches the database as the generic error. | The audit of 2026-11-14: `Formats.cs:44-63` refuses "$" while `tasks.md` 12.3d shows it before amounts; `ReciboBuilder.cs:170-176` drops the cents silently; `ReciboLineConfiguration.cs:46` is `numeric(14,2)` and the desk sets no bound | **Strong** on the bound; **medium** on the rest |
+| 53 | **An index period must be one that can exist.** A year before 2000 or after the current one is refused. IPC and RIPTE refuse the current month and any later one, not yet published; ICL, published daily, takes the current month. | The audit of 2026-11-14: `IndicesViewModel.cs:25,490-499` takes the year 1 or 201. Finding F1 on publication delays | **Strong**; the year 2000 is a choice |
+| 54 | **An email needs a dot in its domain**, besides the check the notices use (`TenantNoticeDesk.cs:240`), so "ana@gmail" is refused. The notices' mailbox setup uses the same check, and says why instead of only greying out its button. | The audit of 2026-11-14: `MailAddress.TryCreate` accepts a domain with no dot, documented .NET behaviour, and a missing ".com" is the commonest email typo. To be proven by a test before it is built. `MailboxSetupViewModel.cs:68-71` | **Medium** |
+| 55 | **A number is accepted as it is printed.** Recibo search takes "N° 1234" and "1.234"; the go-live starting number takes "1.500". | The audit of 2026-11-14: `ReciboSheetBuilder.cs:30` prints "N° 1234", `ReciboSearch.cs:13-14` and `GoLiveViewModel.cs:111` take bare digits only | **Medium** |
 
 ### Findings (the code or the world differs from what was assumed)
 
@@ -107,6 +121,7 @@ this spec's.
   - Requirement 1: Persons Are Listed and Found
   - Requirement 2: A Person Is Created With Checked Identifiers
   - Requirement 3: A Person Is Corrected
+  - Requirement 26: A Person's Data Is Checked Field by Field, All at Once
 - Capability: unit-registry (MODIFIED)
   - Requirement 4: Units Are Listed With Derived Availability
   - Requirement 5: A Unit Is Created and Edited
@@ -135,6 +150,11 @@ this spec's.
 - Capabilities: access-control, desktop-shell (MODIFIED)
   - Requirement 21: The Database Refuses an Empleado's Cutover Date on Insert
   - Requirement 22: Five New Screens, for Both Roles
+- Checking what the operator types
+  - Requirement 27: Every Form Shows All Its Errors, Each in Its Own Words
+  - Requirement 28: A Property's Address Is Chosen and Bounded
+  - Requirement 29: A Contract's Parties and Dates Hold Together
+  - Requirement 30: An Index Period Can Exist
 - Out of Scope
 - Parameters Left to Design
 - Questions
@@ -215,6 +235,71 @@ ask for confirmation. Identifier checks of Requirement 2 apply. An issued recibo
 - WHEN the name is corrected to "Pérez, Juan Carlos"
 - THEN the contract MUST show the new name
 - AND the issued recibo MUST still read "Perez Juan"
+
+### Requirement 26: A Person's Data Is Checked Field by Field, All at Once
+
+Wherever a person is created or corrected, each field MUST accept only what Decision 43 allows, and the fields Decision 47 names MUST
+be required. Every error the form can find without the database MUST be shown at the same time, each beside its field, under one
+summary saying nothing was saved, and nothing MUST be written while any remains (Decision 44). A CUIL or CUIT that does not carry the
+DNI, and a DNI without a CUIL, MUST warn and let the operator save on confirming (Decisions 46 and 47). The identifier field and the
+list's column MUST read "CUIL o CUIT", and the search MUST find a person by it (Decision 45). A person stored before these rules who
+breaks one is listed as before, and is asked to fix it only when corrected.
+
+#### Scenario: Digits in a name are refused
+
+- GIVEN the first name "2432342"
+- WHEN the person is saved
+- THEN it MUST be refused beside the first name
+- AND no person MUST be written
+
+#### Scenario: A real name with an apostrophe, a hyphen and an accent passes
+
+- GIVEN the first name "Ma. José" and the last name "D'Angelo-Pérez"
+- WHEN the person is saved with a valid DNI, its CUIL and a phone
+- THEN it MUST be written with both names as typed
+
+#### Scenario: Letters in a DNI and a phone are refused together
+
+- GIVEN the DNI "wewefwee" and the phone "sdeewedwe"
+- WHEN the person is saved
+- THEN both MUST be refused at the same time, each beside its own field
+
+#### Scenario: A phone written the usual ways passes
+
+- GIVEN the phone "03493 15-421234", "+54 9 3493 421234" or "(03493) 421234"
+- WHEN the person is saved
+- THEN it MUST be accepted as typed
+
+#### Scenario: An email missing its ".com" is refused
+
+- GIVEN the email "ana@gmail"
+- WHEN the person is saved
+- THEN it MUST be refused beside the email
+
+#### Scenario: Neither phone nor email is refused
+
+- GIVEN a person with name, DNI and CUIL, and no phone and no email
+- WHEN the person is saved
+- THEN it MUST be refused, saying one of the two is needed
+
+#### Scenario: A CUIL that does not carry the DNI warns
+
+- GIVEN the DNI "30123456" and the CUIL "20-28111222-9", valid on its own
+- WHEN the person is saved
+- THEN the form MUST warn that the two do not match, and write nothing yet
+- AND saving again without changing them MUST write the person as typed
+
+#### Scenario: A DNI without a CUIL warns
+
+- GIVEN the DNI "30123456" and no CUIL
+- WHEN the person is saved
+- THEN the form MUST warn that the CUIL is missing, and write the person once the operator confirms
+
+#### Scenario: A self-employed person's CUIT is entered in the same field
+
+- GIVEN a person whose CUIT is "20-30123456-3" and whose DNI is "30123456"
+- WHEN it is typed in the field reading "CUIL o CUIT"
+- THEN the person MUST be written, and found by searching that number
 
 ---
 
@@ -995,6 +1080,132 @@ the database after an action. Views follow Mateo's mockups (Decisions P8, P11); 
 
 ---
 
+## Checking what the operator types (MODIFIED: every capability with a form; added 2026-11-14)
+
+### Requirement 27: Every Form Shows All Its Errors, Each in Its Own Words
+
+Every form MUST follow Decision 44: all the errors it can find on its own at once, each beside its field, under one summary, and
+nothing written while any remains. Each error MUST name its own problem (Decision 50). Every free text MUST respect its maximum length
+(Decision 48). Money MUST be typed as Decision 52 says, and numbers as Decision 55 says.
+
+#### Scenario: A contract form with three mistakes shows three
+
+- GIVEN a contract with no tenant, an end date before its start and a canon of "abc"
+- WHEN it is saved
+- THEN three errors MUST be shown together, each beside its field
+- AND the port MUST NOT be called
+
+#### Scenario: A CUIL one digit short says so
+
+- GIVEN the CUIL "20-3012345-6", ten digits
+- WHEN the person is saved
+- THEN the error MUST say a CUIL has eleven digits, not that its last one is wrong
+
+#### Scenario: A voiding reason that would not fit the recibo is refused
+
+- GIVEN a voiding reason longer than the recibo can print
+- WHEN the voiding is confirmed
+- THEN it MUST be refused beside the reason, saying how long it may be
+
+#### Scenario: An amount typed as shown is read
+
+- GIVEN "$ 1.500" in a money field and "15%" in a percentage field
+- WHEN the form is saved
+- THEN they MUST be read as 1500 and 15
+
+#### Scenario: Cents on a recibo line are refused, not cut
+
+- GIVEN "1.500,75" typed on a recibo line
+- WHEN the collection is previewed
+- THEN it MUST be refused, saying the amount goes in whole pesos
+- AND no recibo MUST print 1.500
+
+#### Scenario: A huge amount is refused by the form
+
+- GIVEN an amount above the canon's upper bound on any money field
+- WHEN the form is saved
+- THEN it MUST be refused with its own text, not the generic error
+
+#### Scenario: A recibo number is found as it was printed
+
+- GIVEN a recibo printed as "N° 1234"
+- WHEN an operator searches "N° 1234" or "1.234"
+- THEN that recibo MUST be found
+
+### Requirement 28: A Property's Address Is Chosen and Bounded
+
+The province MUST be chosen from the fixed list of Decision 49, with Santa Fe preselected, and MUST NOT be typed. The postal code, floor
+and apartment MUST stay free text within Decision 48's lengths.
+
+#### Scenario: The province cannot be typed
+
+- GIVEN the property form
+- WHEN it opens
+- THEN the province MUST read "Santa Fe", and every other choice MUST be one of the 24 jurisdictions
+
+#### Scenario: Floor and apartment as the agency writes them
+
+- GIVEN the floor "PB" and the apartment "Local 3"
+- WHEN the property is saved
+- THEN both MUST be written as typed
+
+#### Scenario: A property with no street number
+
+- GIVEN the number "S/N"
+- WHEN the property is saved
+- THEN it MUST be written
+
+### Requirement 29: A Contract's Parties and Dates Hold Together
+
+A contract MUST follow Decision 51.
+
+#### Scenario: The tenant cannot guarantee their own contract
+
+- GIVEN "Juan Pérez" as tenant
+- WHEN he is also added as codeudor of the same contract
+- THEN it MUST be refused beside the codeudores
+
+#### Scenario: An end equal to the start is refused
+
+- GIVEN a start and an end on 1 July 2026
+- WHEN the contract is saved
+- THEN it MUST be refused beside the end date
+
+#### Scenario: An end past the legal ceiling is refused
+
+- GIVEN a start on 1 July 2026 and an end on 1 July 2077
+- WHEN the contract is saved
+- THEN it MUST be refused, naming the 50-year ceiling
+
+#### Scenario: A notice dated before the start is refused
+
+- GIVEN a contract starting on 1 July 2026
+- WHEN a notice dated 15 June 2026 is recorded
+- THEN it MUST be refused
+
+#### Scenario: A tenant with no email warns
+
+- GIVEN a tenant whose person has a phone and no email
+- WHEN the contract is saved
+- THEN the form MUST warn that notices will not reach them, and write the contract once the operator confirms
+
+### Requirement 30: An Index Period Can Exist
+
+Typed index values MUST follow Decision 53.
+
+#### Scenario: A mistyped year is refused
+
+- GIVEN the period "201" for IPC
+- WHEN the value is saved
+- THEN it MUST be refused beside the period
+
+#### Scenario: This month's IPC is not out yet
+
+- GIVEN today in November 2026
+- WHEN an IPC or RIPTE value for November 2026 is saved
+- THEN it MUST be refused, saying it is not published yet
+- AND an ICL value for November 2026 MUST be accepted
+
 ## Out of Scope
 
 Everything in `proposal.md` §2 "Out of Scope" stays out. In addition:
@@ -1002,6 +1213,8 @@ Everything in `proposal.md` §2 "Out of Scope" stays out. In addition:
 | Not here | Why |
 |---|---|
 | Companies as parties | Finding F10, unless N3 says otherwise |
+| Checking that a phone answers or an email reaches someone | Decisions 43 and 54 check the writing only; a bounced notice is the notices change's |
+| Storing a property's partida inmobiliaria, or checking its tax debt | N22. API Santa Fe shows a partida's debt only behind a reCaptcha, and no documented service for programs was found on 2026-11-14, so it cannot be automated as things stand |
 | Refunding a paid difference, or an overcharge from a mistyped index | Settled by hand on Otros Conceptos (Decision 27) |
 | Correcting an adjustment other than the latest | Decision 26 |
 | Reversing a cancellation made by mistake | Final by Decision 35; the contract is loaded again. Debt it erased is not restored |
@@ -1163,3 +1376,38 @@ fail first.
 93. A search names each person's roles on contracts in force; an ended or cancelled contract and a removed party count for nothing; the list filters by role. (R1)
 94. Correcting a level as a real Admin and as a real Empleado records who, when, the previous and the new level; saving the same level records nothing. (R12)
 95. Neither role can update or delete a correction record, and an insert cannot choose its author. (R12)
+
+**Checking what the operator types** (added 2026-11-14)
+
+96. A name with a digit or a symbol is refused; letters with accents, ñ, ü, space, apostrophe, hyphen and dot pass; a name of only
+    punctuation is refused; 60 characters pass and 61 do not. (R26, Decision 43)
+97. A DNI with any letter is refused with its own text, not read as absent; dots and spaces still pass. (R26)
+98. A phone with a letter, with a `+` not at the start, or with fewer than 8 or more than 15 digits is refused; each phone in the
+    scenario passes. (R26)
+99. "ana@gmail" is refused; every address the notices' check refuses is refused too; "ana@gmail.com" passes. Shown first that the
+    notices' check alone accepts "ana@gmail". (R26, Decision 54)
+100. A domicile of 120 characters passes and of 121 does not; an empty one passes. (R26)
+101. Neither phone nor email is refused; either one alone passes. (R26, Decision 47)
+102. Four errors in one save of a person are all returned together, each naming its field, and the port is never called. Must fail if
+     the rules stop at the first error. (R26, Decision 44)
+103. A CUIL not carrying the DNI warns and writes nothing; saving again writes both as typed. The DNI "1234567" matches a CUIL carrying
+     "01234567" without a warning. A DNI without a CUIL warns the same way. (R26, Decisions 46 and 47)
+104. A correction follows the same rules, and a stored person who breaks one is listed and found as before. (R26)
+105. The field and the list column read "CUIL o CUIT", and a search by that number finds the person. (R26, Decision 45)
+106. A contract with three mistakes returns three errors together and calls no port; the same holds for the cash desk, the index
+     form, the users form and the change-password dialog, each with two mistakes. (R27, Decision 44)
+107. A CUIL of ten digits, each way a clause fails, an unreadable share and a password of only spaces each give their own text. (R27,
+     Decision 50)
+108. Every free text in Decision 48 passes at its maximum and is refused one character past it, beside its field. (R27, Decision 48)
+109. "$ 1.500" and "15%" are read as 1500 and 15; cents on a recibo line are refused and nothing is cut; an amount past the bound is
+     refused with its own text on every money field. (R27, Decision 52)
+110. A recibo is found by "N° 1234" and by "1.234"; the go-live starting number takes "1.500". (R27, Decision 55)
+111. The province offers exactly the 24 jurisdictions, Santa Fe first chosen, and the port refuses any other value. (R28, Decision 49)
+112. "PB", "Local 3" and "S/N" are written as typed. (R28)
+113. A tenant added as codeudor of the same contract is refused; a lessor who is also the tenant is not. (R29, Decision 51)
+114. An end equal to the start and an end past 50 years are refused; 50 years exactly passes. (R29)
+115. A notice dated before the start is refused; on the start date it passes. (R29)
+116. A fee plan amount with cents is refused. (R29, `lease-contract/spec.md:359`)
+117. A tenant with no email warns and writes the contract on confirming. (R29)
+118. A year before 2000 or after the current one is refused; IPC and RIPTE refuse the current month and later, and ICL takes the
+     current month. (R30, Decision 53)

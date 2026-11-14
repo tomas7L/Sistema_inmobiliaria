@@ -1,0 +1,326 @@
+<UserControl x:Class="Inmobiliaria.Desktop.Views.PartiesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:parties="clr-namespace:Inmobiliaria.Presentation.Parties;assembly=Inmobiliaria.Presentation"
+             xmlns:domain="clr-namespace:Inmobiliaria.Domain.Parties;assembly=Inmobiliaria.Domain"
+             xmlns:views="clr-namespace:Inmobiliaria.Desktop.Views"
+             mc:Ignorable="d"
+             d:DesignHeight="900" d:DesignWidth="1100"
+             Style="{StaticResource Theme.Page}">
+    <!--
+        The Personas screen as the designer drew it (canvas "Personas", "Nueva persona", "Editar persona"): the list,
+        and in its place the form, one step at a time. Bound to PartiesViewModel; no logic lives here.
+    -->
+    <UserControl.Resources>
+        <views:EqualsConverter x:Key="Equals" />
+        <BooleanToVisibilityConverter x:Key="Shown" />
+
+        <!-- Shown only while the form is closed. -->
+        <Style x:Key="ListPart" TargetType="StackPanel">
+            <Setter Property="Visibility" Value="Visible" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsFormOpen}" Value="True">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- "Usar esa persona", shown only while someone is offered. -->
+        <Style x:Key="OfferPart" TargetType="Button" BasedOn="{StaticResource Theme.LinkButton}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding OfferedHolder}" Value="{x:Null}">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Each part of the form below is shown while the view-model's Step is that part. -->
+        <Style x:Key="FieldsStep" TargetType="StackPanel">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Step}" Value="{x:Static parties:PartyFormStep.Fields}">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="ConfirmStep" TargetType="Border" BasedOn="{StaticResource Theme.Card}">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Step}" Value="{x:Static parties:PartyFormStep.Confirm}">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="NoIdentifierStep" TargetType="Border" BasedOn="{StaticResource Theme.Card}">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Step}" Value="{x:Static parties:PartyFormStep.NoIdentifier}">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="SavedStep" TargetType="Border" BasedOn="{StaticResource Theme.Card}">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Step}" Value="{x:Static parties:PartyFormStep.Saved}">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="Required" TargetType="Run">
+            <Setter Property="Foreground" Value="{DynamicResource Theme.Bad}" />
+        </Style>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="32,28">
+
+            <!-- The list. -->
+            <StackPanel Style="{StaticResource ListPart}">
+                <TextBlock Text="Personas" Style="{StaticResource Theme.Title}" />
+                <TextBlock Text="Datos de cada persona y el rol que tiene en sus contratos vigentes." Style="{StaticResource Theme.Subtitle}" />
+                <TextBlock Text="{Binding Runner.ErrorMessage}" Style="{StaticResource Theme.ErrorText}" Margin="0,12,0,0" />
+
+                <Border Style="{StaticResource Theme.Card}" CornerRadius="22" Padding="16,12" Margin="0,18,0,0">
+                    <!-- The search box takes what the buttons leave, to the card's right edge, as on the canvas. -->
+                    <DockPanel LastChildFill="True">
+                        <Button Content="Nueva persona" Style="{StaticResource Theme.PrimaryButton}" DockPanel.Dock="Left"
+                                Command="{Binding NewCommand}" Margin="0,4,0,4" />
+                        <Button Content="Editar" Style="{StaticResource Theme.GhostButton}" Margin="12,0,0,0" DockPanel.Dock="Left"
+                                Command="{Binding EditCommand}" CommandParameter="{Binding SelectedPerson}" />
+                        <Border Style="{StaticResource Theme.SegmentGroup}" Margin="12,4,0,4" DockPanel.Dock="Left">
+                            <StackPanel Orientation="Horizontal">
+                                <RadioButton Content="Todas" GroupName="RoleFilter" Style="{StaticResource Theme.Segment}"
+                                             IsChecked="{Binding RoleFilter, Converter={StaticResource Equals}, ConverterParameter={x:Null}}" />
+                                <RadioButton Content="Propietarios" GroupName="RoleFilter" Style="{StaticResource Theme.Segment}"
+                                             IsChecked="{Binding RoleFilter, Converter={StaticResource Equals}, ConverterParameter={x:Static domain:PartyRole.Lessor}}" />
+                                <RadioButton Content="Inquilinos" GroupName="RoleFilter" Style="{StaticResource Theme.Segment}"
+                                             IsChecked="{Binding RoleFilter, Converter={StaticResource Equals}, ConverterParameter={x:Static domain:PartyRole.Tenant}}" />
+                                <RadioButton Content="Codeudores" GroupName="RoleFilter" Style="{StaticResource Theme.Segment}"
+                                             IsChecked="{Binding RoleFilter, Converter={StaticResource Equals}, ConverterParameter={x:Static domain:PartyRole.Codebtor}}" />
+                            </StackPanel>
+                        </Border>
+                        <TextBox Style="{StaticResource Theme.Input}" Margin="12,4,0,4" MinWidth="220"
+                                 Tag="Buscar por nombre, DNI o CUIL (Enter para buscar)"
+                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}">
+                            <TextBox.InputBindings>
+                                <KeyBinding Key="Enter" Command="{Binding SearchCommand}" />
+                            </TextBox.InputBindings>
+                        </TextBox>
+                    </DockPanel>
+                </Border>
+
+                <Border Style="{StaticResource Theme.Card}" Padding="8,8,8,4" Margin="0,18,0,0">
+                    <StackPanel>
+                        <DataGrid Style="{StaticResource Theme.Table}" ItemsSource="{Binding Persons}"
+                                  SelectedItem="{Binding SelectedPerson}">
+                            <DataGrid.Columns>
+                                <DataGridTemplateColumn Header="APELLIDO Y NOMBRE" Width="2.2*" MinWidth="180">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <!-- A person with neither identifier carries the warning under the name. -->
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding ListName}" FontWeight="Bold" TextAlignment="Center" />
+                                                <TextBlock Text="{Binding IdentifierWarning}" Style="{StaticResource Theme.ErrorText}"
+                                                           Foreground="{DynamicResource Theme.Muted}" FontWeight="Normal" FontSize="13"
+                                                           TextAlignment="Center" Margin="0,2,0,0" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTextColumn Header="DNI" Binding="{Binding Dni}" Width="1.1*" MinWidth="100" />
+                                <DataGridTextColumn Header="CUIL" Binding="{Binding Cuil}" Width="1.2*" MinWidth="120" />
+                                <DataGridTemplateColumn Header="ROLES" Width="1.6*" MinWidth="120">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <ItemsControl ItemsSource="{Binding RoleNames}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <WrapPanel />
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border x:Name="Chip" Style="{StaticResource Theme.Chip}">
+                                                            <TextBlock Text="{Binding}" />
+                                                        </Border>
+                                                        <DataTemplate.Triggers>
+                                                            <DataTrigger Binding="{Binding}" Value="Inquilino">
+                                                                <Setter TargetName="Chip" Property="Tag" Value="ok" />
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding}" Value="Codeudor">
+                                                                <Setter TargetName="Chip" Property="Tag" Value="warn" />
+                                                            </DataTrigger>
+                                                        </DataTemplate.Triggers>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTextColumn Header="TELÉFONO" Binding="{Binding PhoneNumber}" Width="1.2*" MinWidth="110" />
+                                <DataGridTextColumn Header="EMAIL" Binding="{Binding Email}" Width="1.8*" MinWidth="140" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <TextBlock Text="No hay ninguna persona con ese nombre, DNI o CUIL." Style="{StaticResource Theme.Hint}"
+                                   FontSize="15" Margin="14,18"
+                                   Visibility="{Binding IsEmpty, Converter={StaticResource Shown}}" />
+                        <TextBlock Style="{StaticResource Theme.Hint}" Margin="14,10,14,14">
+                            <Run Text="{Binding CountText, Mode=OneWay}" /><Run Text=". Los roles se calculan a partir de los contratos vigentes: no se guardan en la persona." />
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <!-- The form, in place of the list. -->
+            <StackPanel Visibility="{Binding IsFormOpen, Converter={StaticResource Shown}}">
+                <DockPanel>
+                    <Button Content="Volver a personas" Style="{StaticResource Theme.GhostButton}" DockPanel.Dock="Right"
+                            VerticalAlignment="Top" Command="{Binding BackCommand}" />
+                    <StackPanel>
+                        <TextBlock Text="{Binding FormTitle}" Style="{StaticResource Theme.Title}" />
+                        <TextBlock Text="{Binding FormSubtitle}" Style="{StaticResource Theme.Subtitle}" />
+                    </StackPanel>
+                </DockPanel>
+                <TextBlock Text="{Binding Runner.ErrorMessage}" Style="{StaticResource Theme.ErrorText}" Margin="0,12,0,0" />
+
+                <!-- The fields. -->
+                <StackPanel Style="{StaticResource FieldsStep}">
+                    <Border Style="{StaticResource Theme.Card}" Margin="0,18,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Identidad" Style="{StaticResource Theme.CardTitle}" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="16" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="16" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <StackPanel Grid.Column="0" Grid.Row="0">
+                                    <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Nombre " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
+                                    <TextBox Style="{StaticResource Theme.Input}" Tag="Por ejemplo: Tomás"
+                                             Text="{Binding FirstName, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Grid.Row="0">
+                                    <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Apellido " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
+                                    <TextBox Style="{StaticResource Theme.Input}" Tag="Por ejemplo: Ríos"
+                                             Text="{Binding LastName, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="0" Grid.Row="2">
+                                    <TextBlock Text="DNI" Style="{StaticResource Theme.Label}" />
+                                    <TextBox Style="{StaticResource Theme.Input}" Tag="Solo números"
+                                             Text="{Binding Dni, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="No puede repetirse." Style="{StaticResource Theme.Hint}" Margin="0,6,0,0" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Grid.Row="2">
+                                    <TextBlock Text="CUIL" Style="{StaticResource Theme.Label}" />
+                                    <TextBox Style="{StaticResource Theme.Input}" Tag="XX-XXXXXXXX-X"
+                                             Text="{Binding Cuil, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="No puede repetirse." Style="{StaticResource Theme.Hint}" Margin="0,6,0,0" />
+                                </StackPanel>
+                            </Grid>
+                            <TextBlock Text="{Binding RefusalMessage}" Style="{StaticResource Theme.ErrorText}" Margin="0,16,0,0" />
+                            <Button Content="Usar esa persona" Style="{StaticResource OfferPart}" HorizontalAlignment="Left"
+                                    Margin="0,6,0,0" Command="{Binding UseHolderCommand}" />
+                            <TextBlock Text="{Binding IdentityHint}" Style="{StaticResource Theme.Hint}" Margin="0,16,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource Theme.Card}" Margin="0,18,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Contacto y domicilio" Style="{StaticResource Theme.CardTitle}" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="16" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="16" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <StackPanel Grid.Column="0" Grid.Row="0">
+                                    <TextBlock Text="Teléfono" Style="{StaticResource Theme.Label}" />
+                                    <TextBox Style="{StaticResource Theme.Input}" Tag="Por ejemplo: 03493 15-0000"
+                                             Text="{Binding PhoneNumber, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Grid.Row="0">
+                                    <TextBlock Text="Email" Style="{StaticResource Theme.Label}" />
+                                    <TextBox Style="{StaticResource Theme.Input}" Tag="nombre@ejemplo.test"
+                                             Text="{Binding Email, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="0" Grid.ColumnSpan="3" Grid.Row="2">
+                                    <TextBlock Text="Domicilio" Style="{StaticResource Theme.Label}" />
+                                    <TextBox Style="{StaticResource Theme.Input}" Tag="Calle, número y localidad"
+                                             Text="{Binding Domicile, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                            </Grid>
+                            <TextBlock Text="El rol (propietario, inquilino o codeudor), el alquiler y los honorarios se cargan en el contrato, no acá."
+                                       Style="{StaticResource Theme.Hint}" Margin="0,16,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+                        <Button Content="Cancelar" Style="{StaticResource Theme.GhostButton}" Command="{Binding BackCommand}" />
+                        <Button Content="{Binding SaveText}" Style="{StaticResource Theme.PrimaryButton}" Margin="12,0,0,0"
+                                Height="46" Padding="26,0" FontSize="15" Command="{Binding SaveCommand}" />
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- The summary to confirm a correction of identity data. -->
+                <Border Style="{StaticResource ConfirmStep}" Margin="0,18,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Confirme la corrección" Style="{StaticResource Theme.CardTitle}" />
+                        <TextBlock Text="{Binding Pending.Text}" TextWrapping="Wrap" FontSize="15" />
+                        <DataGrid Style="{StaticResource Theme.Table}" ItemsSource="{Binding Pending.Changes}" Margin="0,12,0,0">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="DATO" Binding="{Binding Field}" />
+                                <DataGridTextColumn Header="VALOR ANTERIOR" Binding="{Binding Old}" Width="*" />
+                                <DataGridTextColumn Header="VALOR NUEVO" Binding="{Binding New}" Width="*" FontWeight="Bold" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+                            <Button Content="Volver a editar" Style="{StaticResource Theme.GhostButton}" Command="{Binding CancelCommand}" />
+                            <Button Content="Confirmar corrección" Style="{StaticResource Theme.PrimaryButton}" Margin="12,0,0,0"
+                                    Command="{Binding ConfirmCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- The warning that a person with neither identifier cannot be checked for duplicates. -->
+                <Border Style="{StaticResource NoIdentifierStep}" Margin="0,18,0,0">
+                    <StackPanel>
+                        <TextBlock Text="{Binding NoIdentifierWarning}" TextWrapping="Wrap" FontSize="15" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource Theme.Warn}" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+                            <Button Content="Volver a completar" Style="{StaticResource Theme.GhostButton}" Command="{Binding CancelCommand}" />
+                            <Button Content="Guardarla igual" Style="{StaticResource Theme.PrimaryButton}" Margin="12,0,0,0"
+                                    Command="{Binding AcceptNoIdentifierCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- What was saved, with the way back. -->
+                <Border Style="{StaticResource SavedStep}" Margin="0,18,0,0">
+                    <StackPanel>
+                        <TextBlock Text="{Binding Saved.Title}" Style="{StaticResource Theme.CardTitle}" Foreground="{DynamicResource Theme.Ok}" />
+                        <TextBlock Text="{Binding Saved.Text}" TextWrapping="Wrap" FontSize="15" />
+                        <Button Content="Volver a personas" Style="{StaticResource Theme.PrimaryButton}" HorizontalAlignment="Right"
+                                Margin="0,16,0,0" Command="{Binding BackCommand}" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
