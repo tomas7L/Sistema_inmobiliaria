@@ -7,6 +7,11 @@ public enum NavigationTarget
     RecentCollections,
     Voiding,
     Notices,
+    Contracts,
+    Parties,
+    Units,
+    Indices,
+    Adjustments,
     GoLive,
     Users,
 }
@@ -18,6 +23,11 @@ public static class NavigationTitles
     public const string RecentCollections = "Cobros recientes";
     public const string Voiding = "Anular un cobro";
     public const string Notices = "Avisos";
+    public const string Contracts = "Contratos";
+    public const string Parties = "Personas";
+    public const string Units = "Propiedades";
+    public const string Indices = "Índices";
+    public const string Adjustments = "Ajustes de alquiler";
     public const string GoLive = "Puesta en marcha";
     public const string Users = "Usuarios";
 }

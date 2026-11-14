@@ -16,6 +16,13 @@ public sealed class ShellViewModelTests
     private static NavigationTarget[] TargetsOf(ShellViewModel shell) =>
         shell.Navigation.Select(entry => entry.Target).ToArray();
 
+    /// <summary>gestion-de-alquileres Requirement 22, in the order of Mateo's sidebar.</summary>
+    private static readonly NavigationTarget[] RentalScreens =
+    [
+        NavigationTarget.Contracts, NavigationTarget.Parties, NavigationTarget.Units,
+        NavigationTarget.Indices, NavigationTarget.Adjustments,
+    ];
+
     [Fact]
     public void TheShell_ShowsTheDisplayNameAndRoleOfTheSessionItWasBuiltFrom()
     {
@@ -34,12 +41,15 @@ public sealed class ShellViewModelTests
     }
 
     [Fact]
-    public void AnEmpleadosNavigation_HasTheDeskTheRecentListVoidingAndAvisos_AndNoGoLiveOrUsers()
+    public void AnEmpleadosNavigation_HasTheDeskTheRecentListVoidingAvisosAndTheRentalScreens_AndNoGoLiveOrUsers()
     {
         var shell = ShellFor(UserRole.Empleado);
 
         Assert.Equal(
-            [NavigationTarget.CashDesk, NavigationTarget.RecentCollections, NavigationTarget.Voiding, NavigationTarget.Notices],
+            [
+                NavigationTarget.CashDesk, NavigationTarget.RecentCollections, NavigationTarget.Voiding,
+                NavigationTarget.Notices, .. RentalScreens,
+            ],
             TargetsOf(shell));
         Assert.DoesNotContain(NavigationTarget.GoLive, TargetsOf(shell));
         Assert.DoesNotContain(NavigationTarget.Users, TargetsOf(shell));
@@ -54,10 +64,31 @@ public sealed class ShellViewModelTests
         Assert.Equal(
             [
                 NavigationTarget.CashDesk, NavigationTarget.RecentCollections, NavigationTarget.Voiding,
-                NavigationTarget.Notices, NavigationTarget.GoLive, NavigationTarget.Users,
+                NavigationTarget.Notices, .. RentalScreens, NavigationTarget.GoLive, NavigationTarget.Users,
             ],
             TargetsOf(shell));
         Assert.Equal("Usuarios", shell.Navigation.Single(e => e.Target == NavigationTarget.Users).Title);
+    }
+
+    /// <summary>
+    /// gestion-de-alquileres spec Test 70: both roles get all five rental screens, open, titled as Mateo's sidebar
+    /// titles them, even when the recargo terms close the desk; Usuarios stays Admin-only.
+    /// </summary>
+    [Theory]
+    [InlineData(UserRole.Empleado)]
+    [InlineData(UserRole.Admin)]
+    public void BothRoles_GetTheFiveRentalScreens_OpenEvenWithInvalidRecargoTerms(UserRole role)
+    {
+        var shell = ShellFor(role, "Recargo:DailyRate falta.");
+
+        var rental = shell.Navigation.Where(entry => RentalScreens.Contains(entry.Target)).ToArray();
+
+        Assert.Equal(RentalScreens, rental.Select(entry => entry.Target));
+        Assert.Equal(
+            ["Contratos", "Personas", "Propiedades", "Índices", "Ajustes de alquiler"],
+            rental.Select(entry => entry.Title));
+        Assert.All(rental, entry => Assert.True(entry.IsAvailable));
+        Assert.Equal(role == UserRole.Admin, TargetsOf(shell).Contains(NavigationTarget.Users));
     }
 
     [Fact]
