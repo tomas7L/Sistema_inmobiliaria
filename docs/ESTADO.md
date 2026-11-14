@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-13 (segundo cierre), con la revisión de la guía de pantallas de Mateo registrada en `tasks.md` (#125)_
+_Última actualización: 2026-11-13 (tercer cierre), con el código de `limite-de-intentos-de-login` mergeado (#132)_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -8,22 +8,22 @@ _Última actualización: 2026-11-13 (segundo cierre), con la revisión de la gu�
 
 ## En qué estamos
 
-**No hay change activo.** Se respondió la guía de pantallas de Mateo (`C:\Users\buffa\Downloads\Respuesta a la guía de
-pantallas.docx`, fuera de git) y **se espera su respuesta**. Lo que nos comprometimos a construir está en
-`gestion-de-alquileres/tasks.md` 12.3d; el porqué, en Engram `decisions/mockup-guide-review-2026-11-13`. `notificaciones`, `mora`
-y `gestion-de-alquileres` siguen abiertos, esperando las pantallas.
+**Change activo: `limite-de-intentos-de-login`.** La Phase 1 (código) está mergeada (#132); falta la **Phase 2**, la prueba en
+vivo en PRUEBA (`openspec/changes/limite-de-intentos-de-login/tasks.md`, 2.1 a 2.4), y archivarlo. Las **pantallas de Mateo están
+cerradas**: 80 pantallas en su lienzo, con las siete correcciones aplicadas y verificadas; lo que nos toca construir está en
+`gestion-de-alquileres/tasks.md` 12.3d. `notificaciones`, `mora` y `gestion-de-alquileres` siguen abiertos, esperando S12.
 
 ## Próximos pasos
 
-1. **Respuesta de Mateo a la revisión:** él elige dónde va "Corregir ajuste" (12.3d) y después manda los diseños.
+1. **Phase 2 de `limite-de-intentos-de-login`** (Tomás escribe las contraseñas, el asistente abre la app y lee el registro):
+   tres contraseñas mal muestran la espera de 2:30; cinco minutos de contraseñas mal no hacen saltar el bloqueo de Supabase.
+   Después, archivar el change.
 2. **Reunión con Nicolás, la semana del 2026-11-16:** todo lo que hay que llevar está en `lectura-reunion-nicolas.md` (raíz,
-   local, fuera de git). Tomás también le pregunta cómo quiere redactado el mail de los avisos.
-3. **Change `limite-de-intentos-de-login`** (antes de entregar): propuesta escrita, espera la lectura de Tomás
-   (`openspec/changes/limite-de-intentos-de-login/proposal.md`). Después siguen spec, design y tasks. Tomás le pregunta a
-   Nicolás cuántas PC entran al sistema (proposal P2).
-4. **Phase 4 de `notificaciones`, S12 (Pantallas) y M2 de `mora`:** cuando lleguen los diseños (`notificaciones/tasks.md`
-   4.1 y 4.2, `gestion-de-alquileres/tasks.md` 12.x, `mora/tasks.md` Phase 2).
-5. **Panorama de lo que falta:** Engram `plan/remaining-work-panorama`. `carga-inicial` espera el Excel de la reunión.
+   local, fuera de git). Además: cuántas PC entran al sistema (proposal P2 del login) y cómo quiere redactado el mail de los avisos.
+3. **S12 (Pantallas), Phase 4 de `notificaciones` y M2 de `mora`:** ya se pueden programar con el lienzo de Mateo
+   (`gestion-de-alquileres/tasks.md` 12.x y 12.3d, `notificaciones/tasks.md` 4.1 y 4.2, `mora/tasks.md` Phase 2). Incluye
+   "Cerrar sesión", que hoy no existe.
+4. **Panorama de lo que falta:** Engram `plan/remaining-work-panorama`. `carga-inicial` espera el Excel de la reunión.
 
 ## Pendientes / bloqueos
 
@@ -32,9 +32,11 @@ y `gestion-de-alquileres` siguen abiertos, esperando las pantallas.
 - **En producción el único usuario es `nicolas`, no `tomas`.** Tomás le cambió la contraseña al entrar el 2026-11-13, así que ya
   no se la pide al primer ingreso. **Antes de entregar, restablecerla desde Usuarios** para que Nicolás elija la suya, y no guardar
   contraseñas en el chat ni en archivos del repo.
-- **Los logins fallidos bloquean a toda la oficina, probado en PRUEBA el 2026-11-13:** contraseña mal 10 veces en 2,5 minutos
-  bloquea esa IP 2 minutos; un usuario desactivado 5 veces bloquea todo el proyecto 30 segundos. La app dice "No se pudo
-  conectar… Revise la conexión", que invita a reintentar. Arreglo pendiente: próximo paso 3.
+- **Los logins fallidos bloquean a toda la oficina** (probado en PRUEBA el 2026-11-13): 10 fallas en 2,5 minutos bloquean esa IP
+  2 minutos; un usuario desactivado 5 veces bloquea todo el proyecto 30 segundos. **El arreglo está mergeado (#132)** y falta
+  probarlo en vivo (próximo paso 1). Cada intento contaba doble por un reintento de Npgsql; ya no (Engram
+  `discovery/npgsql-gss-retry-doubles-login-failures`). Seguimiento sin urgencia: la espera usa el reloj de Windows
+  (`tasks.md` del change, Issues found).
 - **La contraseña de aplicación de Gmail de la prueba** (credencial `SistemaInmobiliaria/Gmail` en esta PC): Tomás la revoca en
   su cuenta de Google cuando ya no la necesite.
 - **El botón de Traer índices todavía no se apretó en una pantalla:** no hay vista hasta S12, `tasks.md` 12.3b. Se probó contra las fuentes reales con un programa temporal.
@@ -45,10 +47,11 @@ y `gestion-de-alquileres` siguen abiertos, esperando las pantallas.
   `openspec/domain/respuestas-del-dueno.md`, punto 9, y Engram `decisions/carga-inicial-own-change`.
 - **Al instalar la próxima versión, todas las PC de la inmobiliaria se actualizan juntas** (`tasks.md`, H.5).
 - **`carga-inicial` tiene que rechazar saldos iniciales negativos:** `tasks.md`, Phase 5, punto 5.11.
-- **Mateo diseña las pantallas por su cuenta**, sin fecha acordada. La lógica no lo espera. Su maqueta se revisa antes de
-  mergear: el repo es público y no pueden entrar datos reales. Sus dudas de Índices y Ajustes ya tienen respuesta en Engram
-  `decisions/mockup-indices-ajustes`; que baje `develop`. **Su pantalla de Índices tiene que mostrar el registro de correcciones** (spec Decisión 42).
-  El 2026-11-07 se le respondió la segunda tanda (historial, honorarios contractuales, día de vencimiento, propietarios, fecha de corte, textos).
+- **El lienzo de Mateo** es `https://claude.ai/artifact/WDjHN85XeYCXCTxx6pv1UU`. Leerlo con la herramienta Artifact: `list` con
+  `scope: files` y después `read` con `paths` de `project/<Nombre>.dc.html` (la lectura normal solo da "Loading…"). Son 80
+  pantallas; las oscuras tienen el mismo texto que las claras. **Contar los archivos antes de decir que se revisó todo.** Su guía
+  en Word está desactualizada respecto de las últimas siete correcciones: manda el lienzo. Comportamiento y navegación:
+  `C:\Users\buffa\Downloads\Comportamiento visual y navegación del sistema de alquileres.docx`. Engram `reference/mateo-canvas`.
 - **`C:\Users\buffa\Downloads\Del Lago Alquileres-PantallasPrueba.html` tiene datos reales de inquilinos:** nunca publicarlo ni
   commitearlo. La que se le pasa a Mateo es `C:\Users\buffa\Downloads\Del Lago Maqueta Estilo D.html`, con datos ficticios y una
   copia centrada del logo que Nicolás no aprobó.
@@ -77,8 +80,8 @@ y `gestion-de-alquileres` siguen abiertos, esperando las pantallas.
 
 | | |
 |---|---|
-| **Docker** | **No** para esperar a Mateo ni para proponer el change del login; **sí** para cualquier slice de código (Testcontainers `postgres:17.6`) |
-| **Supabase** | **No** para el próximo paso; si hace falta, solo Tomás se conecta |
+| **Docker** | **No** para la Phase 2 del login; **sí** para la segunda inspección con la suite completa y para S12 (Testcontainers `postgres:17.6`) |
+| **Supabase** | **Sí, PRUEBA**, para la Phase 2 del login; Tomás escribe las contraseñas. Antes de abrir la app, `grep` del `appsettings.json` compilado |
 | **Límite diario** | Tomás pasa el porcentaje al arrancar |
 
 ## Para retomar
@@ -97,7 +100,7 @@ dotnet test Inmobiliaria.Core.slnf --configuration Release
 dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure
 ```
 
-Esperado en `develop` (#125; #124 y #125 son solo documentos): **2221 pasados (Domain 738, Presentation 554, Infrastructure 929), 0 fallas, 0 omitidos**, build
+Esperado en `develop` (#132): **2236 pasados (Domain 738, Presentation 565, Infrastructure 933), 0 fallas, 0 omitidos**, build
 sin advertencias y el modelo en sintonía con `20261113165451_RevokeSupabaseApiRoles`. Si el build de Desktop falla con MSB3027,
 la aplicación está abierta y tiene tomadas sus DLL: cerrarla. La app la abre siempre el asistente (Tomás, 2026-11-13).
 
@@ -114,7 +117,8 @@ máquina dotnet responde en español ("Superado", "Con error", "Omitido").
 |---|---|
 | Cómo trabajamos | `CLAUDE.md` (raíz) |
 | Lo último cerrado | `openspec/changes/archive/2026-11-13-revocar-permisos-api/archive-report.md` |
-| Lo que espera a Mateo | `openspec/changes/notificaciones/tasks.md` (Phase 4), `gestion-de-alquileres/tasks.md` (S12) |
+| El change activo | `openspec/changes/limite-de-intentos-de-login/tasks.md` (Phase 2) |
+| Las pantallas a programar | `gestion-de-alquileres/tasks.md` (S12, 12.3d), `notificaciones/tasks.md` (Phase 4), `mora/tasks.md` (Phase 2) |
 | Qué falta de alquileres | `openspec/changes/gestion-de-alquileres/spec.md` y `proposal.md` |
 | Reglas de lo que falta | `openspec/specs/lease-contract`, `party-registry`, `unit-registry`, `economic-index`, `rent-adjustment`, `contract-account` |
 | Lo que dijo el dueño | `openspec/domain/respuestas-del-dueno.md` |
