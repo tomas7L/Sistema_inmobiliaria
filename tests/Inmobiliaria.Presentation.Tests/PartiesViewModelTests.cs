@@ -490,4 +490,204 @@ public class PartiesViewModelTests
         Assert.Null(viewModel.RefusalMessage);
         Assert.Null(viewModel.OfferedHolder);
     }
+
+    // The screen as the designer drew it (gestion-de-alquileres tasks 12.3d): a list, and a form of its own reached from
+    // "Nueva persona" or "Editar", which ends on a saved notice with the way back.
+
+    /// <summary>The list reads "last, first", as its "Apellido y nombre" column says, with the phone and the email.</summary>
+    [Fact]
+    public async Task TheList_ShowsTheLastNameFirst_ThePhoneAndTheEmail()
+    {
+        var port = new FakePartyRegistry { Persons = [Juan with { PhoneNumber = "03493 15-0101" }] };
+
+        var viewModel = await LoadedAsync(port);
+
+        var row = Row(viewModel, JuanId);
+        Assert.Equal("Pérez, Juan", row.ListName);
+        Assert.Equal("03493 15-0101", row.PhoneNumber);
+        Assert.Equal("juan@example.com", row.Email);
+    }
+
+    /// <summary>The list opens with no form; "Nueva persona" opens an empty one, and the way back closes it, clearing it.</summary>
+    [Fact]
+    public async Task NewPerson_OpensAnEmptyForm_AndGoingBackClosesIt()
+    {
+        var viewModel = await LoadedAsync(Port());
+        Assert.False(viewModel.IsFormOpen);
+
+        viewModel.NewCommand.Execute(null);
+
+        Assert.True(viewModel.IsFormOpen);
+        Assert.Null(viewModel.Editing);
+        Assert.Equal("Nueva persona", viewModel.FormTitle);
+        Assert.Equal("Complete los datos de identidad y de contacto.", viewModel.FormSubtitle);
+        Assert.Equal("Guardar persona", viewModel.SaveText);
+        Assert.Equal(
+            "Cada persona se carga una sola vez, aunque sea propietaria en un contrato e inquilina en otro. Si ya está cargada, búsquela en Personas en vez de crearla de nuevo.",
+            viewModel.IdentityHint);
+
+        viewModel.FirstName = "Lía";
+        viewModel.BackCommand.Execute(null);
+
+        Assert.False(viewModel.IsFormOpen);
+        Assert.Equal(string.Empty, viewModel.FirstName);
+    }
+
+    /// <summary>"Editar" needs a person, and opens the form on them, titled with their name as listed.</summary>
+    [Fact]
+    public async Task Editing_NeedsAPerson_AndOpensTheFormOnThem()
+    {
+        var viewModel = await LoadedAsync(Port());
+        Assert.False(viewModel.EditCommand.CanExecute(null));
+
+        viewModel.EditCommand.Execute(Row(viewModel, JuanId));
+
+        Assert.True(viewModel.IsFormOpen);
+        Assert.Equal("Juan", viewModel.FirstName);
+        Assert.Equal("Editar persona", viewModel.FormTitle);
+        Assert.Equal("Pérez, Juan", viewModel.FormSubtitle);
+        Assert.Equal("Guardar cambios", viewModel.SaveText);
+        Assert.Equal(
+            "Puede corregir el nombre, el apellido, el DNI y el CUIL si se cargaron mal. El DNI y el CUIL no pueden coincidir con los de otra persona.",
+            viewModel.IdentityHint);
+    }
+
+    /// <summary>A person created ends on the saved notice, named as the list names them; the form stays open to show it.</summary>
+    [Fact]
+    public async Task Creating_EndsOnTheSavedNotice()
+    {
+        var viewModel = await LoadedAsync(Port());
+        viewModel.NewCommand.Execute(null);
+        Fill(viewModel, "Lía", "Sosa", "28111222");
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.True(viewModel.IsFormOpen);
+        Assert.Equal(("Persona guardada", "Sosa, Lía ya está en la lista de personas."), (viewModel.Saved!.Title, viewModel.Saved.Text));
+
+        viewModel.BackCommand.Execute(null);
+
+        Assert.False(viewModel.IsFormOpen);
+        Assert.Null(viewModel.Saved);
+    }
+
+    /// <summary>A confirmed correction of identity data says the recibos keep what they printed; contact data alone says so.</summary>
+    [Fact]
+    public async Task ACorrection_SaysWhichDataItChanged()
+    {
+        var viewModel = await LoadedAsync(Port());
+        viewModel.EditCommand.Execute(Row(viewModel, JuanId));
+        viewModel.FirstName = "Juan Carlos";
+        await viewModel.SaveCommand.ExecuteAsync(null);
+        await viewModel.ConfirmCommand.ExecuteAsync(null);
+
+        Assert.Equal(
+            ("Corrección guardada", "Se actualizaron los datos de identidad. Los recibos ya emitidos conservan lo que imprimieron."),
+            (viewModel.Saved!.Title, viewModel.Saved.Text));
+
+        viewModel.EditCommand.Execute(Row(viewModel, JuanId));
+        Assert.Null(viewModel.Saved);
+        viewModel.Email = "nuevo@example.com";
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal(("Cambios guardados", "Se actualizaron los datos de contacto."), (viewModel.Saved!.Title, viewModel.Saved.Text));
+    }
+
+    /// <summary>Removing the last identifier is a correction of identity too, once its warning is accepted.</summary>
+    [Fact]
+    public async Task RemovingTheLastIdentifier_IsSavedAsACorrection()
+    {
+        var port = Port();
+        port.OnCorrect = (id, draft, accepted) => accepted
+            ? PartyResult.Saved(new PartyListing(id, draft.FirstName!, draft.LastName!, null, null, null, null, null))
+            : PartyResult.Refused(PartyRefusal.NoIdentifierNotAccepted);
+        var viewModel = await LoadedAsync(port);
+        viewModel.EditCommand.Execute(Row(viewModel, JuanId));
+        viewModel.Dni = "";
+        viewModel.Cuil = "";
+        await viewModel.SaveCommand.ExecuteAsync(null);
+        await viewModel.ConfirmCommand.ExecuteAsync(null);
+
+        await viewModel.AcceptNoIdentifierCommand.ExecuteAsync(null);
+
+        Assert.Equal("Corrección guardada", viewModel.Saved!.Title);
+    }
+
+    /// <summary>A refusal leaves the form open with no saved notice, so the operator can fix it.</summary>
+    [Fact]
+    public async Task ARefusal_KeepsTheFormOpen_WithNoSavedNotice()
+    {
+        var port = Port();
+        port.OnCreate = (_, _) => PartyResult.Refused(PartyRefusal.CuilInvalid);
+        var viewModel = await LoadedAsync(port);
+        viewModel.NewCommand.Execute(null);
+        Fill(viewModel, "Juan", "Pérez", cuil: "20-11111111-3");
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.True(viewModel.IsFormOpen);
+        Assert.Null(viewModel.Saved);
+    }
+
+    /// <summary>"Usar esa persona" goes back to the list with the holder selected, as the designer's navigation says.</summary>
+    [Fact]
+    public async Task UsingTheHolder_GoesBackToTheList_WithThemSelected()
+    {
+        var port = Port();
+        port.OnCreate = (_, _) => PartyResult.Refused(PartyRefusal.DniTaken, Juan);
+        var viewModel = await LoadedAsync(port);
+        viewModel.NewCommand.Execute(null);
+        Fill(viewModel, "Otro", "Señor", "30.123.456");
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        viewModel.UseHolderCommand.Execute(null);
+
+        Assert.False(viewModel.IsFormOpen);
+        Assert.Equal(JuanId, viewModel.SelectedPerson!.Id);
+    }
+
+    /// <summary>The form shows one step at a time: the fields, the summary to confirm, the warning to accept, or the saved notice.</summary>
+    [Fact]
+    public async Task TheForm_ShowsOneStepAtATime()
+    {
+        var port = Port();
+        port.OnCorrect = (id, draft, accepted) => accepted
+            ? PartyResult.Saved(new PartyListing(id, draft.FirstName!, draft.LastName!, null, null, null, null, null))
+            : PartyResult.Refused(PartyRefusal.NoIdentifierNotAccepted);
+        var viewModel = await LoadedAsync(port);
+        viewModel.EditCommand.Execute(Row(viewModel, JuanId));
+        Assert.Equal(PartyFormStep.Fields, viewModel.Step);
+
+        viewModel.Dni = "";
+        viewModel.Cuil = "";
+        await viewModel.SaveCommand.ExecuteAsync(null);
+        Assert.Equal(PartyFormStep.Confirm, viewModel.Step);
+
+        await viewModel.ConfirmCommand.ExecuteAsync(null);
+        Assert.Equal(PartyFormStep.NoIdentifier, viewModel.Step);
+
+        await viewModel.AcceptNoIdentifierCommand.ExecuteAsync(null);
+        Assert.Equal(PartyFormStep.Saved, viewModel.Step);
+
+        viewModel.EditCommand.Execute(Row(viewModel, JuanId));
+        Assert.Equal(PartyFormStep.Fields, viewModel.Step);
+    }
+
+    /// <summary>The foot of the list counts who is shown, and the roles come one per label, in the listing's order.</summary>
+    [Fact]
+    public async Task TheList_CountsWhoIsShown_AndNamesEachRoleApart()
+    {
+        var port = new FakePartyRegistry { Persons = [Juan with { ActiveRoles = [PartyRole.Lessor, PartyRole.Codebtor] }, Ana] };
+        var viewModel = await LoadedAsync(port);
+
+        Assert.Equal(["Propietario", "Codeudor"], Row(viewModel, JuanId).RoleNames);
+        Assert.Equal("2 personas", viewModel.CountText);
+        Assert.False(viewModel.IsEmpty);
+
+        viewModel.RoleFilter = PartyRole.Lessor;
+        Assert.Equal("1 persona", viewModel.CountText);
+
+        viewModel.RoleFilter = PartyRole.Tenant;
+        Assert.True(viewModel.IsEmpty);
+    }
 }

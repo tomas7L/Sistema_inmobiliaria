@@ -7,6 +7,7 @@ using Inmobiliaria.Domain.Collection;
 using Inmobiliaria.Domain.GoLive;
 using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Domain.Notices;
+using Inmobiliaria.Domain.Parties;
 using Inmobiliaria.Infrastructure.Access;
 using Inmobiliaria.Infrastructure.IndexSources;
 using Inmobiliaria.Presentation.CashDesk;
@@ -15,6 +16,7 @@ using Inmobiliaria.Desktop.Printing;
 using Inmobiliaria.Presentation.GoLive;
 using Inmobiliaria.Presentation.Login;
 using Inmobiliaria.Presentation.Notices;
+using Inmobiliaria.Presentation.Parties;
 using Inmobiliaria.Presentation.Printing;
 using Inmobiliaria.Presentation.Recibos;
 using Inmobiliaria.Presentation.Voiding;
@@ -195,9 +197,12 @@ public partial class App : Application
                 ? new NoticesViewModel(noticeDesk, new CredentialManagerMailboxStore(), session.Role, LoadAgencyName())
                 : null;
 
+            // Personas is for both roles (gestion-de-alquileres spec Requirement 22).
+            var partiesViewModel = new PartiesViewModel(_sessionProvider.GetRequiredService<IPartyRegistry>());
+
             mainWindow = new MainWindow(
                 shellViewModel, cashDeskViewModel, recentViewModel, voidingViewModel, goLiveViewModel, usersViewModel,
-                noticesViewModel);
+                noticesViewModel, partiesViewModel);
             MainWindow = mainWindow;
             // ShutdownMode is OnExplicitShutdown (App.xaml) precisely so that closing
             // LoginWindow or ChangePasswordWindow mid-bootstrap never ends the process before

@@ -1,0 +1,28 @@
+<!--
+    The light palette of the designer's canvas (caja.css, ".t-light"). Every themed style reads these brushes with
+    DynamicResource, so a dark palette with the same keys can replace this dictionary at run time.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <SolidColorBrush x:Key="Theme.Background" Color="#E8EAED" />
+    <SolidColorBrush x:Key="Theme.Surface" Color="#F3F4F6" />
+    <SolidColorBrush x:Key="Theme.Surface2" Color="#DDE0E5" />
+    <SolidColorBrush x:Key="Theme.Ink" Color="#1B2130" />
+    <SolidColorBrush x:Key="Theme.Ink2" Color="#3F4757" />
+    <SolidColorBrush x:Key="Theme.Muted" Color="#565E6E" />
+    <SolidColorBrush x:Key="Theme.Line" Color="#C4C9D2" />
+    <SolidColorBrush x:Key="Theme.OnAccent" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="Theme.Select" Color="#CDD2F5" />
+    <SolidColorBrush x:Key="Theme.Ok" Color="#17623A" />
+    <SolidColorBrush x:Key="Theme.OkBack" Color="#2417623A" />
+    <SolidColorBrush x:Key="Theme.Warn" Color="#7F4B06" />
+    <SolidColorBrush x:Key="Theme.WarnBack" Color="#297F4B06" />
+    <SolidColorBrush x:Key="Theme.Bad" Color="#A01C15" />
+    <SolidColorBrush x:Key="Theme.Field" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="Theme.FieldLine" Color="#8A92A3" />
+    <SolidColorBrush x:Key="Theme.Button" Color="#07109B" />
+    <SolidColorBrush x:Key="Theme.ButtonLine" Color="#07109B" />
+    <SolidColorBrush x:Key="Theme.ButtonHover" Color="#0B17BD" />
+    <SolidColorBrush x:Key="Theme.Focus" Color="#07109B" />
+    <SolidColorBrush x:Key="Theme.NavOn" Color="#07109B" />
+</ResourceDictionary>

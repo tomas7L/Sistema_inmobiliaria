@@ -75,6 +75,10 @@
                                          Value="{x:Static shell:NavigationTarget.Notices}">
                                 <Setter Property="Visibility" Value="Collapsed" />
                             </DataTrigger>
+                            <DataTrigger Binding="{Binding SelectedItem.Target, ElementName=NavigationList}"
+                                         Value="{x:Static shell:NavigationTarget.Parties}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
                         </Style.Triggers>
                     </Style>
                 </TextBlock.Style>
@@ -149,6 +153,21 @@
                     </Style>
                 </views:NoticesView.Style>
             </views:NoticesView>
+
+            <!-- Rebuilt to the designer's canvas, so its style is based on the theme's page. -->
+            <views:PartiesView x:Name="PartiesScreen">
+                <views:PartiesView.Style>
+                    <Style TargetType="views:PartiesView" BasedOn="{StaticResource Theme.Page}">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding SelectedItem.Target, ElementName=NavigationList}"
+                                         Value="{x:Static shell:NavigationTarget.Parties}">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </views:PartiesView.Style>
+            </views:PartiesView>
 
             <views:UsersView x:Name="UsersScreen">
                 <views:UsersView.Style>

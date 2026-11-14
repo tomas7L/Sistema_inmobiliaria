@@ -1,0 +1,325 @@
+<!--
+    The designer's components (caja.css), as named styles. They are keyed, not implicit, so a screen takes the theme
+    only when it is rebuilt to the canvas; the screens not rebuilt yet keep the default look until their own slice.
+    Colours come from the palette dictionary through DynamicResource.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <FontFamily x:Key="Theme.Font">Segoe UI Variable Text, Segoe UI</FontFamily>
+
+    <!-- The ground of a screen. -->
+    <Style x:Key="Theme.Page" TargetType="UserControl">
+        <Setter Property="Background" Value="{DynamicResource Theme.Background}" />
+        <Setter Property="Foreground" Value="{DynamicResource Theme.Ink}" />
+        <Setter Property="FontFamily" Value="{StaticResource Theme.Font}" />
+        <Setter Property="FontSize" Value="14" />
+    </Style>
+
+    <Style x:Key="Theme.Title" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="32" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="Foreground" Value="{DynamicResource Theme.Ink}" />
+    </Style>
+
+    <Style x:Key="Theme.Subtitle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="Margin" Value="0,4,0,0" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="Foreground" Value="{DynamicResource Theme.Muted}" />
+    </Style>
+
+    <Style x:Key="Theme.CardTitle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="17" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="Margin" Value="0,0,0,12" />
+        <Setter Property="Foreground" Value="{DynamicResource Theme.Ink}" />
+    </Style>
+
+    <Style x:Key="Theme.Label" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Margin" Value="0,0,0,6" />
+        <Setter Property="Foreground" Value="{DynamicResource Theme.Ink2}" />
+    </Style>
+
+    <Style x:Key="Theme.Hint" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="Foreground" Value="{DynamicResource Theme.Muted}" />
+    </Style>
+
+    <!-- A refusal or a failure: bold, in the "bad" colour. Collapsed while it has no text. -->
+    <Style x:Key="Theme.ErrorText" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="Foreground" Value="{DynamicResource Theme.Bad}" />
+        <Style.Triggers>
+            <Trigger Property="Text" Value="">
+                <Setter Property="Visibility" Value="Collapsed" />
+            </Trigger>
+            <Trigger Property="Text" Value="{x:Null}">
+                <Setter Property="Visibility" Value="Collapsed" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="Theme.Card" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource Theme.Surface}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Theme.Line}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="18" />
+        <Setter Property="Padding" Value="24,22" />
+    </Style>
+
+    <!-- The pill buttons: primary in the logo blue, ghost outlined. -->
+    <Style x:Key="Theme.ButtonBase" TargetType="Button">
+        <Setter Property="Height" Value="36" />
+        <Setter Property="Padding" Value="18,0" />
+        <Setter Property="FontFamily" Value="{StaticResource Theme.Font}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Pill" CornerRadius="18" Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Pill" Property="BorderBrush" Value="{DynamicResource Theme.Ink}" />
+                            <Setter TargetName="Pill" Property="BorderThickness" Value="2" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.45" />
+                            <Setter Property="Cursor" Value="Arrow" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="Theme.PrimaryButton" TargetType="Button" BasedOn="{StaticResource Theme.ButtonBase}">
+        <Setter Property="Background" Value="{DynamicResource Theme.Button}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Theme.ButtonLine}" />
+        <Setter Property="Foreground" Value="{DynamicResource Theme.OnAccent}" />
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource Theme.ButtonHover}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="Theme.GhostButton" TargetType="Button" BasedOn="{StaticResource Theme.ButtonBase}">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Theme.Muted}" />
+        <Setter Property="Foreground" Value="{DynamicResource Theme.Ink}" />
+        <Setter Property="FontWeight" Value="Medium" />
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource Theme.Select}" />
+                <Setter Property="BorderBrush" Value="{DynamicResource Theme.Ink}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- A link-looking button, as "Usar esa persona". -->
+    <Style x:Key="Theme.LinkButton" TargetType="Button">
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Foreground" Value="{DynamicResource Theme.Focus}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <TextBlock x:Name="Text" Text="{TemplateBinding Content}" TextDecorations="Underline" />
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Text" Property="FontWeight" Value="Bold" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- The boxed pill input. Its Tag is the placeholder, shown while the box is empty. -->
+    <Style x:Key="Theme.Input" TargetType="TextBox">
+        <Setter Property="Height" Value="44" />
+        <Setter Property="Padding" Value="16,0" />
+        <Setter Property="FontFamily" Value="{StaticResource Theme.Font}" />
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="Foreground" Value="{DynamicResource Theme.Ink}" />
+        <Setter Property="Background" Value="{DynamicResource Theme.Field}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Theme.FieldLine}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border x:Name="Box" CornerRadius="22" Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                        <!-- The TextBox applies its own Padding to the text inside the host, so the grid adds none: a
+                             margin here as well indented the text twice. The placeholder takes the same Padding, plus the
+                             two pixels the text box keeps before the caret, so both start at the same place. -->
+                        <Grid>
+                            <Border Padding="{TemplateBinding Padding}" IsHitTestVisible="False">
+                                <TextBlock x:Name="Placeholder" Text="{TemplateBinding Tag}" VerticalAlignment="Center" Margin="2,0,0,0"
+                                           Foreground="{DynamicResource Theme.Muted}" Visibility="Collapsed" />
+                            </Border>
+                            <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Text" Value="">
+                            <Setter TargetName="Placeholder" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource Theme.Ink2}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource Theme.Focus}" />
+                            <Setter TargetName="Box" Property="BorderThickness" Value="2" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.55" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- One option of a segmented choice, as the role filter. -->
+    <Style x:Key="Theme.Segment" TargetType="RadioButton">
+        <Setter Property="FontFamily" Value="{StaticResource Theme.Font}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource Theme.Ink2}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <Border x:Name="Pill" CornerRadius="16" Padding="16,7" Background="{TemplateBinding Background}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Background" Value="{DynamicResource Theme.Select}" />
+                            <Setter Property="Foreground" Value="{DynamicResource Theme.Ink}" />
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter Property="Background" Value="{DynamicResource Theme.NavOn}" />
+                            <Setter Property="Foreground" Value="#FFFFFF" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Pill" Property="BorderBrush" Value="{DynamicResource Theme.Ink}" />
+                            <Setter TargetName="Pill" Property="BorderThickness" Value="2" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="Theme.SegmentGroup" TargetType="Border">
+        <Setter Property="Padding" Value="4" />
+        <Setter Property="CornerRadius" Value="20" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Theme.Line}" />
+        <Setter Property="Background" Value="{DynamicResource Theme.Surface}" />
+    </Style>
+
+    <!-- The table: no outer box, a strong header rule, a line between rows, the selected row in the selection colour. -->
+    <Style x:Key="Theme.TableHeader" TargetType="DataGridColumnHeader">
+        <Setter Property="Padding" Value="10,12" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="Foreground" Value="{DynamicResource Theme.Muted}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Theme.Line}" />
+        <Setter Property="BorderThickness" Value="0,0,0,1" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+    </Style>
+
+    <!--
+        Every column centred, header and cells alike (Tomás, 2026-11-14). The cell keeps no background of its own,
+        selected or not: WPF's default style would otherwise paint the system blue over the row's selection colour.
+    -->
+    <Style x:Key="Theme.TableCell" TargetType="DataGridCell">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Padding" Value="10,14" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="DataGridCell">
+                    <Border Padding="{TemplateBinding Padding}" Background="{TemplateBinding Background}">
+                        <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsSelected" Value="True">
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="Foreground" Value="{DynamicResource Theme.Ink}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- The selection is painted on the row, in the theme's colour, with the ink unchanged so it stays legible. -->
+    <Style x:Key="Theme.TableRow" TargetType="DataGridRow">
+        <Setter Property="Background" Value="Transparent" />
+        <Style.Triggers>
+            <Trigger Property="IsSelected" Value="True">
+                <Setter Property="Background" Value="{DynamicResource Theme.Select}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="Theme.Table" TargetType="DataGrid">
+        <Setter Property="AutoGenerateColumns" Value="False" />
+        <Setter Property="IsReadOnly" Value="True" />
+        <Setter Property="CanUserAddRows" Value="False" />
+        <Setter Property="CanUserDeleteRows" Value="False" />
+        <Setter Property="SelectionMode" Value="Single" />
+        <Setter Property="HeadersVisibility" Value="Column" />
+        <Setter Property="GridLinesVisibility" Value="Horizontal" />
+        <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource Theme.Line}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="RowStyle" Value="{StaticResource Theme.TableRow}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Foreground" Value="{DynamicResource Theme.Ink}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="ColumnHeaderStyle" Value="{StaticResource Theme.TableHeader}" />
+        <Setter Property="CellStyle" Value="{StaticResource Theme.TableCell}" />
+    </Style>
+
+    <!-- A coloured label, as a role. Its Tag picks the colour: "ok", "warn" or anything else for the neutral one. -->
+    <Style x:Key="Theme.Chip" TargetType="Border">
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="Padding" Value="12,4" />
+        <Setter Property="Margin" Value="3,0" />
+        <Setter Property="Background" Value="{DynamicResource Theme.Surface2}" />
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource Theme.Ink2}" />
+        <Setter Property="TextElement.FontSize" Value="13" />
+        <Setter Property="TextElement.FontWeight" Value="SemiBold" />
+        <Style.Triggers>
+            <Trigger Property="Tag" Value="ok">
+                <Setter Property="Background" Value="{DynamicResource Theme.OkBack}" />
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource Theme.Ok}" />
+            </Trigger>
+            <Trigger Property="Tag" Value="warn">
+                <Setter Property="Background" Value="{DynamicResource Theme.WarnBack}" />
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource Theme.Warn}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+</ResourceDictionary>
