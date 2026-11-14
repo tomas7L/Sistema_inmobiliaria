@@ -49,7 +49,7 @@ A login attempt MUST succeed if and only if PostgreSQL accepts a connection comp
 
 #### Scenario: A login with no verdict keeps the window open
 
-- GIVEN the database cannot be reached, or fails with anything other than refusing the login
+- GIVEN the database cannot be reached, or fails with anything other than refusing the login or the pooler's block
 - WHEN "maria" attempts to log in
 - THEN the login window MUST stay open with what she typed, and show a message telling her to check the connection and try again
 - AND that message MUST NOT read as a wrong password
@@ -465,6 +465,116 @@ one generic message, worded identically for a wrong password and an unknown user
 - WHEN she logs in typing "girasoles 1"
 - THEN the login MUST fail with the generic message
 
+<!-- Added by limite-de-intentos-de-login (2026-11-14). Requirement, Decision and P numbers inside these four
+requirements refer to openspec/changes/archive/2026-11-14-limite-de-intentos-de-login/spec.md. -->
+
+### Requirement: The Pooler's Block Is Told Apart
+
+When the pooler refuses a login with its breaker (Decision 11), the login MUST end in its own outcome, neither a failed
+login nor a login with no verdict. The window MUST stay open with what was typed, MUST show the block message
+(Requirement 4), MUST start the wait at once for 150 seconds (Decision 10), and MUST write the refusal to the error log
+(Decision 13).
+
+#### Scenario: Too many wrong passwords from the office
+
+- GIVEN the pooler answers `XX000` with "(ECIRCUITBREAKER) too many authentication failures, new connections are temporarily blocked"
+- WHEN "maria" attempts to log in, with her correct password
+- THEN the window MUST show the block message, not "Usuario o contraseña incorrectos." nor the connection message
+- AND the wait MUST start, for 150 seconds
+
+#### Scenario: Too many attempts with an unknown or deactivated user
+
+- GIVEN the pooler answers `XX000` with "(ECIRCUITBREAKER) failed to retrieve database credentials after multiple attempts, new connections are temporarily blocked"
+- WHEN anyone attempts to log in
+- THEN the outcome MUST be the same as in the scenario above
+
+#### Scenario: The pooler's other errors are unchanged
+
+- GIVEN the pooler answers "(EAUTHQUERY) user not found in the database", or any `XX000` error not starting with `(ECIRCUITBREAKER)`
+- WHEN a login is attempted
+- THEN the outcome MUST be what it is today: a failed login for the first, a login with no verdict for the rest
+
+### Requirement: Failed Logins Slow Down on Each PC
+
+The application MUST count failed logins in a row on the PC it runs on, for as long as it stays open (P3). On the third,
+the wait MUST start, for 150 seconds measured from that third failure (P2). During the wait the window MUST show the time
+left, and MUST NOT attempt a login (Decision 12). When the wait ends, the button MUST be enabled again and the count MUST
+start again. What counts and what starts the count again is Decision 8; the username does not matter (Decision 9).
+
+#### Scenario: Two mistakes do not wait
+
+- GIVEN two failed logins in a row
+- WHEN the second is refused
+- THEN the button MUST be enabled at once, with "Usuario o contraseña incorrectos." as today
+
+#### Scenario: The third mistake waits
+
+- GIVEN two failed logins in a row
+- WHEN a third is refused
+- THEN the button MUST be disabled, and the window MUST show 2:30 left, counting down
+- AND at 149 seconds after the third failure the button MUST still be disabled
+- AND at 150 seconds it MUST be enabled
+
+#### Scenario: Another username does not escape the wait
+
+- GIVEN two failed logins as "maria"
+- WHEN a third is refused as "jose"
+- THEN the wait MUST start
+
+#### Scenario: A lost connection does not erase the count
+
+- GIVEN two failed logins in a row, then a login with no verdict
+- WHEN the next login is refused
+- THEN the wait MUST start
+
+#### Scenario: A login the database accepted starts the count again
+
+- GIVEN two failed logins in a row, then a login the database accepted that the application refuses as not provisioned
+- WHEN the next login is refused
+- THEN the button MUST be enabled at once: that is the first failure of a new count
+
+#### Scenario: Nothing reaches the database during the wait
+
+- GIVEN a wait has started
+- WHEN the operator presses Enter or tries to log in in any way before it ends
+- THEN no login attempt MUST be made
+
+### Requirement: The Waits Say What Happened
+
+Each wait MUST show its own message: the three-failure message (Requirement 3) and the block message (Requirement 2).
+Each MUST say there were too many failed attempts, how long to wait, and that trying earlier makes the wait longer. Neither
+MAY read as a wrong password nor as a network problem, and each MUST be worded identically whatever username was typed
+(P5). The final wording is Mateo's (P4); until it arrives, placeholder texts that meet this requirement stand (Decision 14).
+
+#### Scenario: The messages are their own
+
+- GIVEN the three-failure wait, and separately a block
+- WHEN each message is shown
+- THEN neither MUST equal "Usuario o contraseña incorrectos." nor the connection message
+
+#### Scenario: The username changes nothing
+
+- GIVEN the same wait reached once with an existing username and once with one that does not exist
+- WHEN the message is shown
+- THEN it MUST be the same text
+
+### Requirement: A Refused Login Counts Once at the Pooler
+
+One login attempt the database or the pooler refuses MUST reach the pooler as exactly one connection, so the count of
+Requirement 3 matches the count the pooler keeps (Decision 15).
+
+#### Scenario: A wrong password is one connection
+
+- GIVEN a pooler that refuses every login
+- WHEN one login is attempted with a wrong password
+- THEN the pooler MUST have received exactly one connection
+
+#### Scenario: The block is one connection too
+
+- GIVEN a pooler that answers with its breaker
+- WHEN one login is attempted
+- THEN the pooler MUST have received exactly one connection
+
 ## Tests
 
 Derived from the requirements above, not generic CRUD coverage. Each names the requirement it proves. Integration tests require a real Postgres (`postgres:17.6` via Testcontainers) connecting as each application role in turn; permission and trigger behavior cannot be validated against a fake.
@@ -541,3 +651,21 @@ Tests 22 to 44 come from `gestion-de-usuarios`; `R` and Decision numbers in them
     password and an unknown username.** R10, extends `user-registry` Tests 4 and 5 *(Infrastructure.Tests)*
 44. **The pooler's refusal of an unknown or deactivated role is an ordinary failed login; any other `XX000` is unavailable, never a rejection.** Found by the live smoke, where Testcontainers cannot see it because it has no pooler *(Infrastructure.Tests, `LoginWithoutVerdictTests`, a loopback socket replaying the error)*
 45. **No server answering and a connection dropped before the answer are both unavailable.** *(Infrastructure.Tests, `LoginWithoutVerdictTests`)*. The login window's half is the live check, because it lives in Desktop, outside the CI filter.
+46. **The pooler's "(ECIRCUITBREAKER) too many authentication failures, …" reply is the block outcome**, and the exception
+   is kept for the error log. Shown failing on today's code, which calls it a login with no verdict. R2
+47. **The pooler's "(ECIRCUITBREAKER) failed to retrieve database credentials after multiple attempts, …" reply is the block
+   outcome.** R2
+48. **Two failed logins leave the button enabled; the third disables it.** Shown failing with the count removed. R3
+49. **The wait ends exactly 150 seconds after the third failure**: disabled at 149, enabled at 150, and the time left
+   reads 2:30 at the start and 0:01 a second before the end. R3
+50. **After the wait ends, one failed login does not start a new wait.** R3
+51. **A third failure under a different username starts the wait.** R3, Decision 9
+52. **A login with no verdict between failures neither counts nor starts the count again.** R3, Decision 8
+53. **A successful or not-provisioned login starts the count again.** R3, Decision 8
+54. **A block starts the 150-second wait at once, with no failures before it.** R2
+55. **During a wait, logging in reaches the authenticator zero times.** The fake authenticator counts its calls. R3,
+    Decision 12
+56. **The three-failure message and the block message differ from each other, from "Usuario o contraseña incorrectos."
+    and from the connection message, and each is the same text for any username.** R4
+57. **One refused login, with a wrong password and with the breaker, reaches the fake pooler as exactly one connection.**
+    Shown failing on today's code, which opens two. R5, Decision 15

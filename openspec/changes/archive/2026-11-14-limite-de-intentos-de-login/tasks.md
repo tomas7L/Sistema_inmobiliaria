@@ -48,7 +48,8 @@ Decision needed before apply: No
 
 ## Deviations
 
-None yet.
+- **2.3:** the closing correct login was `tomas`, not another user: both test Employees are deactivated, and a pooler
+  block is per IP, so it would have refused any user.
 
 ## Phase 1: The gate, the outcome and their tests (PR 1, est. about 300 lines)
 
@@ -83,7 +84,7 @@ D11, §2 to §6, F1 and F2. Risk: item 2 (a guard on the login).
 **Docker: no. Supabase: yes, the test project (PRUEBA). Only Tomás types passwords; the assistant launches the application
 and reads `%LOCALAPPDATA%\SistemaInmobiliaria\logs`.** Proposal §10, spec Preconditions.
 
-- [ ] 2.1 **Rebuild and point at PRUEBA:** the compiled `appsettings.json` checked with `grep` for `chygrzoqmcqpncogeiuz` before opening (`docs/ESTADO.md`)
-- [ ] 2.2 **Three wrong passwords:** after waiting 3 minutes with no attempts, three wrong passwords for an active user. The third shows "Demasiados intentos fallidos" and the button reads "Espere 2:30", counting down; Enter does nothing
-- [ ] 2.3 **The office never trips:** keep typing wrong passwords as fast as the button allows for 5 minutes. No `ECIRCUITBREAKER` line appears in the log, and a correct password from another user logs in at the end
-- [ ] 2.4 **Close:** `docs/ESTADO.md`'s failed-logins pending item removed; the `user-registry` delta merged into `openspec/specs/` at archive
+- [x] 2.1 **Rebuild and point at PRUEBA:** the compiled `appsettings.json` checked with `grep` for `chygrzoqmcqpncogeiuz` before opening (`docs/ESTADO.md`) **Done 2026-11-14**: `grep` found `chygrzoqmcqpncogeiuz` before and after `dotnet build Inmobiliaria.sln -c Release` (exit 0, 0 Advertencia(s), 0 Errores); app opened at 17:26, no error log for the day yet
+- [x] 2.2 **Three wrong passwords:** after waiting 3 minutes with no attempts, three wrong passwords for an active user. The third shows "Demasiados intentos fallidos" and the button reads "Espere 2:30", counting down; Enter does nothing **Done 2026-11-14** (Tomás typed, user `tomas`, no attempts that day before 17:26): the third wrong password showed "Demasiados intentos fallidos" and "Espere 2:30" counting down; on a second run Enter and the button did nothing during the wait; after the wait the correct password logged in. Error log for the day: none written
+- [x] 2.3 **The office never trips:** keep typing wrong passwords as fast as the button allows for 5 minutes. No `ECIRCUITBREAKER` line appears in the log, and a correct password from another user logs in at the end **Done 2026-11-14, deviation**: the app relaunched at 17:36; two more cycles, three wrong passwords and a 2:30 wait each, as fast as the button allowed until about 17:43; then the correct password logged in. No `ECIRCUITBREAKER`: no error log written that day at all. The correct login was `tomas` itself, not another user: both test Employees are deactivated, and a pooler block is per IP, so it would refuse any user
+- [x] 2.4 **Close:** `docs/ESTADO.md`'s failed-logins pending item removed; the `user-registry` delta merged into `openspec/specs/` at archive **Done 2026-11-14**: the pending item removed from `docs/ESTADO.md`; the delta merged by script (`archive-report.md`)
