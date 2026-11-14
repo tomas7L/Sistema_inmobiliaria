@@ -46,6 +46,14 @@ public sealed class ShellViewModel
 
             // Both roles; the notices' figure is the desk's, so the same terms close it (notificaciones spec Requirement 8).
             new(NavigationTarget.Notices, NavigationTitles.Notices, termsReason is null, termsReason),
+
+            // Both roles, in the order of Mateo's sidebar (gestion-de-alquileres spec Requirement 22). Open whatever
+            // the recargo terms say: those close only the screens that charge or show a recargo.
+            new(NavigationTarget.Contracts, NavigationTitles.Contracts),
+            new(NavigationTarget.Parties, NavigationTitles.Parties),
+            new(NavigationTarget.Units, NavigationTitles.Units),
+            new(NavigationTarget.Indices, NavigationTitles.Indices),
+            new(NavigationTarget.Adjustments, NavigationTitles.Adjustments),
         };
 
         if (role == UserRole.Admin)
