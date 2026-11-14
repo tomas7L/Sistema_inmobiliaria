@@ -39,4 +39,11 @@ public abstract record AuthenticationResult
     /// send the user hunting for a typo. <paramref name="Cause"/> is for the error log, never the screen.
     /// </summary>
     public sealed record Unavailable(Exception Cause) : AuthenticationResult;
+
+    /// <summary>
+    /// Supabase's pooler refused the login with its circuit breaker, after too many failed logins: it refuses every new
+    /// connection for a while, whoever logs in. Neither <see cref="Rejected"/> nor <see cref="Unavailable"/>, because the
+    /// cure is to wait (limite-de-intentos-de-login, spec Requirement 2). <paramref name="Cause"/> is for the error log.
+    /// </summary>
+    public sealed record Blocked(Exception Cause) : AuthenticationResult;
 }

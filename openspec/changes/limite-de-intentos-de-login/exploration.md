@@ -44,10 +44,16 @@ On PRUEBA (`chygrzoqmcqpncogeiuz`), from Tomás's PC, recorded in `%LOCALAPPDATA
 2. Wrong passwords for the deactivated `muñoz`: log 19:24:33, `(ECIRCUITBREAKER) failed to retrieve database credentials
    after multiple attempts`. A deactivated user trips the other breaker.
 
-The number of attempts was not counted exactly (Tomás: "5 o 6"). Failures from an earlier round, less than 150 s
-before, most likely counted too: the application opens exactly one connection per attempt
-(`NpgsqlAuthenticator.cs:66`, "The one and only physical connection this method ever opens (spec test 2)"), so each
-attempt is one failure.
+The number of attempts was not counted exactly (Tomás: "5 o 6").
+
+**Corrected 2026-11-13, during the code phase: each failed attempt counts twice.** This paragraph first said the
+application opens exactly one connection per attempt (`NpgsqlAuthenticator.cs:66`). It opens one *logical* connection,
+but Npgsql 10.0.3 opens a second physical one underneath: in `NpgsqlConnector.OpenCore`, any error while
+`GssEncryptionMode` is `Prefer`, the default, is retried once with GSS encryption disabled, whatever the `SslMode`, even
+when no GSS request was ever sent. Measured with a fake pooler that counts what it accepts: a refused login opened **2**
+connections as the application is today, and **1** with `GssEncryptionMode = Disable`. `LoginWithoutVerdictTests.cs:108`
+already said so ("Npgsql opens a second one to retry after the first refusal"). So 5 wrong passwords reach the pooler's
+10, which matches Tomás's count, and the fix must make one attempt one failure (spec Decision 15).
 
 ## What the code does today
 

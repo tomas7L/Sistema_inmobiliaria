@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.CompilerServices;
 using System.Text;
 using Inmobiliaria.Infrastructure.Access;
 using Npgsql;
@@ -15,6 +16,7 @@ namespace Inmobiliaria.Infrastructure.Tests;
 public sealed class LoginWithoutVerdictTests
 {
     private const string InternalError = "XX000";
+    private const string InvalidPassword = "28P01";
 
     /// <summary>Text captured from the pooler on 2026-11-04, for a deactivated user and for a nonexistent one.</summary>
     [Fact]
@@ -35,6 +37,35 @@ public sealed class LoginWithoutVerdictTests
 
         var unavailable = Assert.IsType<AuthenticationResult.Unavailable>(result);
         Assert.Equal(message, Assert.IsType<PostgresException>(unavailable.Cause).MessageText);
+    }
+
+    /// <summary>
+    /// Both of the pooler's circuit breakers, in the text captured on the test database on 2026-11-13: a login it refuses
+    /// this way is neither a wrong password nor a login with no verdict (limite-de-intentos-de-login, Tests 1 and 2).
+    /// </summary>
+    [Theory]
+    [InlineData("(ECIRCUITBREAKER) too many authentication failures, new connections are temporarily blocked")]
+    [InlineData("(ECIRCUITBREAKER) failed to retrieve database credentials after multiple attempts, new connections are temporarily blocked")]
+    public async Task ThePoolersBlock_IsItsOwnOutcome(string message)
+    {
+        var result = await LogInAgainstPoolerReplying(message);
+
+        var blocked = Assert.IsType<AuthenticationResult.Blocked>(result);
+        Assert.Equal(message, Assert.IsType<PostgresException>(blocked.Cause).MessageText);
+    }
+
+    /// <summary>
+    /// The pooler counts failures per connection, so one refused login must be one connection, or the application's own
+    /// count would be half the pooler's (limite-de-intentos-de-login, Test 13).
+    /// </summary>
+    [Theory]
+    [InlineData(InvalidPassword, "password authentication failed for user \"maria\"")]
+    [InlineData(InternalError, "(ECIRCUITBREAKER) too many authentication failures, new connections are temporarily blocked")]
+    public async Task ARefusedLogin_ReachesThePoolerOnce(string code, string message)
+    {
+        var (_, connections) = await LogInAgainstPooler(code, message);
+
+        Assert.Equal(1, connections);
     }
 
     /// <summary>Nothing listens on the port, as when the office has no network: the login window must survive it.</summary>
@@ -86,34 +117,46 @@ public sealed class LoginWithoutVerdictTests
         }
     }
 
-    private static async Task<AuthenticationResult> LogInAgainstPoolerReplying(string message)
+    private static async Task<AuthenticationResult> LogInAgainstPoolerReplying(string message) =>
+        (await LogInAgainstPooler(InternalError, message)).Result;
+
+    private static async Task<(AuthenticationResult Result, int Connections)> LogInAgainstPooler(string code, string message)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
-        var pooler = ServeFatalErrorsAsync(listener, message, timeout.Token);
+        var connections = new StrongBox<int>();
+        var pooler = ServeFatalErrorsAsync(listener, code, message, connections, timeout.Token);
 
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        AuthenticationResult result;
         try
         {
-            return await AuthenticatorOn(port).AuthenticateAsync("noexiste", "any-password", timeout.Token);
+            result = await AuthenticatorOn(port).AuthenticateAsync("noexiste", "any-password", timeout.Token);
         }
         finally
         {
             await timeout.CancelAsync();
             await pooler;
         }
+
+        return (result, connections.Value);
     }
 
-    /// <summary>Serves every connection, because Npgsql opens a second one to retry after the first refusal.</summary>
-    private static async Task ServeFatalErrorsAsync(TcpListener listener, string message, CancellationToken ct)
+    /// <summary>
+    /// Serves and counts every connection the client opens, so a second one is counted rather than left hanging. Npgsql
+    /// retries a refused open once unless GSS encryption is off, which is why the login turns it off.
+    /// </summary>
+    private static async Task ServeFatalErrorsAsync(
+        TcpListener listener, string code, string message, StrongBox<int> connections, CancellationToken ct)
     {
         try
         {
             while (true)
             {
                 using var client = await listener.AcceptTcpClientAsync(ct);
-                await ReplyWithFatalErrorAsync(client.GetStream(), message, ct);
+                Interlocked.Increment(ref connections.Value);
+                await ReplyWithFatalErrorAsync(client.GetStream(), code, message, ct);
             }
         }
         catch (Exception exception) when (exception is OperationCanceledException or IOException)
@@ -122,7 +165,7 @@ public sealed class LoginWithoutVerdictTests
         }
     }
 
-    private static async Task ReplyWithFatalErrorAsync(NetworkStream stream, string message, CancellationToken ct)
+    private static async Task ReplyWithFatalErrorAsync(NetworkStream stream, string sqlState, string message, CancellationToken ct)
     {
         const int SslRequest = 80877103;
         const int GssEncRequest = 80877104;
@@ -144,12 +187,12 @@ public sealed class LoginWithoutVerdictTests
             await stream.WriteAsync(new[] { (byte)'N' }, ct);
         }
 
-        await stream.WriteAsync(FatalErrorResponse(message), ct);
+        await stream.WriteAsync(FatalErrorResponse(sqlState, message), ct);
     }
 
-    private static byte[] FatalErrorResponse(string message)
+    private static byte[] FatalErrorResponse(string sqlState, string message)
     {
-        var fields = Encoding.UTF8.GetBytes($"SFATAL\0VFATAL\0C{InternalError}\0M{message}\0\0");
+        var fields = Encoding.UTF8.GetBytes($"SFATAL\0VFATAL\0C{sqlState}\0M{message}\0\0");
 
         var response = new byte[1 + sizeof(int) + fields.Length];
         response[0] = (byte)'E';

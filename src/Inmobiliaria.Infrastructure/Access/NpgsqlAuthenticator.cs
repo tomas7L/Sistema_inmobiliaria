@@ -13,6 +13,9 @@ public sealed class NpgsqlAuthenticator : IAuthenticator
 {
     private const string PoolerUserNotFound = "(EAUTHQUERY) user not found";
 
+    /// <summary>The prefix of both of the pooler's circuit breakers' messages (limite-de-intentos-de-login, spec Decision 11).</summary>
+    private const string PoolerBlock = "(ECIRCUITBREAKER)";
+
     private readonly ConnectionEndpoint _endpoint;
 
     public NpgsqlAuthenticator(ConnectionEndpoint endpoint)
@@ -32,6 +35,14 @@ public sealed class NpgsqlAuthenticator : IAuthenticator
         || exception.SqlState == PostgresErrorCodes.InternalError
             && exception.MessageText.StartsWith(PoolerUserNotFound, StringComparison.Ordinal);
 
+    /// <summary>
+    /// The pooler refuses every new connection for a while after too many failed logins, whoever logs in, and says so with
+    /// a generic XX000 whose message starts with <see cref="PoolerBlock"/>.
+    /// </summary>
+    private static bool IsPoolerBlock(PostgresException exception) =>
+        exception.SqlState == PostgresErrorCodes.InternalError
+        && exception.MessageText.StartsWith(PoolerBlock, StringComparison.Ordinal);
+
     public async Task<AuthenticationResult> AuthenticateAsync(
         string username, string password, CancellationToken ct = default)
     {
@@ -49,6 +60,11 @@ public sealed class NpgsqlAuthenticator : IAuthenticator
             Database = _endpoint.Database,
             SslMode = _endpoint.SslMode,
             Username = SupavisorUsername.For(username, _endpoint.ProjectRef),
+
+            // Npgsql retries any failed open once without GSS encryption while it is Prefer, its default, so a refused
+            // login would reach the pooler twice and count twice toward its circuit breaker. Supabase's pooler never
+            // offers GSS encryption, so turning it off loses nothing (limite-de-intentos-de-login, spec Decision 15).
+            GssEncryptionMode = GssEncryptionMode.Disable,
         }.ConnectionString;
 
         // The password is supplied per physical connection rather than fixed in the connection string, so
@@ -107,6 +123,12 @@ public sealed class NpgsqlAuthenticator : IAuthenticator
             // Revealing Whether The Username Exists").
             await dataSource.DisposeAsync();
             return new AuthenticationResult.Rejected();
+        }
+        catch (PostgresException ex) when (IsPoolerBlock(ex))
+        {
+            // Not a verdict on these credentials, and not a network problem: the cure is to wait.
+            await dataSource.DisposeAsync();
+            return new AuthenticationResult.Blocked(ex);
         }
         catch (NpgsqlException ex)
         {
