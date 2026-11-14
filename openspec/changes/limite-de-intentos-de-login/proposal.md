@@ -82,6 +82,10 @@ the Linux CI job builds, which `Inmobiliaria.Desktop` is not.
 the third failure, one PC can never put more than 3 failures in any 150-second stretch, so three PCs failing at the same
 moment still stay at 9.
 
+**Corrected 2026-11-13:** that count holds only once each attempt reaches the pooler once. Today Npgsql opens a second
+connection after every refusal, so each attempt counts twice and two PCs would already reach 12 (exploration, **What the
+test proved**). The change therefore also turns off the retry that causes it (spec Decision 15).
+
 ## 5. Decisions
 
 | # | Decision | Strength |

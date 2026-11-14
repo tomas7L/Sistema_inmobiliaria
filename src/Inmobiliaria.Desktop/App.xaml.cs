@@ -13,6 +13,7 @@ using Inmobiliaria.Presentation.CashDesk;
 using Inmobiliaria.Presentation.Common;
 using Inmobiliaria.Desktop.Printing;
 using Inmobiliaria.Presentation.GoLive;
+using Inmobiliaria.Presentation.Login;
 using Inmobiliaria.Presentation.Notices;
 using Inmobiliaria.Presentation.Printing;
 using Inmobiliaria.Presentation.Recibos;
@@ -95,10 +96,14 @@ public partial class App : Application
     /// </summary>
     private async Task RunBootstrapAsync()
     {
+        // One gate for the whole run, so the count of failed logins survives every pass of the loop below
+        // (limite-de-intentos-de-login, design D5).
+        var loginGate = new LoginGate(TimeProvider.System, OperationRunner.DefaultErrorLog);
+
         while (true)
         {
             var authenticator = _serviceProvider!.GetRequiredService<IAuthenticator>();
-            var loginViewModel = new LoginViewModel(authenticator);
+            var loginViewModel = new LoginViewModel(authenticator, loginGate);
             var loginWindow = new LoginWindow(loginViewModel);
 
             var loginDialogResult = loginWindow.ShowDialog();

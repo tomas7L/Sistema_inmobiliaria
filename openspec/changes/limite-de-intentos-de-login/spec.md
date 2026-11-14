@@ -18,7 +18,7 @@ drawn, and the operator texts' final wording (Mateo's, proposal P4) are not deci
 
 | Read | Why |
 |---|---|
-| **Decisions** table, rows 8 to 14 | The calls this spec had to make beyond the proposal. Each has a strength. The **medium** rows are where you can change my mind. |
+| **Decisions** table, rows 8 to 15 | The calls this spec had to make beyond the proposal. Each has a strength. The **medium** rows are where you can change my mind. |
 | Requirements 2 and 3 | The block, and the wait after three failures: the two promises that matter. |
 
 **Skip** the Tests section and "Parameters Left to Design". **Skim** the rest; the scenarios are there so a test can be
@@ -49,6 +49,7 @@ are this spec's.
 | 12 | **During a wait the application opens no connection.** The button is disabled and pressing Enter does nothing; an attempt the pooler never sees cannot count against the office. | SPEC CALL | Strong |
 | 13 | **A block is written to the error log**, as a login with no verdict is today, so a block at the agency leaves evidence of when it happened. | SPEC CALL, following `user-registry` "A login with no verdict keeps the window open" | Strong |
 | 14 | **Until Mateo's wording arrives, the code carries placeholder texts** that already say the three things P4 requires, marked as placeholders the way `MoraTexts` and `NoticesTexts` are. | SPEC CALL | Medium |
+| 15 | **A refused login reaches the pooler once.** The login's connection turns off GSS encryption, which Supabase's pooler never offers, so Npgsql no longer opens a second connection after a refusal. Without this, every attempt counts twice and P2's arithmetic fails: two PCs at three attempts each already make 12. Added 2026-11-13 during the code phase; Tomás: "Si hazlo asi, corije ese error." | VERIFIED FACT: Finding F5 | Strong |
 
 ### Findings (the code and the test database)
 
@@ -58,6 +59,7 @@ are this spec's.
 | F2 | **The login's view-model has no tests, and cannot have them in CI**: `LoginViewModel` lives in `Inmobiliaria.Desktop`, which `Inmobiliaria.Core.slnf` leaves out. | The counting and the wait live where `Inmobiliaria.Presentation.Tests` can reach them; the view-model only shows their state. |
 | F3 | **The application's clock gives only the date**: `IAgencyClock.Today` is a `DateOnly`. | The wait reads .NET's `TimeProvider`, which has a fake for tests. |
 | F4 | **Today a block falls under "A login with no verdict keeps the window open"**, which requires the check-your-connection message (`user-registry/spec.md:50-56`). | Requirement 1 narrows that scenario. |
+| F5 | **Each refused login opens two connections today.** Npgsql 10.0.3 retries any failed open once without GSS encryption while `GssEncryptionMode` is `Prefer`, its default, whatever the `SslMode` (`NpgsqlConnector.OpenCore`). A fake pooler counting what it accepts saw 2 connections per refused login, and 1 with `GssEncryptionMode = Disable` (exploration, corrected). | Decision 15, Requirement 5, Test 13. |
 
 ## Table of Contents
 
@@ -66,17 +68,18 @@ are this spec's.
 3. Requirement 2: The Pooler's Block Is Told Apart
 4. Requirement 3: Failed Logins Slow Down on Each PC
 5. Requirement 4: The Waits Say What Happened
-6. Out of Scope
-7. Parameters Left to Design
-8. Questions for Tomás
-9. Preconditions
-10. Tests
+6. Requirement 5: A Refused Login Counts Once at the Pooler
+7. Out of Scope
+8. Parameters Left to Design
+9. Questions for Tomás
+10. Preconditions
+11. Tests
 
 ## Capabilities covered
 
 | Capability | Status | Requirements |
 |---|---|---|
-| `user-registry` | MODIFIED | 1 (modified), 2, 3 and 4 (new) |
+| `user-registry` | MODIFIED | 1 (modified), 2, 3, 4 and 5 (new) |
 
 ## Capability: user-registry (MODIFIED)
 
@@ -182,6 +185,23 @@ MAY read as a wrong password nor as a network problem, and each MUST be worded i
 - WHEN the message is shown
 - THEN it MUST be the same text
 
+### Requirement 5: A Refused Login Counts Once at the Pooler
+
+One login attempt the database or the pooler refuses MUST reach the pooler as exactly one connection, so the count of
+Requirement 3 matches the count the pooler keeps (Decision 15).
+
+#### Scenario: A wrong password is one connection
+
+- GIVEN a pooler that refuses every login
+- WHEN one login is attempted with a wrong password
+- THEN the pooler MUST have received exactly one connection
+
+#### Scenario: The block is one connection too
+
+- GIVEN a pooler that answers with its breaker
+- WHEN one login is attempted
+- THEN the pooler MUST have received exactly one connection
+
 ## Out of Scope
 
 | Not here | Why |
@@ -213,7 +233,7 @@ None open. Tomás asks Nicolás how many PCs log in (P2); the answer can change 
 
 ## Tests
 
-Each names the requirement it proves and the project it lives in. Tests 1 to 3 use the fake pooler of Finding F1, in
+Each names the requirement it proves and the project it lives in. Tests 1 to 3 and 13 use the fake pooler of Finding F1, in
 `Inmobiliaria.Infrastructure.Tests`. Tests 4 to 12 use a fake `TimeProvider` and a fake authenticator, in
 `Inmobiliaria.Presentation.Tests`. A skipped test is an unrun test.
 
@@ -236,9 +256,11 @@ Each names the requirement it proves and the project it lives in. Tests 1 to 3 u
     Decision 12
 12. **The three-failure message and the block message differ from each other, from "Usuario o contraseña incorrectos."
     and from the connection message, and each is the same text for any username.** R4
+13. **One refused login, with a wrong password and with the breaker, reaches the fake pooler as exactly one connection.**
+    Shown failing on today's code, which opens two. R5, Decision 15
 
 The existing login tests (`AuthenticationTests`, `ChosenPasswordAndLoginTests`, `LoginWithoutVerdictTests` and the
 user-administration tests) MUST pass unchanged.
 
-Verification, beyond the tests: Tests 1 and 4 are shown failing as stated; and the live check on PRUEBA (Preconditions)
+Verification, beyond the tests: Tests 1, 4 and 13 are shown failing as stated; and the live check on PRUEBA (Preconditions)
 is run once, with its result recorded in `tasks.md`.

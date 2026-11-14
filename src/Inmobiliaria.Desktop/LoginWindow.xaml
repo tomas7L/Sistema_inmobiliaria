@@ -31,12 +31,26 @@
                      PasswordChanged="PasswordInput_PasswordChanged"
                      Margin="0,0,0,12" />
 
-        <TextBlock Grid.Row="4"
-                   Text="{Binding ErrorMessage}"
-                   TextWrapping="Wrap" />
+        <StackPanel Grid.Row="4">
+            <TextBlock Text="{Binding WaitTitle}"
+                       FontWeight="SemiBold"
+                       Margin="0,0,0,2">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding WaitTitle}" Value="{x:Null}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+            <TextBlock Text="{Binding ErrorMessage}"
+                       TextWrapping="Wrap" />
+        </StackPanel>
 
         <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button Content="Ingresar"
+            <Button Content="{Binding ButtonText}"
                     Command="{Binding LoginCommand}"
                     IsDefault="True"
                     MinWidth="90" />

@@ -1,14 +1,14 @@
 # Design: limite-de-intentos-de-login (keeping one person's typos from locking the office out)
 
-Technical design for the `limite-de-intentos-de-login` change, from `spec.md` (Requirements 1 to 4, Decisions P1 to P7
-and 8 to 14, Tests 1 to 12, merged as PR #127 on 2026-11-13) and `proposal.md` in this folder. Written 2026-11-13.
+Technical design for the `limite-de-intentos-de-login` change, from `spec.md` (Requirements 1 to 5, Decisions P1 to P7
+and 8 to 15, Tests 1 to 13; merged as PR #127 on 2026-11-13 with Requirements 1 to 4, and corrected the same day) and `proposal.md` in this folder. Written 2026-11-13.
 Nothing here is code; nothing here edits the spec. Every existing file named was read or mapped and is cited `path:line`;
 anything new is marked **(new)**. Paths use `Infra` = `src/Inmobiliaria.Infrastructure/`, `Pres` =
 `src/Inmobiliaria.Presentation/`, `Desk` = `src/Inmobiliaria.Desktop/`, `ITests` = `tests/Inmobiliaria.Infrastructure.Tests/`
 and `PTests` = `tests/Inmobiliaria.Presentation.Tests/`.
 
 **How complete the audit was.** Read: `Infra/Access/NpgsqlAuthenticator.cs`, `Infra/Access/AuthenticationResult.cs`,
-`Desk/LoginViewModel.cs`, `Desk/LoginWindow.xaml` (bindings), `Desk/App.xaml.cs:96-133` (the login loop),
+`Desk/LoginViewModel.cs`, `Desk/LoginWindow.xaml` (bindings), `Desk/App.xaml.cs:96-133` (the login loop), Npgsql 10.0.3's `NpgsqlConnector.OpenCore` (D11),
 `Desk/ChangePasswordViewModel.cs:30-55`, `Pres/Common/IErrorLog.cs`, `Pres/Common/OperationRunner.cs:53`,
 `ITests/LoginWithoutVerdictTests.cs`, `PTests/PresentationArchitectureGuardTests.cs`, and the projects in
 `Inmobiliaria.Core.slnf`. **Not run:** no build and no test.
@@ -38,6 +38,7 @@ and `PTests` = `tests/Inmobiliaria.Presentation.Tests/`.
 | D8 | **The gate also logs `Blocked` and `NoVerdict` causes**, through `IErrorLog`, with the context `"Login"` the view-model uses today (`Desk/LoginViewModel.cs:86`). The application passes `OperationRunner.DefaultErrorLog`. Moving the existing log line into the gate makes spec Decision 13 testable | Medium |
 | D9 | **Mateo's texts go in `Pres/Login/LoginTexts.cs` (new)**, with the three messages that exist today moved beside them unchanged, so Test 12 compares them in one place. Spec Decision 14's placeholders are not needed: Mateo's wording arrived and Tomás approved it on 2026-11-13 | Strong |
 | D10 | **Both waits last `LoginGate.Wait` = 150 seconds**, one constant (spec P2, Decision 10). If Nicolás's answer changes it, it changes there and in the two texts that name it | Strong |
+| D11 | **`GssEncryptionMode = Disable` in the login's connection string** (`Infra/Access/NpgsqlAuthenticator.cs:45-52`), so a refused login is one connection, not two (spec Decision 15, Finding F5). The same data source serves the whole session (`SessionDbContextFactory`), which loses nothing: Supabase's pooler declines GSS encryption, as the fake pooler does | Strong |
 
 ## Table of Contents
 
@@ -74,6 +75,10 @@ the `IsLoginRefusal` catch (line 103) and the `NpgsqlException` catch (line 111)
 
 `IsLoginRefusal` does not change: the `(EAUTHQUERY) user not found` case stays a refusal (spec Requirement 2, third
 scenario).
+
+The `NpgsqlConnectionStringBuilder` at lines 45-52 gains `GssEncryptionMode = GssEncryptionMode.Disable` (D11), with a
+comment naming the retry it prevents. The comment at `ITests/LoginWithoutVerdictTests.cs:108`, which explains that the
+fake pooler serves a second connection because Npgsql retries, is rewritten: after D11 there is no second connection.
 
 ## 3. The gate
 
@@ -148,6 +153,7 @@ stays one.
 |---|---|---|
 | 1, 2 | `ITests/LoginWithoutVerdictTests.cs` | Two new cases with the fake pooler (`LogInAgainstPoolerReplying`, as the case at line 23 uses it), one per breaker text, asserting `Blocked` and its `PostgresException`. Test 1 is shown failing first: today it is `Unavailable` |
 | 3 | same file | The existing three cases, unchanged |
+| 13 | same file | The fake pooler counts the connections it accepts; one refused login with a wrong-password error (`28P01`) and one with the breaker each leave the count at exactly 1. Shown failing first: today it is 2 |
 | 4 to 12 | `PTests/LoginGateTests.cs` **(new)** | A fixed `TimeProvider` the test moves forward by hand, a `RecordingErrorLog` (`PTests/Fakes/RecordingErrorLog.cs`), and an `attempt` lambda that returns a scripted outcome and counts its calls (Test 11). Test 4 is shown failing with the count removed |
 | 12 | same file | Asserts the six texts are pairwise distinct where the spec requires it, and that `Message` is the same whichever username the lambda closes over |
 
@@ -173,7 +179,7 @@ Rollback: install the previous version. No migration, no stored data.
 
 ## 9. Slice, size and preconditions
 
-**One PR**, about 280 lines: authenticator and outcome (~25), `LoginGate` (~90), `LoginTexts` (~25), view-model, window and
+**One PR**, about 300 lines: authenticator, outcome and D11 (~30), `LoginGate` (~90), `LoginTexts` (~25), view-model, window and
 `App` (~50), tests (~90 in `PTests`, ~20 in `ITests`). **Risk: item 2 (a guard on the login)**: the independent verifier
 and the gentle-ai review run, as the proposal says.
 
