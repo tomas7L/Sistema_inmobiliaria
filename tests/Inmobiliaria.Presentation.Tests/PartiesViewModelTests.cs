@@ -12,7 +12,7 @@ public class PartiesViewModelTests
     private static readonly Guid AnaId = Guid.NewGuid();
 
     private static readonly PartyListing Juan =
-        new(JuanId, "Juan", "Pérez", "30123456", "20111111112", "juan@example.com", null, null);
+        new(JuanId, "Juan", "Pérez", "30123456", "20301234563", "juan@example.com", null, null);
 
     private static readonly PartyListing Ana = new(AnaId, "Ana", "Álvarez", null, null, null, null, null);
 
@@ -85,12 +85,26 @@ public class PartiesViewModelTests
     }
 
 
+    /// <summary>
+    /// A person the form accepts: a phone, so the phone-or-email rule holds (Decision 47), and, for a DNI typed alone, the
+    /// CUIL that carries it, so no identifier warning stands between the test and the port (Decisions 46 and 47).
+    /// </summary>
     private static void Fill(PartiesViewModel viewModel, string first, string last, string dni = "", string cuil = "")
     {
         viewModel.FirstName = first;
         viewModel.LastName = last;
         viewModel.Dni = dni;
-        viewModel.Cuil = cuil;
+        viewModel.Cuil = cuil.Length == 0 && dni.Length > 0 ? CuilFor(dni) : cuil;
+        viewModel.PhoneNumber = "03493 421234";
+    }
+
+    /// <summary>The CUIL with prefix 20 that carries <paramref name="dni"/>, with its check digit.</summary>
+    private static string CuilFor(string dni)
+    {
+        var body = "20" + new string(dni.Where(char.IsAsciiDigit).ToArray()).PadLeft(8, '0');
+        int[] weights = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
+        var digit = 11 - (body.Select((c, i) => (c - '0') * weights[i]).Sum() % 11);
+        return body + (digit == 11 ? 0 : digit);
     }
 
     /// <summary>Requirement 1 and Decision 28: in the port's order; identifiers shown; a person with neither shows a warning.</summary>
@@ -144,18 +158,19 @@ public class PartiesViewModelTests
         Assert.Single(port.Created);
     }
 
-    /// <summary>Spec Test 5: an invalid identifier shows its own text and the port is still what refuses on create.</summary>
+    /// <summary>Spec Test 5 with Requirement 26: an invalid identifier shows its own text beside its field, and nothing is sent.</summary>
     [Fact]
     public async Task AWrongCheckDigit_ShowsItsOwnText()
     {
         var port = Port();
-        port.OnCreate = (_, _) => PartyResult.Refused(PartyRefusal.CuilInvalid);
         var viewModel = await LoadedAsync(port);
         Fill(viewModel, "Juan", "Pérez", cuil: "20-11111111-3");
 
         await viewModel.SaveCommand.ExecuteAsync(null);
 
-        Assert.Equal(PartyRefusal.CuilInvalid.OperatorText(), viewModel.RefusalMessage);
+        Assert.Equal(PartyRefusal.CuilInvalid.OperatorText(), viewModel.Errors[PartyField.Cuil]);
+        Assert.Equal(PartyFieldErrors.SummaryText, viewModel.Errors.Summary);
+        Assert.Empty(port.Created);
         Assert.Null(viewModel.OfferedHolder);
         Assert.Null(viewModel.Runner.ErrorMessage);
     }
@@ -173,14 +188,14 @@ public class PartiesViewModelTests
 
         await viewModel.SaveCommand.ExecuteAsync(null);
 
-        Assert.Equal(PartyRefusal.NoIdentifierNotAccepted.OperatorText(), viewModel.NoIdentifierWarning);
+        Assert.Equal(PartyRefusal.NoIdentifierNotAccepted.OperatorText(), viewModel.Warning);
         Assert.Null(viewModel.RefusalMessage);
         Assert.Equal("Hans", viewModel.FirstName);
 
-        await viewModel.AcceptNoIdentifierCommand.ExecuteAsync(null);
+        await viewModel.AcceptWarningCommand.ExecuteAsync(null);
 
         Assert.Equal([false, true], port.Created.Select(c => c.Accepted).ToList());
-        Assert.Null(viewModel.NoIdentifierWarning);
+        Assert.Null(viewModel.Warning);
         Assert.Equal(string.Empty, viewModel.FirstName);
     }
 
@@ -196,7 +211,7 @@ public class PartiesViewModelTests
 
         viewModel.CancelCommand.Execute(null);
 
-        Assert.Null(viewModel.NoIdentifierWarning);
+        Assert.Null(viewModel.Warning);
         Assert.Single(port.Created);
         Assert.Equal("Hans", viewModel.FirstName);
     }
@@ -274,8 +289,12 @@ public class PartiesViewModelTests
 
         await viewModel.SaveCommand.ExecuteAsync(null);
 
+        // A DNI with no CUIL warns first (Decision 47); accepted, old and new are asked as before.
+        Assert.Equal(PartyWarning.DniWithoutCuil.OperatorText(), viewModel.Warning);
+        await viewModel.AcceptWarningCommand.ExecuteAsync(null);
+
         Assert.Equal(
-            [("DNI", "30123456", "28111222"), ("CUIL", "20111111112", PartiesViewModel.AbsentValue)],
+            [("DNI", "30123456", "28111222"), ("CUIL", "20301234563", PartiesViewModel.AbsentValue)],
             viewModel.Pending!.Changes.Select(c => (c.Field, c.Old, c.New)).ToList());
     }
 
@@ -308,7 +327,7 @@ public class PartiesViewModelTests
 
         Assert.Null(viewModel.Pending);
         Assert.Empty(port.Corrected);
-        Assert.Equal(PartyRefusal.DniInvalid.OperatorText(), viewModel.RefusalMessage);
+        Assert.Equal(PartyRefusal.DniInvalid.OperatorText(), viewModel.Errors[PartyField.Dni]);
     }
 
     /// <summary>Requirement 3: correcting to a taken DNI names the holder, offers nothing to use, and stays in the form.</summary>
@@ -320,6 +339,7 @@ public class PartiesViewModelTests
         var viewModel = await LoadedAsync(port);
         viewModel.EditCommand.Execute(Row(viewModel, JuanId));
         viewModel.Dni = "28111222";
+        viewModel.Cuil = CuilFor("28111222");
         await viewModel.SaveCommand.ExecuteAsync(null);
 
         await viewModel.ConfirmCommand.ExecuteAsync(null);
@@ -345,9 +365,9 @@ public class PartiesViewModelTests
         await viewModel.SaveCommand.ExecuteAsync(null);
         await viewModel.ConfirmCommand.ExecuteAsync(null);
 
-        Assert.NotNull(viewModel.NoIdentifierWarning);
+        Assert.NotNull(viewModel.Warning);
 
-        await viewModel.AcceptNoIdentifierCommand.ExecuteAsync(null);
+        await viewModel.AcceptWarningCommand.ExecuteAsync(null);
 
         Assert.Equal([false, true], port.Corrected.Select(c => c.Accepted).ToList());
         Assert.Null(viewModel.Editing);
@@ -408,12 +428,12 @@ public class PartiesViewModelTests
         var viewModel = await LoadedAsync(port);
         Fill(viewModel, "Hans", "Müller");
         await viewModel.SaveCommand.ExecuteAsync(null);
-        Assert.NotNull(viewModel.NoIdentifierWarning);
+        Assert.NotNull(viewModel.Warning);
 
         viewModel.LastName = "Mueller";
 
-        Assert.Null(viewModel.NoIdentifierWarning);
-        Assert.False(viewModel.AcceptNoIdentifierCommand.CanExecute(null));
+        Assert.Null(viewModel.Warning);
+        Assert.False(viewModel.AcceptWarningCommand.CanExecute(null));
         Assert.Single(port.Created);
     }
 
@@ -608,7 +628,7 @@ public class PartiesViewModelTests
         await viewModel.SaveCommand.ExecuteAsync(null);
         await viewModel.ConfirmCommand.ExecuteAsync(null);
 
-        await viewModel.AcceptNoIdentifierCommand.ExecuteAsync(null);
+        await viewModel.AcceptWarningCommand.ExecuteAsync(null);
 
         Assert.Equal("Corrección guardada", viewModel.Saved!.Title);
     }
@@ -618,7 +638,6 @@ public class PartiesViewModelTests
     public async Task ARefusal_KeepsTheFormOpen_WithNoSavedNotice()
     {
         var port = Port();
-        port.OnCreate = (_, _) => PartyResult.Refused(PartyRefusal.CuilInvalid);
         var viewModel = await LoadedAsync(port);
         viewModel.NewCommand.Execute(null);
         Fill(viewModel, "Juan", "Pérez", cuil: "20-11111111-3");
@@ -646,6 +665,85 @@ public class PartiesViewModelTests
         Assert.Equal(JuanId, viewModel.SelectedPerson!.Id);
     }
 
+    /// <summary>Requirement 26, Test 102 on the screen: every error at once, each beside its field, and the port never called.</summary>
+    [Fact]
+    public async Task EveryErrorIsShownAtOnce_AndNothingIsSent()
+    {
+        var port = Port();
+        var viewModel = await LoadedAsync(port);
+        viewModel.NewCommand.Execute(null);
+        viewModel.FirstName = "2432342";
+        viewModel.LastName = "Pérez";
+        viewModel.Dni = "wewefwee";
+        viewModel.PhoneNumber = "sdeewedwe";
+        viewModel.Email = "ana@gmail";
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal(4, viewModel.Errors.Count);
+        Assert.Equal(PartyRefusal.NameInvalid.OperatorText(), viewModel.Errors[PartyField.FirstName]);
+        Assert.Null(viewModel.Errors[PartyField.LastName]);
+        Assert.Equal(PartyRefusal.DniInvalid.OperatorText(), viewModel.Errors[PartyField.Dni]);
+        Assert.Equal(PartyRefusal.PhoneInvalid.OperatorText(), viewModel.Errors[PartyField.Phone]);
+        Assert.Equal(PartyRefusal.EmailInvalid.OperatorText(), viewModel.Errors[PartyField.Email]);
+        Assert.Empty(port.Created);
+        Assert.Equal(PartyFormStep.Fields, viewModel.Step);
+    }
+
+    /// <summary>Requirement 26: neither phone nor email is an error beside the contact fields.</summary>
+    [Fact]
+    public async Task NeitherPhoneNorEmail_IsAnError()
+    {
+        var port = Port();
+        var viewModel = await LoadedAsync(port);
+        Fill(viewModel, "Lía", "Sosa", "28111222");
+        viewModel.PhoneNumber = "";
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal(PartyRefusal.ContactMissing.OperatorText(), viewModel.Errors[PartyField.Contact]);
+        Assert.Empty(port.Created);
+    }
+
+    /// <summary>Decision 46: a CUIL not carrying the DNI warns; accepting it writes both as typed.</summary>
+    [Fact]
+    public async Task ACuilNotCarryingTheDni_Warns_AndAcceptingWritesIt()
+    {
+        var port = Port();
+        var viewModel = await LoadedAsync(port);
+        Fill(viewModel, "Lía", "Sosa", "30123456", "20-28111222-9");
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal(PartyWarning.CuilDoesNotCarryDni.OperatorText(), viewModel.Warning);
+        Assert.Equal(PartyFormStep.Warning, viewModel.Step);
+        Assert.Empty(port.Created);
+
+        await viewModel.AcceptWarningCommand.ExecuteAsync(null);
+
+        var created = Assert.Single(port.Created);
+        Assert.Equal(("30123456", "20-28111222-9"), (created.Draft.Dni, created.Draft.Cuil));
+        Assert.Equal("Persona guardada", viewModel.Saved!.Title);
+    }
+
+    /// <summary>Decision 46: what was accepted covers the values it warned about, so editing one asks again.</summary>
+    [Fact]
+    public async Task EditingAfterAcceptingAWarning_AsksAgain()
+    {
+        var port = Port();
+        port.OnCreate = (_, _) => PartyResult.Refused(PartyRefusal.DniTaken, Juan);
+        var viewModel = await LoadedAsync(port);
+        Fill(viewModel, "Lía", "Sosa", "30123456", "20-28111222-9");
+        await viewModel.SaveCommand.ExecuteAsync(null);
+        await viewModel.AcceptWarningCommand.ExecuteAsync(null);
+
+        viewModel.Dni = "30123457";
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal(PartyWarning.CuilDoesNotCarryDni.OperatorText(), viewModel.Warning);
+        Assert.Single(port.Created);
+    }
+
     /// <summary>The form shows one step at a time: the fields, the summary to confirm, the warning to accept, or the saved notice.</summary>
     [Fact]
     public async Task TheForm_ShowsOneStepAtATime()
@@ -664,9 +762,9 @@ public class PartiesViewModelTests
         Assert.Equal(PartyFormStep.Confirm, viewModel.Step);
 
         await viewModel.ConfirmCommand.ExecuteAsync(null);
-        Assert.Equal(PartyFormStep.NoIdentifier, viewModel.Step);
+        Assert.Equal(PartyFormStep.Warning, viewModel.Step);
 
-        await viewModel.AcceptNoIdentifierCommand.ExecuteAsync(null);
+        await viewModel.AcceptWarningCommand.ExecuteAsync(null);
         Assert.Equal(PartyFormStep.Saved, viewModel.Step);
 
         viewModel.EditCommand.Execute(Row(viewModel, JuanId));

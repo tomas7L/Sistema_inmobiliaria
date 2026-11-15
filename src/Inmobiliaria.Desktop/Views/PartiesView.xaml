@@ -55,10 +55,10 @@
             </Style.Triggers>
         </Style>
 
-        <Style x:Key="NoIdentifierStep" TargetType="Border" BasedOn="{StaticResource Theme.Card}">
+        <Style x:Key="WarningStep" TargetType="Border" BasedOn="{StaticResource Theme.Card}">
             <Setter Property="Visibility" Value="Collapsed" />
             <Style.Triggers>
-                <DataTrigger Binding="{Binding Step}" Value="{x:Static parties:PartyFormStep.NoIdentifier}">
+                <DataTrigger Binding="{Binding Step}" Value="{x:Static parties:PartyFormStep.Warning}">
                     <Setter Property="Visibility" Value="Visible" />
                 </DataTrigger>
             </Style.Triggers>
@@ -135,7 +135,7 @@
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
                                 <DataGridTextColumn Header="DNI" Binding="{Binding Dni}" Width="1.1*" MinWidth="100" />
-                                <DataGridTextColumn Header="CUIL" Binding="{Binding Cuil}" Width="1.2*" MinWidth="120" />
+                                <DataGridTextColumn Header="CUIL O CUIT" Binding="{Binding Cuil}" Width="1.2*" MinWidth="120" />
                                 <DataGridTemplateColumn Header="ROLES" Width="1.6*" MinWidth="120">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
@@ -190,8 +190,9 @@
                 </DockPanel>
                 <TextBlock Text="{Binding Runner.ErrorMessage}" Style="{StaticResource Theme.ErrorText}" Margin="0,12,0,0" />
 
-                <!-- The fields. -->
+                <!-- The fields, each with its own error beside it, under one summary (spec Requirement 26). -->
                 <StackPanel Style="{StaticResource FieldsStep}">
+                    <TextBlock Text="{Binding Errors.Summary}" Style="{StaticResource Theme.ErrorText}" Margin="0,18,0,0" />
                     <Border Style="{StaticResource Theme.Card}" Margin="0,18,0,0">
                         <StackPanel>
                             <TextBlock Text="Identidad" Style="{StaticResource Theme.CardTitle}" />
@@ -210,22 +211,26 @@
                                     <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Nombre " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
                                     <TextBox Style="{StaticResource Theme.Input}" Tag="Por ejemplo: Tomás"
                                              Text="{Binding FirstName, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="{Binding Errors[FirstName]}" Style="{StaticResource Theme.ErrorText}" Margin="0,6,0,0" />
                                 </StackPanel>
                                 <StackPanel Grid.Column="2" Grid.Row="0">
                                     <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Apellido " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
                                     <TextBox Style="{StaticResource Theme.Input}" Tag="Por ejemplo: Ríos"
                                              Text="{Binding LastName, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="{Binding Errors[LastName]}" Style="{StaticResource Theme.ErrorText}" Margin="0,6,0,0" />
                                 </StackPanel>
                                 <StackPanel Grid.Column="0" Grid.Row="2">
                                     <TextBlock Text="DNI" Style="{StaticResource Theme.Label}" />
                                     <TextBox Style="{StaticResource Theme.Input}" Tag="Solo números"
                                              Text="{Binding Dni, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="{Binding Errors[Dni]}" Style="{StaticResource Theme.ErrorText}" Margin="0,6,0,0" />
                                     <TextBlock Text="No puede repetirse." Style="{StaticResource Theme.Hint}" Margin="0,6,0,0" />
                                 </StackPanel>
                                 <StackPanel Grid.Column="2" Grid.Row="2">
-                                    <TextBlock Text="CUIL" Style="{StaticResource Theme.Label}" />
+                                    <TextBlock Text="CUIL o CUIT" Style="{StaticResource Theme.Label}" />
                                     <TextBox Style="{StaticResource Theme.Input}" Tag="XX-XXXXXXXX-X"
                                              Text="{Binding Cuil, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="{Binding Errors[Cuil]}" Style="{StaticResource Theme.ErrorText}" Margin="0,6,0,0" />
                                     <TextBlock Text="No puede repetirse." Style="{StaticResource Theme.Hint}" Margin="0,6,0,0" />
                                 </StackPanel>
                             </Grid>
@@ -254,18 +259,22 @@
                                     <TextBlock Text="Teléfono" Style="{StaticResource Theme.Label}" />
                                     <TextBox Style="{StaticResource Theme.Input}" Tag="Por ejemplo: 03493 15-0000"
                                              Text="{Binding PhoneNumber, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="{Binding Errors[Phone]}" Style="{StaticResource Theme.ErrorText}" Margin="0,6,0,0" />
                                 </StackPanel>
                                 <StackPanel Grid.Column="2" Grid.Row="0">
                                     <TextBlock Text="Email" Style="{StaticResource Theme.Label}" />
                                     <TextBox Style="{StaticResource Theme.Input}" Tag="nombre@ejemplo.test"
                                              Text="{Binding Email, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="{Binding Errors[Email]}" Style="{StaticResource Theme.ErrorText}" Margin="0,6,0,0" />
                                 </StackPanel>
                                 <StackPanel Grid.Column="0" Grid.ColumnSpan="3" Grid.Row="2">
                                     <TextBlock Text="Domicilio" Style="{StaticResource Theme.Label}" />
                                     <TextBox Style="{StaticResource Theme.Input}" Tag="Calle, número y localidad"
                                              Text="{Binding Domicile, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="{Binding Errors[Domicile]}" Style="{StaticResource Theme.ErrorText}" Margin="0,6,0,0" />
                                 </StackPanel>
                             </Grid>
+                            <TextBlock Text="{Binding Errors[Contact]}" Style="{StaticResource Theme.ErrorText}" Margin="0,16,0,0" />
                             <TextBlock Text="El rol (propietario, inquilino o codeudor), el alquiler y los honorarios se cargan en el contrato, no acá."
                                        Style="{StaticResource Theme.Hint}" Margin="0,16,0,0" />
                         </StackPanel>
@@ -298,15 +307,15 @@
                     </StackPanel>
                 </Border>
 
-                <!-- The warning that a person with neither identifier cannot be checked for duplicates. -->
-                <Border Style="{StaticResource NoIdentifierStep}" Margin="0,18,0,0">
+                <!-- A warning to accept: identifiers that look mistyped, or none at all. -->
+                <Border Style="{StaticResource WarningStep}" Margin="0,18,0,0">
                     <StackPanel>
-                        <TextBlock Text="{Binding NoIdentifierWarning}" TextWrapping="Wrap" FontSize="15" FontWeight="SemiBold"
+                        <TextBlock Text="{Binding Warning}" TextWrapping="Wrap" FontSize="15" FontWeight="SemiBold"
                                    Foreground="{DynamicResource Theme.Warn}" />
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
                             <Button Content="Volver a completar" Style="{StaticResource Theme.GhostButton}" Command="{Binding CancelCommand}" />
                             <Button Content="Guardarla igual" Style="{StaticResource Theme.PrimaryButton}" Margin="12,0,0,0"
-                                    Command="{Binding AcceptNoIdentifierCommand}" />
+                                    Command="{Binding AcceptWarningCommand}" />
                         </StackPanel>
                     </StackPanel>
                 </Border>

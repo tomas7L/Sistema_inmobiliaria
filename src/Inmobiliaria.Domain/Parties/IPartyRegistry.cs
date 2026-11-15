@@ -66,8 +66,26 @@ public sealed record PartyListing(
 public enum PartyRefusal
 {
     NameMissing,
+
+    /// <summary>A name with something other than letters, space, apostrophe, hyphen and dot, or with no letter.</summary>
+    NameInvalid,
+
+    NameTooLong,
     DniInvalid,
+
+    /// <summary>Eleven digits with a check digit that does not match.</summary>
     CuilInvalid,
+
+    /// <summary>Not eleven digits.</summary>
+    CuilWrongLength,
+
+    PhoneInvalid,
+    EmailInvalid,
+    DomicileTooLong,
+
+    /// <summary>Neither a phone nor an email (spec Decision 47).</summary>
+    ContactMissing,
+
     DniTaken,
     CuilTaken,
 
@@ -99,8 +117,22 @@ public static class PartyRefusalText
             "Escriba el nombre y el apellido de la persona.",
         PartyRefusal.DniInvalid =>
             "El DNI debe tener entre 6 y 8 números.",
+        PartyRefusal.NameInvalid =>
+            "Use solo letras, espacios, apóstrofo, guion o punto.",
+        PartyRefusal.NameTooLong =>
+            $"Puede tener hasta {PartyDraftRules.MaximumNameLength} caracteres.",
         PartyRefusal.CuilInvalid =>
-            "El CUIL debe tener 11 números y su último número no corresponde. Revíselo.",
+            "El último número del CUIL o CUIT no corresponde. Revíselo.",
+        PartyRefusal.CuilWrongLength =>
+            "El CUIL o CUIT tiene 11 números.",
+        PartyRefusal.PhoneInvalid =>
+            "Use números, espacios, guiones, paréntesis y un + al principio, con 8 a 15 números.",
+        PartyRefusal.EmailInvalid =>
+            "Escriba un email completo, como nombre@ejemplo.com.",
+        PartyRefusal.DomicileTooLong =>
+            $"Puede tener hasta {PartyDraftRules.MaximumDomicileLength} caracteres.",
+        PartyRefusal.ContactMissing =>
+            "Cargue un teléfono o un email: al menos uno de los dos.",
         PartyRefusal.DniTaken =>
             $"Ese DNI ya lo tiene {holderName ?? "otra persona"}.",
         PartyRefusal.CuilTaken =>
@@ -110,5 +142,15 @@ public static class PartyRefusalText
         PartyRefusal.PartyNotFound =>
             "La persona ya no existe. Actualice la lista.",
         _ => throw new ArgumentOutOfRangeException(nameof(refusal), refusal, "A refusal without operator text."),
+    };
+
+    /// <param name="warning">The warning.</param>
+    public static string OperatorText(this PartyWarning warning) => warning switch
+    {
+        PartyWarning.CuilDoesNotCarryDni =>
+            "El CUIL o CUIT no contiene ese DNI. Revise los dos; si están bien, guárdela igual.",
+        PartyWarning.DniWithoutCuil =>
+            "Falta el CUIL o CUIT. Si no lo tiene a mano, guárdela igual.",
+        _ => throw new ArgumentOutOfRangeException(nameof(warning), warning, "A warning without operator text."),
     };
 }
