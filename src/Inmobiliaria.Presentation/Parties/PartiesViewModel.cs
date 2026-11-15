@@ -27,6 +27,12 @@ public sealed partial class PartiesViewModel : ObservableObject
     /// <summary>True once the operator confirmed old and new identity data, so the saved notice says the recibos keep theirs.</summary>
     private bool _identityConfirmed;
 
+    /// <summary>True once the operator accepted the identifier warnings of this save (Decisions 46 and 47).</summary>
+    private bool _warningsAccepted;
+
+    /// <summary>Whether the warning on screen is the form's own or the port's "neither identifier".</summary>
+    private bool _warningFromPort;
+
     public PartiesViewModel(IPartyRegistry parties)
     {
         ArgumentNullException.ThrowIfNull(parties);
@@ -36,7 +42,7 @@ public sealed partial class PartiesViewModel : ObservableObject
         SearchCommand = new AsyncRelayCommand(LoadAsync, CanAct);
         SaveCommand = new AsyncRelayCommand(SaveAsync, CanAct);
         ConfirmCommand = new AsyncRelayCommand(ConfirmAsync, () => CanAct() && Pending is not null);
-        AcceptNoIdentifierCommand = new AsyncRelayCommand(AcceptNoIdentifierAsync, () => CanAct() && NoIdentifierWarning is not null);
+        AcceptWarningCommand = new AsyncRelayCommand(AcceptWarningAsync, () => CanAct() && Warning is not null);
         EditCommand = new RelayCommand<PartyRow>(Edit, row => row is not null);
         NewCommand = new RelayCommand(OpenNew);
         BackCommand = new RelayCommand(Back);
@@ -58,7 +64,7 @@ public sealed partial class PartiesViewModel : ObservableObject
 
     public IAsyncRelayCommand ConfirmCommand { get; }
 
-    public IAsyncRelayCommand AcceptNoIdentifierCommand { get; }
+    public IAsyncRelayCommand AcceptWarningCommand { get; }
 
     public IRelayCommand<PartyRow> EditCommand { get; }
 
@@ -93,7 +99,7 @@ public sealed partial class PartiesViewModel : ObservableObject
     public PartyFormStep Step =>
         Saved is not null ? PartyFormStep.Saved
         : Pending is not null ? PartyFormStep.Confirm
-        : NoIdentifierWarning is not null ? PartyFormStep.NoIdentifier
+        : Warning is not null ? PartyFormStep.Warning
         : PartyFormStep.Fields;
 
     /// <summary>The foot of the list: how many people it shows.</summary>
@@ -148,11 +154,15 @@ public sealed partial class PartiesViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(Step))]
     private PendingPartyCorrection? _pending;
 
-    /// <summary>The warning that duplicates of this person cannot be detected, waiting to be accepted, or null.</summary>
+    /// <summary>A warning waiting to be accepted, or null: identifiers that look mistyped, or none at all (Decisions 28, 46, 47).</summary>
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(AcceptNoIdentifierCommand))]
+    [NotifyCanExecuteChangedFor(nameof(AcceptWarningCommand))]
     [NotifyPropertyChangedFor(nameof(Step))]
-    private string? _noIdentifierWarning;
+    private string? _warning;
+
+    /// <summary>Each field's error from the last save, all at once (spec Requirement 26, Decision 44). Cleared when the next starts.</summary>
+    [ObservableProperty]
+    private PartyFieldErrors _errors = PartyFieldErrors.None;
 
     /// <summary>The last refusal's operator text, or null. Cleared when the next action starts.</summary>
     [ObservableProperty]
@@ -190,7 +200,8 @@ public sealed partial class PartiesViewModel : ObservableObject
     private void WithdrawConfirmations()
     {
         Pending = null;
-        NoIdentifierWarning = null;
+        Warning = null;
+        _warningsAccepted = false;
     }
 
     private bool CanAct() => !Runner.IsBusy;
@@ -264,7 +275,7 @@ public sealed partial class PartiesViewModel : ObservableObject
     private void Cancel()
     {
         Pending = null;
-        NoIdentifierWarning = null;
+        Warning = null;
     }
 
     private void ClearForm()
@@ -283,7 +294,8 @@ public sealed partial class PartiesViewModel : ObservableObject
     private void ClearMessages()
     {
         Pending = null;
-        NoIdentifierWarning = null;
+        Warning = null;
+        Errors = PartyFieldErrors.None;
         RefusalMessage = null;
         OfferedHolder = null;
     }
@@ -303,17 +315,33 @@ public sealed partial class PartiesViewModel : ObservableObject
     {
         ClearMessages();
         _identityConfirmed = false;
+        _warningsAccepted = false;
+        await ContinueSavingAsync();
+    }
+
+    /// <summary>
+    /// The form's own problems first, all at once and nothing sent; then its warnings, to accept; then, for a correction of
+    /// identity data, old and new to confirm; then the port, whose refusals need the database.
+    /// </summary>
+    private async Task ContinueSavingAsync()
+    {
+        var problems = PartyDraftRules.Problems(Draft());
+        if (problems.Count > 0)
+        {
+            Errors = new PartyFieldErrors(problems);
+            return;
+        }
+
+        if (!_warningsAccepted && PartyDraftRules.Warnings(Draft()) is { Count: > 0 } warnings)
+        {
+            _warningFromPort = false;
+            Warning = string.Join(" ", warnings.Select(w => w.OperatorText()));
+            return;
+        }
 
         if (Editing is not { } editing)
         {
             await SubmitAsync(acceptNoIdentifier: false);
-            return;
-        }
-
-        // What the rules refuse is said now, rather than after asking to confirm something that cannot be written.
-        if (PartyDraftRules.Check(Draft(), acceptNoIdentifier: true) is { } refusal)
-        {
-            RefusalMessage = refusal.OperatorText();
             return;
         }
 
@@ -335,10 +363,17 @@ public sealed partial class PartiesViewModel : ObservableObject
         await SubmitAsync(acceptNoIdentifier: false);
     }
 
-    private async Task AcceptNoIdentifierAsync()
+    private async Task AcceptWarningAsync()
     {
-        NoIdentifierWarning = null;
-        await SubmitAsync(acceptNoIdentifier: true);
+        Warning = null;
+        if (_warningFromPort)
+        {
+            await SubmitAsync(acceptNoIdentifier: true);
+            return;
+        }
+
+        _warningsAccepted = true;
+        await ContinueSavingAsync();
     }
 
     /// <summary>
@@ -375,7 +410,8 @@ public sealed partial class PartiesViewModel : ObservableObject
 
         if (result.Refusal == PartyRefusal.NoIdentifierNotAccepted)
         {
-            NoIdentifierWarning = result.Refusal.Value.OperatorText();
+            _warningFromPort = true;
+            Warning = result.Refusal.Value.OperatorText();
             return;
         }
 
@@ -409,7 +445,7 @@ public sealed partial class PartiesViewModel : ObservableObject
             SearchCommand.NotifyCanExecuteChanged();
             SaveCommand.NotifyCanExecuteChanged();
             ConfirmCommand.NotifyCanExecuteChanged();
-            AcceptNoIdentifierCommand.NotifyCanExecuteChanged();
+            AcceptWarningCommand.NotifyCanExecuteChanged();
         }
     }
 }
@@ -423,8 +459,31 @@ public enum PartyFormStep
 {
     Fields,
     Confirm,
-    NoIdentifier,
+    Warning,
     Saved,
+}
+
+/// <summary>Each field's error text, or null for a field without one; the screen shows each beside its field.</summary>
+public sealed class PartyFieldErrors
+{
+    public const string SummaryText = "No se pudo guardar: revise los datos marcados.";
+
+    public static readonly PartyFieldErrors None = new([]);
+
+    private readonly Dictionary<PartyField, string> _texts;
+
+    public PartyFieldErrors(IEnumerable<PartyProblem> problems)
+    {
+        ArgumentNullException.ThrowIfNull(problems);
+        _texts = problems.ToDictionary(p => p.Field, p => p.Refusal.OperatorText());
+    }
+
+    public string? this[PartyField field] => _texts.GetValueOrDefault(field);
+
+    public int Count => _texts.Count;
+
+    /// <summary>The line over the form while any field has an error.</summary>
+    public string? Summary => _texts.Count > 0 ? SummaryText : null;
 }
 
 /// <summary>The notice a write that landed ends on: its title and its sentence.</summary>
