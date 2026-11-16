@@ -259,13 +259,51 @@ public sealed partial class CashDeskViewModel : ObservableObject, IPendingWork
 
     partial void OnReceivedOnInputChanged(DateTime? value) => OnInputChanged();
 
-    partial void OnTasaMunicipalTextChanged(string value) => OnInputChanged();
+    // An amount typed without its dots is shown with them (Tomás, 2026-11-16). The tidied text comes back through the
+    // same handler, so the preview runs once, for the tidied text.
+    partial void OnTasaMunicipalTextChanged(string value)
+    {
+        if (Formats.TidyMoney(value) is var tidy && tidy != value)
+        {
+            TasaMunicipalText = tidy;
+            return;
+        }
 
-    partial void OnSeguroTextChanged(string value) => OnInputChanged();
+        OnInputChanged();
+    }
 
-    partial void OnOtrosConceptosTextChanged(string value) => OnInputChanged();
+    partial void OnSeguroTextChanged(string value)
+    {
+        if (Formats.TidyMoney(value) is var tidy && tidy != value)
+        {
+            SeguroText = tidy;
+            return;
+        }
 
-    partial void OnHandedAmountTextChanged(string value) => OnInputChanged();
+        OnInputChanged();
+    }
+
+    partial void OnOtrosConceptosTextChanged(string value)
+    {
+        if (Formats.TidyMoney(value) is var tidy && tidy != value)
+        {
+            OtrosConceptosText = tidy;
+            return;
+        }
+
+        OnInputChanged();
+    }
+
+    partial void OnHandedAmountTextChanged(string value)
+    {
+        if (Formats.TidyMoney(value) is var tidy && tidy != value)
+        {
+            HandedAmountText = tidy;
+            return;
+        }
+
+        OnInputChanged();
+    }
 
     partial void OnAccountChanged(AccountListing? value) => OnPropertyChanged(nameof(ReadinessBlock));
 

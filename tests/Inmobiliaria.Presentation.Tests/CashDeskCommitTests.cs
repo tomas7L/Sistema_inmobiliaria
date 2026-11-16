@@ -463,4 +463,22 @@ public class CashDeskCommitTests
 
         Assert.Equal("$ 598.260", desk.SummaryHandedAmountText);
     }
+
+    /// <summary>Tomás 2026-11-16: every amount field of the desk shows its dots once typed, and previews once.</summary>
+    [Fact]
+    public async Task EveryAmountField_ShowsItsDots_AndPreviewsOnce()
+    {
+        var kit = new CashDeskTestKit();
+        var desk = await kit.ChosenAsync();
+        var before = kit.Desk.PreviewCalls;
+
+        await TypeHandedAsync(desk, "598260");
+        desk.TasaMunicipalText = "12000";
+        desk.SeguroText = "4000";
+        desk.OtrosConceptosText = "1500,50";
+        await desk.PreviewInFlight;
+
+        Assert.Equal(("598.260", "12.000", "4.000", "1.500,50"), (desk.HandedAmountText, desk.TasaMunicipalText, desk.SeguroText, desk.OtrosConceptosText));
+        Assert.Equal(4, kit.Desk.PreviewCalls - before);
+    }
 }

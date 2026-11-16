@@ -69,6 +69,15 @@ public static class Formats
     private static readonly Regex AgencyAmount = new(@"^-?(\d{1,3}(\.\d{3})+|\d+)(,\d+)?$", RegexOptions.CultureInvariant);
 
     /// <summary>
+    /// An amount field once the operator leaves it (Tomás, 2026-11-16): "1611000" reads "1.611.000". Every decimal typed is
+    /// kept ("1250,80" reads "1.250,80"), so the value never changes; what is not an amount stays as typed, to be refused.
+    /// </summary>
+    public static string TidyMoney(string text) =>
+        TryParseMoney(text, out var amount) && amount is { } value
+            ? value.ToString("N" + value.Scale.ToString(CultureInfo.InvariantCulture), Agency)
+            : text;
+
+    /// <summary>
     /// Reads an amount the operator typed, in the agency's convention ("598.260", "1250,80"). Null when the
     /// field is empty; false when it is not a number, or when a dot could be a decimal mark.
     /// </summary>
