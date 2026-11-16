@@ -344,4 +344,17 @@ public class VoidingViewModelTests
         Assert.Null(voiding.FindMessage);
         Assert.True(voiding.Gate!.Offered);
     }
+
+    /// <summary>12.3d: a preview shown and not confirmed is an anulación Cerrar sesión warns about; withdrawn, nothing.</summary>
+    [Fact]
+    public async Task APreviewNotConfirmed_IsPendingWork_UntilWithdrawn()
+    {
+        var voiding = await PreviewedAsync(new Kit());
+
+        Assert.Equal("Hay una anulación sin confirmar.", voiding.PendingWork);
+
+        voiding.ReasonText = "Otro motivo";
+
+        Assert.Null(voiding.PendingWork);
+    }
 }

@@ -7,6 +7,7 @@ using Inmobiliaria.Domain.Collection;
 using Inmobiliaria.Presentation.Common;
 using Inmobiliaria.Presentation.Printing;
 using Inmobiliaria.Presentation.Recibos;
+using Inmobiliaria.Presentation.Shell;
 
 namespace Inmobiliaria.Presentation.Voiding;
 
@@ -16,7 +17,7 @@ namespace Inmobiliaria.Presentation.Voiding;
 /// desk's refusals decide. A stale voiding previews once more and waits for a new confirmation; the voiding is
 /// never repeated on its own. After a voiding the pair is read again and shown annulled. Nothing prints.
 /// </summary>
-public sealed partial class VoidingViewModel : ObservableObject
+public sealed partial class VoidingViewModel : ObservableObject, IPendingWork
 {
     private readonly ICollectionDesk _desk;
     private readonly IReciboReader _reader;
@@ -48,6 +49,12 @@ public sealed partial class VoidingViewModel : ObservableObject
     }
 
     public OperationRunner Runner { get; } = new();
+
+    /// <summary>An operation running, or a preview shown and not confirmed: what Cerrar sesión warns about (12.3d).</summary>
+    public string? PendingWork =>
+        Runner.IsBusy ? PendingWorkTexts.OperationRunning
+        : VoidPreview is not null ? PendingWorkTexts.AnulacionNotConfirmed
+        : null;
 
     public IAsyncRelayCommand FindCommand { get; }
 

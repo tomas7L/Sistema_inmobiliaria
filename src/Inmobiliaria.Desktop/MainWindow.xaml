@@ -27,19 +27,44 @@
             </ItemsControl.ItemTemplate>
         </ItemsControl>
 
-        <ListBox x:Name="NavigationList"
-                 ItemsSource="{Binding Navigation}"
-                 DisplayMemberPath="Title"
-                 Width="220"
-                 DockPanel.Dock="Left"
-                 Margin="12">
-            <ListBox.ItemContainerStyle>
-                <Style TargetType="ListBoxItem">
-                    <Setter Property="IsEnabled" Value="{Binding IsAvailable}" />
-                    <Setter Property="ToolTip" Value="{Binding UnavailableReason}" />
-                </Style>
-            </ListBox.ItemContainerStyle>
-        </ListBox>
+        <!-- The sidebar: the screens, and Cerrar sesión at its foot (12.3d). -->
+        <DockPanel DockPanel.Dock="Left" Width="220" Margin="12">
+            <Button DockPanel.Dock="Bottom"
+                    Content="{Binding LogOutText}"
+                    Command="{Binding LogOutCommand}"
+                    HorizontalAlignment="Stretch"
+                    Padding="12,4"
+                    Margin="0,8,0,0" />
+            <!-- Asked only with work pending on a screen (12.3d, Tomás 2026-11-16). -->
+            <Border DockPanel.Dock="Bottom" BorderBrush="#FFB00020" BorderThickness="1" Padding="8" Margin="0,8,0,0">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding LogOutWarning}" Value="{x:Null}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <StackPanel>
+                    <TextBlock Text="{Binding LogOutWarning}" TextWrapping="Wrap" />
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <Button Content="Cerrar sesión" Command="{Binding ConfirmLogOutCommand}" Padding="8,2" />
+                        <Button Content="Cancelar" Command="{Binding CancelLogOutCommand}" Padding="8,2" Margin="8,0,0,0" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+            <ListBox x:Name="NavigationList"
+                     ItemsSource="{Binding Navigation}"
+                     DisplayMemberPath="Title">
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="IsEnabled" Value="{Binding IsAvailable}" />
+                        <Setter Property="ToolTip" Value="{Binding UnavailableReason}" />
+                    </Style>
+                </ListBox.ItemContainerStyle>
+            </ListBox>
+        </DockPanel>
 
         <!-- The screen of the selected entry. Chosen by triggers on the selection, so no code decides it. -->
         <Grid>

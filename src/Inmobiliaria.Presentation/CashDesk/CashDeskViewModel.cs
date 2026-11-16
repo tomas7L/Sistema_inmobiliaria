@@ -7,6 +7,7 @@ using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Presentation.Common;
 using Inmobiliaria.Presentation.Printing;
 using Inmobiliaria.Presentation.Recibos;
+using Inmobiliaria.Presentation.Shell;
 
 namespace Inmobiliaria.Presentation.CashDesk;
 
@@ -34,7 +35,7 @@ public sealed record DeskSummary(CollectionPreview Preview, CollectionRequest Re
 /// pair the summary showed, once, and never retries: a stale or concurrent refusal previews once more and
 /// shows what changed. Every operation goes through <see cref="OperationRunner"/>.
 /// </summary>
-public sealed partial class CashDeskViewModel : ObservableObject
+public sealed partial class CashDeskViewModel : ObservableObject, IPendingWork
 {
     private readonly ICollectionDesk _desk;
     private readonly IDueAdjustmentQuery _adjustments;
@@ -82,6 +83,12 @@ public sealed partial class CashDeskViewModel : ObservableObject
 
     public OperationRunner Runner { get; } = new();
 
+    /// <summary>An operation running, or a summary shown and not committed: what Cerrar sesión warns about (12.3d).</summary>
+    public string? PendingWork =>
+        Runner.IsBusy ? PendingWorkTexts.OperationRunning
+        : Summary is not null ? PendingWorkTexts.CobroNotConfirmed
+        : null;
+
     public IAsyncRelayCommand ContinueCommand { get; }
 
     public IAsyncRelayCommand CommitCommand { get; }
@@ -124,7 +131,11 @@ public sealed partial class CashDeskViewModel : ObservableObject
     private CollectionPreview? _preview;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SummaryHandedAmountText))]
     private DeskSummary? _summary;
+
+    /// <summary>The handed amount the summary will send, written as every other amount: "$ 1.611.000", not as typed.</summary>
+    public string SummaryHandedAmountText => Summary is { } s ? Formats.Money(s.Request.HandedAmount) : string.Empty;
 
     [ObservableProperty]
     private string? _refusalMessage;
