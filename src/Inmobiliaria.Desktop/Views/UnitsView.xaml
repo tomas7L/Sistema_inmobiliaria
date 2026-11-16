@@ -1,0 +1,337 @@
+<UserControl x:Class="Inmobiliaria.Desktop.Views.UnitsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:units="clr-namespace:Inmobiliaria.Presentation.Units;assembly=Inmobiliaria.Presentation"
+             xmlns:domain="clr-namespace:Inmobiliaria.Domain.Units;assembly=Inmobiliaria.Domain"
+             xmlns:views="clr-namespace:Inmobiliaria.Desktop.Views"
+             mc:Ignorable="d"
+             d:DesignHeight="900" d:DesignWidth="1100"
+             Style="{StaticResource Theme.Page}">
+    <!--
+        The Propiedades screen as the designer drew it (canvas "Propiedades", "Nueva propiedad", "Editar propiedad"): the
+        list, and in its place the form, one step at a time. Bound to UnitsViewModel; no logic lives here.
+    -->
+    <UserControl.Resources>
+        <views:EqualsConverter x:Key="Equals" />
+        <BooleanToVisibilityConverter x:Key="Shown" />
+
+        <!-- Shown only while the form is closed. -->
+        <Style x:Key="ListPart" TargetType="StackPanel">
+            <Setter Property="Visibility" Value="Visible" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsFormOpen}" Value="True">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- The type is chosen while creating, and shown locked while correcting. -->
+        <Style x:Key="TypeChoice" TargetType="StackPanel">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding CanChooseType}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="TypeLocked" TargetType="StackPanel">
+            <Setter Property="Visibility" Value="Visible" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding CanChooseType}" Value="True">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Each part of the form below is shown while the view-model's Step is that part. The fields stay while the
+             warning is asked, as on the canvas; only the save buttons give way to the warning's own. -->
+        <Style x:Key="FieldsPart" TargetType="StackPanel">
+            <Setter Property="Visibility" Value="Visible" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Step}" Value="{x:Static units:UnitFormStep.Saved}">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="FieldsStep" TargetType="StackPanel">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Step}" Value="{x:Static units:UnitFormStep.Fields}">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="WarningStep" TargetType="Border" BasedOn="{StaticResource Theme.Card}">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Step}" Value="{x:Static units:UnitFormStep.Warning}">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="SavedStep" TargetType="Border" BasedOn="{StaticResource Theme.Card}">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Step}" Value="{x:Static units:UnitFormStep.Saved}">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="Required" TargetType="Run">
+            <Setter Property="Foreground" Value="{DynamicResource Theme.Bad}" />
+        </Style>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="32,28">
+
+            <!-- The list. -->
+            <StackPanel Style="{StaticResource ListPart}">
+                <TextBlock Text="Propiedades" Style="{StaticResource Theme.Title}" />
+                <TextBlock Text="Inmuebles y cocheras que se alquilan. Solo datos físicos y dirección." Style="{StaticResource Theme.Subtitle}" />
+                <TextBlock Text="{Binding Runner.ErrorMessage}" Style="{StaticResource Theme.ErrorText}" Margin="0,12,0,0" />
+
+                <Border Style="{StaticResource Theme.Card}" CornerRadius="22" Padding="16,12" Margin="0,18,0,0">
+                    <!-- The search box takes what the buttons leave, to the card's right edge, as on the canvas. -->
+                    <DockPanel LastChildFill="True">
+                        <Button Content="Nueva propiedad" Style="{StaticResource Theme.PrimaryButton}" DockPanel.Dock="Left"
+                                Command="{Binding NewCommand}" Margin="0,4,0,4" />
+                        <Button Content="Editar" Style="{StaticResource Theme.GhostButton}" Margin="12,0,0,0" DockPanel.Dock="Left"
+                                Command="{Binding EditCommand}" CommandParameter="{Binding SelectedUnit}" />
+                        <Border Style="{StaticResource Theme.SegmentGroup}" Margin="12,4,0,4" DockPanel.Dock="Left">
+                            <StackPanel Orientation="Horizontal">
+                                <RadioButton Content="Todas" GroupName="TypeFilter" Style="{StaticResource Theme.Segment}"
+                                             IsChecked="{Binding TypeFilter, Converter={StaticResource Equals}, ConverterParameter={x:Null}}" />
+                                <RadioButton Content="Propiedades" GroupName="TypeFilter" Style="{StaticResource Theme.Segment}"
+                                             IsChecked="{Binding TypeFilter, Converter={StaticResource Equals}, ConverterParameter={x:Static domain:UnitType.Property}}" />
+                                <RadioButton Content="Cocheras" GroupName="TypeFilter" Style="{StaticResource Theme.Segment}"
+                                             IsChecked="{Binding TypeFilter, Converter={StaticResource Equals}, ConverterParameter={x:Static domain:UnitType.ParkingSpace}}" />
+                            </StackPanel>
+                        </Border>
+                        <TextBox Style="{StaticResource Theme.Input}" Margin="12,4,0,4" MinWidth="220" Tag="Buscar por dirección"
+                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                    </DockPanel>
+                </Border>
+
+                <Border Style="{StaticResource Theme.Card}" Padding="8,8,8,4" Margin="0,18,0,0">
+                    <StackPanel>
+                        <DataGrid Style="{StaticResource Theme.Table}" ItemsSource="{Binding Units}"
+                                  SelectedItem="{Binding SelectedUnit}">
+                            <DataGrid.Columns>
+                                <DataGridTemplateColumn Header="TIPO" Width="1*" MinWidth="110">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Border x:Name="Chip" Style="{StaticResource Theme.Chip}" HorizontalAlignment="Center">
+                                                <TextBlock Text="{Binding TypeText}" />
+                                            </Border>
+                                            <DataTemplate.Triggers>
+                                                <DataTrigger Binding="{Binding IsParking}" Value="True">
+                                                    <Setter TargetName="Chip" Property="Tag" Value="warn" />
+                                                </DataTrigger>
+                                            </DataTemplate.Triggers>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="DIRECCIÓN" Width="2*" MinWidth="160">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding StreetText}" FontWeight="Bold" TextAlignment="Center"
+                                                       TextWrapping="Wrap" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTextColumn Header="PISO" Binding="{Binding FloorText}" Width="0.7*" MinWidth="60" />
+                                <DataGridTextColumn Header="DEPTO" Binding="{Binding ApartmentText}" Width="0.7*" MinWidth="70" />
+                                <DataGridTextColumn Header="LOCALIDAD" Binding="{Binding City}" Width="1.2*" MinWidth="100" />
+                                <DataGridTextColumn Header="PROVINCIA" Binding="{Binding Province}" Width="1.2*" MinWidth="100" />
+                                <DataGridTextColumn Header="CP" Binding="{Binding PostalCode}" Width="0.6*" MinWidth="60" />
+                                <DataGridTemplateColumn Header="DISPONIBILIDAD" Width="2*" MinWidth="160">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Border x:Name="Chip" Style="{StaticResource Theme.Chip}" HorizontalAlignment="Center">
+                                                <TextBlock Text="{Binding AvailabilityText}" TextWrapping="Wrap" TextAlignment="Center" />
+                                            </Border>
+                                            <DataTemplate.Triggers>
+                                                <DataTrigger Binding="{Binding IsAvailable}" Value="True">
+                                                    <Setter TargetName="Chip" Property="Tag" Value="ok" />
+                                                </DataTrigger>
+                                            </DataTemplate.Triggers>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <TextBlock Text="No hay ninguna propiedad con ese filtro." Style="{StaticResource Theme.Hint}"
+                                   FontSize="15" Margin="14,18"
+                                   Visibility="{Binding IsEmpty, Converter={StaticResource Shown}}" />
+                        <TextBlock Style="{StaticResource Theme.Hint}" Margin="14,10,14,14" TextWrapping="Wrap">
+                            <Run Text="{Binding CountText, Mode=OneWay}" /><Run Text=". «Disponible» significa que ningún contrato vigente la cubre: se calcula, no se guarda. El tipo no se puede cambiar después de crear la unidad." />
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <!-- The form, in place of the list. -->
+            <StackPanel Visibility="{Binding IsFormOpen, Converter={StaticResource Shown}}">
+                <DockPanel>
+                    <Button Content="Volver a propiedades" Style="{StaticResource Theme.GhostButton}" DockPanel.Dock="Right"
+                            VerticalAlignment="Top" Command="{Binding BackCommand}" />
+                    <StackPanel>
+                        <TextBlock Text="{Binding FormTitle}" Style="{StaticResource Theme.Title}" />
+                        <TextBlock Text="{Binding FormSubtitle}" Style="{StaticResource Theme.Subtitle}" />
+                    </StackPanel>
+                </DockPanel>
+                <TextBlock Text="{Binding Runner.ErrorMessage}" Style="{StaticResource Theme.ErrorText}" Margin="0,12,0,0" />
+
+                <!-- The fields, each with its own error beside it, under one summary (spec Requirement 27). -->
+                <StackPanel Style="{StaticResource FieldsPart}">
+                    <TextBlock Text="{Binding Errors.Summary}" Style="{StaticResource Theme.ErrorText}" Margin="0,18,0,0" />
+
+                    <Border Style="{StaticResource Theme.Card}" Margin="0,18,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Tipo" Style="{StaticResource Theme.CardTitle}" />
+                            <StackPanel Style="{StaticResource TypeChoice}">
+                                <Border Style="{StaticResource Theme.SegmentGroup}" HorizontalAlignment="Left">
+                                    <StackPanel Orientation="Horizontal">
+                                        <RadioButton Content="Propiedad" GroupName="UnitType" Style="{StaticResource Theme.Segment}"
+                                                     IsChecked="{Binding SelectedType, Converter={StaticResource Equals}, ConverterParameter={x:Static domain:UnitType.Property}}" />
+                                        <RadioButton Content="Cochera" GroupName="UnitType" Style="{StaticResource Theme.Segment}"
+                                                     IsChecked="{Binding SelectedType, Converter={StaticResource Equals}, ConverterParameter={x:Static domain:UnitType.ParkingSpace}}" />
+                                    </StackPanel>
+                                </Border>
+                                <TextBlock Text="Propiedad: casa, departamento o local. Cochera: lugar para estacionar. No se cambia después de cargada."
+                                           Style="{StaticResource Theme.Hint}" Margin="0,12,0,0" />
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource TypeLocked}" Orientation="Horizontal">
+                                <Border Style="{StaticResource Theme.Chip}" Margin="0">
+                                    <TextBlock Text="{Binding TypeText}" />
+                                </Border>
+                                <TextBlock Text="El tipo no se cambia después de cargada la unidad." Style="{StaticResource Theme.Hint}"
+                                           VerticalAlignment="Center" Margin="14,0,0,0" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource Theme.Card}" Margin="0,18,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Dirección" Style="{StaticResource Theme.CardTitle}" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="16" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="16" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="16" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="16" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <!-- Two per row, then three, as the canvas lays them out. -->
+                                <Grid Grid.Row="0" Grid.ColumnSpan="5">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="16" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Calle " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
+                                        <TextBox Style="{StaticResource Theme.Input}" Tag="Por ejemplo: Sarmiento"
+                                                 Text="{Binding Street, UpdateSourceTrigger=PropertyChanged}" />
+                                        <TextBlock Text="{Binding Errors[Street]}" Style="{StaticResource Theme.ErrorText}" Margin="0,6,0,0" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Número " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
+                                        <TextBox Style="{StaticResource Theme.Input}" Tag="Por ejemplo: 201"
+                                                 Text="{Binding Number, UpdateSourceTrigger=PropertyChanged}" />
+                                        <TextBlock Text="{Binding Errors[Number]}" Style="{StaticResource Theme.ErrorText}" Margin="0,6,0,0" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <Grid Grid.Row="2" Grid.ColumnSpan="5">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="16" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Piso" Style="{StaticResource Theme.Label}" />
+                                        <TextBox Style="{StaticResource Theme.Input}" Tag="Si corresponde"
+                                                 Text="{Binding Floor, UpdateSourceTrigger=PropertyChanged}" />
+                                        <TextBlock Text="{Binding Errors[Floor]}" Style="{StaticResource Theme.ErrorText}" Margin="0,6,0,0" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Departamento o local" Style="{StaticResource Theme.Label}" />
+                                        <TextBox Style="{StaticResource Theme.Input}" Tag="Si corresponde"
+                                                 Text="{Binding Apartment, UpdateSourceTrigger=PropertyChanged}" />
+                                        <TextBlock Text="{Binding Errors[Apartment]}" Style="{StaticResource Theme.ErrorText}" Margin="0,6,0,0" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <StackPanel Grid.Row="4" Grid.Column="0">
+                                    <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Localidad " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
+                                    <TextBox Style="{StaticResource Theme.Input}" Text="{Binding City, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="{Binding Errors[City]}" Style="{StaticResource Theme.ErrorText}" Margin="0,6,0,0" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="4" Grid.Column="2">
+                                    <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Provincia " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
+                                    <ComboBox Style="{StaticResource Theme.Dropdown}" ItemsSource="{Binding Provinces}"
+                                              SelectedItem="{Binding Province}" />
+                                    <TextBlock Text="{Binding Errors[Province]}" Style="{StaticResource Theme.ErrorText}" Margin="0,6,0,0" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="4" Grid.Column="4">
+                                    <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Código postal " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
+                                    <TextBox Style="{StaticResource Theme.Input}" Text="{Binding PostalCode, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="{Binding Errors[PostalCode]}" Style="{StaticResource Theme.ErrorText}" Margin="0,6,0,0" />
+                                </StackPanel>
+                            </Grid>
+                            <TextBlock Text="{Binding RefusalMessage}" Style="{StaticResource Theme.ErrorText}" Margin="0,16,0,0" />
+                            <TextBlock Text="Los datos del alquiler (inquilino, precio, fechas) no se guardan en la unidad: están en el contrato."
+                                       Style="{StaticResource Theme.Hint}" Margin="0,16,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <StackPanel Style="{StaticResource FieldsStep}" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+                        <Button Content="Cancelar" Style="{StaticResource Theme.GhostButton}" Command="{Binding BackCommand}" />
+                        <Button Content="{Binding SaveText}" Style="{StaticResource Theme.PrimaryButton}" Margin="12,0,0,0"
+                                Height="46" Padding="26,0" FontSize="15" Command="{Binding SaveCommand}" />
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Another unit has this address: proceed or go back to the fields. -->
+                <Border Style="{StaticResource WarningStep}" Margin="0,18,0,0">
+                    <StackPanel>
+                        <TextBlock Text="{Binding IdenticalAddressWarning}" TextWrapping="Wrap" FontSize="15" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource Theme.Warn}" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+                            <Button Content="Volver a revisar" Style="{StaticResource Theme.GhostButton}" Command="{Binding CancelCommand}" />
+                            <Button Content="Guardarla igual" Style="{StaticResource Theme.PrimaryButton}" Margin="12,0,0,0"
+                                    Command="{Binding AcceptIdenticalAddressCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- What was saved, with the way back. -->
+                <Border Style="{StaticResource SavedStep}" Margin="0,18,0,0">
+                    <StackPanel>
+                        <TextBlock Text="{Binding Saved.Title}" Style="{StaticResource Theme.CardTitle}" Foreground="{DynamicResource Theme.Ok}" />
+                        <TextBlock Text="{Binding Saved.Text}" TextWrapping="Wrap" FontSize="15" />
+                        <Button Content="Volver a propiedades" Style="{StaticResource Theme.PrimaryButton}" HorizontalAlignment="Right"
+                                Margin="0,16,0,0" Command="{Binding BackCommand}" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -5,6 +5,7 @@ using Inmobiliaria.Presentation.Notices;
 using Inmobiliaria.Presentation.Parties;
 using Inmobiliaria.Presentation.Recibos;
 using Inmobiliaria.Presentation.Shell;
+using Inmobiliaria.Presentation.Units;
 using Inmobiliaria.Presentation.Users;
 using Inmobiliaria.Presentation.Voiding;
 
@@ -25,11 +26,13 @@ public partial class MainWindow : Window
         GoLiveViewModel? goLive,
         UsersViewModel? users,
         NoticesViewModel? notices,
-        PartiesViewModel parties)
+        PartiesViewModel parties,
+        UnitsViewModel units)
     {
         ArgumentNullException.ThrowIfNull(viewModel);
         ArgumentNullException.ThrowIfNull(recentCollections);
         ArgumentNullException.ThrowIfNull(parties);
+        ArgumentNullException.ThrowIfNull(units);
         InitializeComponent();
 
         DataContext = viewModel;
@@ -40,6 +43,7 @@ public partial class MainWindow : Window
         UsersScreen.DataContext = users;
         NoticesScreen.DataContext = notices;
         PartiesScreen.DataContext = parties;
+        UnitsScreen.DataContext = units;
     }
 
     /// <summary>Selects a screen's navigation entry, when it is offered and available.</summary>

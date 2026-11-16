@@ -169,6 +169,20 @@
                 </views:PartiesView.Style>
             </views:PartiesView>
 
+            <views:UnitsView x:Name="UnitsScreen">
+                <views:UnitsView.Style>
+                    <Style TargetType="views:UnitsView" BasedOn="{StaticResource Theme.Page}">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding SelectedItem.Target, ElementName=NavigationList}"
+                                         Value="{x:Static shell:NavigationTarget.Units}">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </views:UnitsView.Style>
+            </views:UnitsView>
+
             <views:UsersView x:Name="UsersScreen">
                 <views:UsersView.Style>
                     <Style TargetType="views:UsersView">

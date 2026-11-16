@@ -62,6 +62,18 @@ public enum UnitRefusal
     /// <summary>Street, number, city, province or postal code is missing.</summary>
     AddressIncomplete,
 
+    /// <summary>A free text of the address is longer than its maximum (spec Decision 48).</summary>
+    AddressTooLong,
+
+    /// <summary>The province is not one of the 24 jurisdictions (spec Decision 49).</summary>
+    ProvinceNotInList,
+
+    /// <summary>The postal code is in neither of its two forms (spec Decision 49).</summary>
+    PostalCodeMalformed,
+
+    /// <summary>The postal code is a CPA of another province (spec Decision 49).</summary>
+    PostalCodeOfAnotherProvince,
+
     /// <summary>Another unit has this address and the operator has not accepted it yet. A warning, never a final refusal.</summary>
     IdenticalAddressNotAccepted,
 
@@ -89,6 +101,14 @@ public static class UnitRefusalText
     {
         UnitRefusal.AddressIncomplete =>
             "Escriba la calle, el número, la ciudad, la provincia y el código postal.",
+        UnitRefusal.AddressTooLong =>
+            "La dirección tiene un dato demasiado largo: la calle admite 80 caracteres, el número 10, el piso y el departamento 20, y la localidad 60.",
+        UnitRefusal.ProvinceNotInList =>
+            "Elija una provincia de la lista.",
+        UnitRefusal.PostalCodeMalformed =>
+            "Escriba el código postal como 2322 o como S2322ABC.",
+        UnitRefusal.PostalCodeOfAnotherProvince =>
+            "El código postal es de otra provincia: la letra del principio tiene que ser la de la provincia elegida.",
         UnitRefusal.IdenticalAddressNotAccepted =>
             $"Ya existe una unidad en {existingAddress ?? "esa dirección"}. Confirme si quiere guardarla igual.",
         UnitRefusal.UnitNotFound =>
