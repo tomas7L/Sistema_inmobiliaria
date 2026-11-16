@@ -14,9 +14,35 @@ public static class IndexEntryRules
     /// <summary><c>numeric(18,6)</c> keeps twelve whole digits.</summary>
     private const decimal FirstLevelTooLarge = 1_000_000_000_000m;
 
-    /// <summary>The current month is allowed: an index such as ICL is published on its first day.</summary>
-    public static IndexRefusal? CheckPeriod(IndexPeriod period, DateOnly today) =>
-        period > new IndexPeriod(today.Year, today.Month) ? IndexRefusal.FuturePeriod : null;
+    /// <summary>The first year a period can be (spec Decision 53): before it, a year is a typing error such as "201".</summary>
+    public const int FirstYear = 2000;
+
+    /// <summary>
+    /// Whether <paramref name="period"/> can exist for <paramref name="indexName"/> (spec Decision 53): its year between
+    /// <see cref="FirstYear"/> and the current one, and never a month that has not begun. ICL is published daily, so its
+    /// current month is allowed; every other index is published after its month, so its current month is not out yet.
+    /// </summary>
+    public static IndexRefusal? CheckPeriod(IndexPeriod period, DateOnly today, string indexName)
+    {
+        ArgumentNullException.ThrowIfNull(indexName);
+
+        var current = new IndexPeriod(today.Year, today.Month);
+
+        if (period.Year < FirstYear || period.Year > today.Year)
+        {
+            return IndexRefusal.YearOutOfRange;
+        }
+
+        if (period > current)
+        {
+            return IndexRefusal.FuturePeriod;
+        }
+
+        return period == current && !IsPublishedDaily(indexName) ? IndexRefusal.NotPublishedYet : null;
+    }
+
+    /// <summary>ICL, published every day by the BCRA, so the value of the 1st exists on the 1st.</summary>
+    public static bool IsPublishedDaily(string indexName) => indexName == "ICL";
 
     public static IndexRefusal? CheckLevel(decimal level)
     {

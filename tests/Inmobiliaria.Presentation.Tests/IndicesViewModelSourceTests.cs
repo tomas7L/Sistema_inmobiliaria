@@ -113,7 +113,7 @@ public class IndicesViewModelSourceTests
         var world = await LoadedAsync();
         world.Miss(IclId, "ICL", August);
         world.Source.Answers[("ICL", July)] = new IndexFetch.Found(34.24m);
-        world.ViewModel.PeriodText = "07/2026";
+        world.ViewModel.BringPeriodText = "07/2026";
 
         await world.ViewModel.BringFromSourceCommand.ExecuteAsync(null);
 
@@ -154,7 +154,7 @@ public class IndicesViewModelSourceTests
     public async Task ATypedMonthTheFormWouldRefuse_RequestsNothing_AndShowsItsText(string period, string expected)
     {
         var world = await LoadedAsync();
-        world.ViewModel.PeriodText = period;
+        world.ViewModel.BringPeriodText = period;
 
         await world.ViewModel.BringFromSourceCommand.ExecuteAsync(null);
 
@@ -168,10 +168,10 @@ public class IndicesViewModelSourceTests
         var world = await LoadedAsync();
         world.Source.Answers[("ICL", July)] = new IndexFetch.Found(34.24m);
         world.Source.Answers[("ICL", August)] = new IndexFetch.Found(34.9m);
-        world.ViewModel.PeriodText = "07/2026";
+        world.ViewModel.BringPeriodText = "07/2026";
         await world.ViewModel.BringFromSourceCommand.ExecuteAsync(null);
 
-        world.ViewModel.PeriodText = "08/2026";
+        world.ViewModel.BringPeriodText = "08/2026";
         await world.ViewModel.BringFromSourceCommand.ExecuteAsync(null);
 
         Assert.Equal("08/2026", Assert.Single(world.ViewModel.Fetched).PeriodText);
@@ -182,7 +182,7 @@ public class IndicesViewModelSourceTests
     {
         var world = await LoadedAsync();
         world.Source.Answers[("ICL", July)] = new IndexFetch.Found(34.24m);
-        world.ViewModel.PeriodText = "07/2026";
+        world.ViewModel.BringPeriodText = "07/2026";
         await world.ViewModel.BringFromSourceCommand.ExecuteAsync(null);
 
         world.ViewModel.SelectedIndex = world.ViewModel.Indices.Single(i => i.Name == "IPC");
@@ -196,7 +196,7 @@ public class IndicesViewModelSourceTests
         var world = await LoadedAsync();
         world.Source.Gate = new TaskCompletionSource();
         world.Source.Answers[("ICL", July)] = new IndexFetch.Found(34.24m);
-        world.ViewModel.PeriodText = "07/2026";
+        world.ViewModel.BringPeriodText = "07/2026";
         var pressing = world.ViewModel.BringFromSourceCommand.ExecuteAsync(null);
 
         world.ViewModel.SelectedIndex = world.ViewModel.Indices.Single(i => i.Name == "IPC");
@@ -211,7 +211,7 @@ public class IndicesViewModelSourceTests
     {
         var world = await LoadedAsync();
         world.Source.Gate = new TaskCompletionSource();
-        world.ViewModel.PeriodText = "07/2026";
+        world.ViewModel.BringPeriodText = "07/2026";
         var pressing = world.ViewModel.BringFromSourceCommand.ExecuteAsync(null);
 
         Assert.True(world.ViewModel.Runner.IsBusy);
@@ -230,7 +230,7 @@ public class IndicesViewModelSourceTests
     {
         var world = await LoadedAsync();
         world.Source.Answers[("ICL", July)] = new IndexFetch.Found(34.24m);
-        world.ViewModel.PeriodText = "07/2026";
+        world.ViewModel.BringPeriodText = "07/2026";
         await world.ViewModel.BringFromSourceCommand.ExecuteAsync(null);
 
         await world.ViewModel.ConfirmFetchedCommand.ExecuteAsync(world.ViewModel.Fetched.Single());
@@ -246,7 +246,7 @@ public class IndicesViewModelSourceTests
             ? IndexEntryResult.Saved(new IndexValueListing(Guid.NewGuid(), July, 340m))
             : IndexEntryResult.Refused(IndexRefusal.FarLevelNotAccepted, StoredJune);
         world.Source.Answers[("ICL", July)] = new IndexFetch.Found(340m);
-        world.ViewModel.PeriodText = "07/2026";
+        world.ViewModel.BringPeriodText = "07/2026";
         await world.ViewModel.BringFromSourceCommand.ExecuteAsync(null);
 
         await world.ViewModel.ConfirmFetchedCommand.ExecuteAsync(world.ViewModel.Fetched.Single());
@@ -267,7 +267,7 @@ public class IndicesViewModelSourceTests
             ? IndexEntryResult.Saved(new IndexValueListing(Guid.NewGuid(), July, level))
             : IndexEntryResult.Refused(IndexRefusal.FarLevelNotAccepted, StoredJune);
         world.Source.Answers[("ICL", July)] = new IndexFetch.Found(12276.766m);
-        world.ViewModel.PeriodText = "07/2026";
+        world.ViewModel.BringPeriodText = "07/2026";
         await world.ViewModel.BringFromSourceCommand.ExecuteAsync(null);
 
         await world.ViewModel.ConfirmFetchedCommand.ExecuteAsync(world.ViewModel.Fetched.Single());
@@ -319,7 +319,7 @@ public class IndicesViewModelSourceTests
     {
         var world = await LoadedAsync();
         world.Source.Answers[("ICL", July)] = new IndexFetch.Found(34.1234567m);
-        world.ViewModel.PeriodText = "07/2026";
+        world.ViewModel.BringPeriodText = "07/2026";
 
         await world.ViewModel.BringFromSourceCommand.ExecuteAsync(null);
 
@@ -344,7 +344,7 @@ public class IndicesViewModelSourceTests
     {
         var world = await LoadedAsync();
         world.Source.Answers[("ICL", July)] = fetch;
-        world.ViewModel.PeriodText = "07/2026";
+        world.ViewModel.BringPeriodText = "07/2026";
 
         await world.ViewModel.BringFromSourceCommand.ExecuteAsync(null);
 
@@ -355,9 +355,36 @@ public class IndicesViewModelSourceTests
         Assert.False(row.CanStore);
         Assert.Null(world.ViewModel.Runner.ErrorMessage);
 
+        // The month to bring is the panel's own; typing by hand takes the form's.
+        world.ViewModel.PeriodText = "07/2026";
         world.ViewModel.LevelText = "34,24";
         await world.ViewModel.SaveCommand.ExecuteAsync(null);
         Assert.Equal([(IclId, July, 34.24m, false)], world.Port.Added);
+    }
+
+    /// <summary>"Todavía no se guardó nada" is said only while a month waits to be stored, not when the source matches.</summary>
+    [Fact]
+    public async Task TheNotStoredYetNote_ShowsOnlyWhileAMonthCanBeStored()
+    {
+        var world = await LoadedAsync();
+        world.Source.Answers[("ICL", July)] = new IndexFetch.Found(34.24m);
+        world.ViewModel.BringPeriodText = "07/2026";
+        var notified = new List<string?>();
+        world.ViewModel.PropertyChanged += (_, e) => notified.Add(e.PropertyName);
+
+        await world.ViewModel.BringFromSourceCommand.ExecuteAsync(null);
+
+        Assert.True(world.ViewModel.HasStorableFetched);
+        Assert.Contains(nameof(IndicesViewModel.HasStorableFetched), notified);
+
+        // The same month, now stored with the level the source gives: nothing is left to store.
+        var icl = world.Port.Indices.FindIndex(i => i.Id == IclId);
+        world.Port.Indices[icl] = new IndexListing(IclId, "ICL", null, [new IndexValueListing(Guid.NewGuid(), July, 34.24m)]);
+        await world.ViewModel.LoadCommand.ExecuteAsync(null);
+        await world.ViewModel.BringFromSourceCommand.ExecuteAsync(null);
+
+        Assert.False(world.ViewModel.Fetched.Single().CanStore);
+        Assert.False(world.ViewModel.HasStorableFetched);
     }
 
     [Fact]
@@ -381,7 +408,7 @@ public class IndicesViewModelSourceTests
     public async Task IpcNotThereYet_SaysItMayExistAtIndec_AndDoesNotReadAsAnError()
     {
         var world = await LoadedAsync("IPC");
-        world.ViewModel.PeriodText = "09/2026";
+        world.ViewModel.BringPeriodText = "09/2026";
 
         await world.ViewModel.BringFromSourceCommand.ExecuteAsync(null);
 
@@ -396,7 +423,7 @@ public class IndicesViewModelSourceTests
     public async Task IclNotThereYet_NamesItsOwnPublisher()
     {
         var world = await LoadedAsync();
-        world.ViewModel.PeriodText = "09/2026";
+        world.ViewModel.BringPeriodText = "09/2026";
 
         await world.ViewModel.BringFromSourceCommand.ExecuteAsync(null);
 
@@ -424,7 +451,7 @@ public class IndicesViewModelSourceTests
     {
         var world = await LoadedAsync();
         world.Source.Answers[("ICL", June)] = new IndexFetch.Found(33.5m);
-        world.ViewModel.PeriodText = "06/2026";
+        world.ViewModel.BringPeriodText = "06/2026";
 
         await world.ViewModel.BringFromSourceCommand.ExecuteAsync(null);
 
@@ -446,7 +473,7 @@ public class IndicesViewModelSourceTests
     {
         var world = await LoadedAsync();
         world.Source.Answers[("ICL", June)] = new IndexFetch.Found(33m);
-        world.ViewModel.PeriodText = "06/2026";
+        world.ViewModel.BringPeriodText = "06/2026";
 
         await world.ViewModel.BringFromSourceCommand.ExecuteAsync(null);
 
@@ -462,7 +489,7 @@ public class IndicesViewModelSourceTests
     {
         var world = await LoadedAsync();
         world.Source.Answers[("ICL", June)] = new IndexFetch.Found(33.5m);
-        world.ViewModel.PeriodText = "06/2026";
+        world.ViewModel.BringPeriodText = "06/2026";
         await world.ViewModel.BringFromSourceCommand.ExecuteAsync(null);
 
         await world.ViewModel.CorrectFromFetchedCommand.ExecuteAsync(world.ViewModel.Fetched.Single());
@@ -477,7 +504,7 @@ public class IndicesViewModelSourceTests
     {
         var world = await LoadedAsync();
         world.Source.Answers[("ICL", June)] = new IndexFetch.Found(12076.3937m);
-        world.ViewModel.PeriodText = "06/2026";
+        world.ViewModel.BringPeriodText = "06/2026";
         await world.ViewModel.BringFromSourceCommand.ExecuteAsync(null);
 
         await world.ViewModel.CorrectFromFetchedCommand.ExecuteAsync(world.ViewModel.Fetched.Single());

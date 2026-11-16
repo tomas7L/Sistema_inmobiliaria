@@ -11,15 +11,17 @@ using Inmobiliaria.Presentation.Common;
 namespace Inmobiliaria.Presentation.Indices;
 
 /// <summary>
-/// The Índices screen (gestion-de-alquileres spec Requirements 11, 12 and 18, design §6): each index with its values, a form to
-/// type a level or correct one, the warning for a far level, the adjustments a correction affects, and the record corrections
-/// leave, and the button that brings ICL and IPC from their official source (Requirement 25). The list is read again after every
-/// write, refused or not. Both roles; the view arrives in slice S12.
+/// The Índices screen (gestion-de-alquileres spec Requirements 11, 12, 18, 25 and 30, design §6): each index with its values, a
+/// form to type a level or correct one, the warning for a far level, the adjustments a correction affects, and the record
+/// corrections leave, and the panel that brings ICL and IPC from their official source. The list is read again after every
+/// write, refused or not. Both roles. As the designer drew it (canvas "Índices"), the form's own errors show beside their
+/// fields, all at once (Decision 44), and a write that lands leaves a notice above the form.
 /// </summary>
 public sealed partial class IndicesViewModel : ObservableObject
 {
-    private const string LevelFormatMessage = "Escriba el nivel como se publica, por ejemplo 1.915.878,76.";
-    private const string PeriodFormatMessage = "Escriba el período como mes y año, por ejemplo 08/2026.";
+    public const string LevelFormatMessage = "Escriba el nivel como se publica, por ejemplo 1.915.878,76.";
+    public const string PeriodFormatMessage = "Escriba el período como mes y año, por ejemplo 08/2026.";
+    public const string UnchangedMessage = "El valor no cambió: no hay nada que guardar.";
     private const string NoIndexMessage = "Elija un índice.";
 
     private static readonly string[] PeriodFormats = ["MM/yyyy", "M/yyyy"];
@@ -49,10 +51,15 @@ public sealed partial class IndicesViewModel : ObservableObject
         CorrectExistingCommand = new AsyncRelayCommand(CorrectExistingAsync, () => CanAct() && DuplicateOffer is not null);
         EditCommand = new AsyncRelayCommand<IndexValueRow>(EditAsync);
         ClearFormCommand = new RelayCommand(ClearForm);
+        BackToEditingCommand = new RelayCommand(WithdrawPending);
+        OpenBringCommand = new RelayCommand(OpenBring, () => CanBringFromSource);
+        CloseBringCommand = new RelayCommand(CloseBring);
+        DismissDoneCommand = new RelayCommand(DismissDone);
         BringFromSourceCommand = new AsyncRelayCommand(BringFromSourceAsync, () => CanAct() && CanBringFromSource);
         ConfirmFetchedCommand = new AsyncRelayCommand<FetchedValueRow>(ConfirmFetchedAsync, row => CanAct() && row is { CanStore: true });
         CorrectFromFetchedCommand = new AsyncRelayCommand<FetchedValueRow>(CorrectFromFetchedAsync, row => CanAct() && row is { CanCorrect: true });
         Runner.PropertyChanged += OnRunnerChanged;
+        Fetched.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasStorableFetched));
     }
 
     public OperationRunner Runner { get; } = new();
@@ -67,6 +74,9 @@ public sealed partial class IndicesViewModel : ObservableObject
 
     /// <summary>The confirmed adjustments the pending correction would leave with a different level (spec Requirement 18).</summary>
     public ObservableCollection<AffectedAdjustmentRow> AffectedAdjustments { get; } = [];
+
+    /// <summary>The adjustments the correction just saved affects, kept on its notice once the form is cleared.</summary>
+    public ObservableCollection<AffectedAdjustmentRow> DoneAdjustments { get; } = [];
 
     /// <summary>The record of the value being corrected, the most recent first (spec Decision 42).</summary>
     public ObservableCollection<IndexCorrectionRow> Corrections { get; } = [];
@@ -84,9 +94,25 @@ public sealed partial class IndicesViewModel : ObservableObject
 
     public IAsyncRelayCommand<IndexValueRow> EditCommand { get; }
 
+    /// <summary>"Cancelar": the form goes back to typing a new value.</summary>
     public IRelayCommand ClearFormCommand { get; }
 
-    /// <summary>Asks the source for the month typed or, with none typed, for what the worklist misses of this index. Stores nothing.</summary>
+    /// <summary>"Revisar" and "Volver a editar": the warning or the summary goes, the form stays as typed.</summary>
+    public IRelayCommand BackToEditingCommand { get; }
+
+    /// <summary>"Traer valores": opens the panel that asks the source.</summary>
+    public IRelayCommand OpenBringCommand { get; }
+
+    /// <summary>"Cerrar" and "Descartar": closes the panel, storing nothing.</summary>
+    public IRelayCommand CloseBringCommand { get; }
+
+    /// <summary>"Listo": closes the notice of a saved correction.</summary>
+    public IRelayCommand DismissDoneCommand { get; }
+
+    /// <summary>
+    /// Asks the source for the month typed in the panel or, with none typed, for what the worklist misses of this index. Stores
+    /// nothing.
+    /// </summary>
     public IAsyncRelayCommand BringFromSourceCommand { get; }
 
     /// <summary>Stores a month the source brought, through the same checks and port as a typed one.</summary>
@@ -95,18 +121,40 @@ public sealed partial class IndicesViewModel : ObservableObject
     /// <summary>Opens the correction of a stored level that differs from the source's. Writes nothing by itself.</summary>
     public IAsyncRelayCommand<FetchedValueRow> CorrectFromFetchedCommand { get; }
 
+    /// <summary>True while a month the source brought waits to be stored, so "nothing was saved yet" is worth saying.</summary>
+    public bool HasStorableFetched => Fetched.Any(row => row.CanStore);
+
     /// <summary>False for an index with no source, which is what leaves RIPTE typed.</summary>
     public bool CanBringFromSource => SelectedIndex is { } index && _source.Supports(index.Name);
 
     /// <summary>A correction keeps its month: changing the month is a different value.</summary>
     public bool CanChoosePeriod => Editing is null;
 
+    public bool IsEditing => Editing is not null;
+
     public string GuidanceText => SelectedIndex is { } index ? IndexGuidance.For(index.Name) : string.Empty;
 
+    /// <summary>The note under the form: what a level is, and which months this index takes (spec Decision 53).</summary>
+    public string FormHint => SelectedIndex is { } index ? IndexGuidance.FormHint(index.Name) : string.Empty;
+
+    /// <summary>"$" for an index published in pesos, shown before its level; empty otherwise.</summary>
+    public string LevelUnit => SelectedIndex is { } index ? IndexGuidance.Unit(index.Name) : string.Empty;
+
+    public string SourceName => SelectedIndex is { } index ? IndexGuidance.Source(index.Name) : string.Empty;
+
+    /// <summary>"Nivel publicado", with the unit when the index has one: "Nivel publicado ($)".</summary>
+    public string LevelLabel => LevelUnit.Length == 0 ? "Nivel publicado" : $"Nivel publicado ({LevelUnit})";
+
+    public string FormTitle => Editing is null ? "Cargar un valor" : "Corregir un valor";
+
+    public string SaveText => Editing is null ? "Agregar valor" : "Revisar corrección";
+
+    /// <summary>The foot of the values: how many there are.</summary>
+    public string CountText => Values.Count == 1 ? "1 valor" : $"{Values.Count} valores";
+
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(GuidanceText))]
-    [NotifyPropertyChangedFor(nameof(CanBringFromSource))]
-    [NotifyCanExecuteChangedFor(nameof(BringFromSourceCommand))]
+    [NotifyPropertyChangedFor(nameof(GuidanceText), nameof(FormHint), nameof(LevelUnit), nameof(LevelLabel), nameof(SourceName), nameof(CanBringFromSource))]
+    [NotifyCanExecuteChangedFor(nameof(BringFromSourceCommand), nameof(OpenBringCommand))]
     private IndexRow? _selectedIndex;
 
     [ObservableProperty]
@@ -115,9 +163,25 @@ public sealed partial class IndicesViewModel : ObservableObject
     [ObservableProperty]
     private string _levelText = string.Empty;
 
+    /// <summary>The period's error from the last save, beside the field (spec Decision 44), or null.</summary>
+    [ObservableProperty]
+    private string? _periodError;
+
+    /// <summary>The level's error from the last save, beside the field (spec Decision 44), or null.</summary>
+    [ObservableProperty]
+    private string? _levelError;
+
+    /// <summary>True while the panel that asks the source is open.</summary>
+    [ObservableProperty]
+    private bool _isBringOpen;
+
+    /// <summary>The month the panel asks for, or blank for the worklist's.</summary>
+    [ObservableProperty]
+    private string _bringPeriodText = string.Empty;
+
     /// <summary>The value the form is correcting, or null while it types a new one.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanChoosePeriod))]
+    [NotifyPropertyChangedFor(nameof(CanChoosePeriod), nameof(IsEditing), nameof(FormTitle), nameof(SaveText))]
     private IndexValueRow? _editing;
 
     /// <summary>The old and new level of a correction waiting to be confirmed, or null.</summary>
@@ -125,10 +189,34 @@ public sealed partial class IndicesViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(ConfirmCorrectionCommand))]
     private string? _correctionSummary;
 
+    /// <summary>"Confirme la corrección de IPC 08/2026", over the summary.</summary>
+    [ObservableProperty]
+    private string? _correctionTitle;
+
+    [ObservableProperty]
+    private string? _correctionOldText;
+
+    [ObservableProperty]
+    private string? _correctionNewText;
+
     /// <summary>The warning naming the earlier level, waiting to be accepted, or null.</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(AcceptFarLevelCommand))]
     private string? _farLevelWarning;
+
+    /// <summary>"Valor anterior (07/2026)", beside its level, while the far level is asked.</summary>
+    [ObservableProperty]
+    private string? _farPreviousLabel;
+
+    [ObservableProperty]
+    private string? _farPreviousLevel;
+
+    /// <summary>"Valor que escribió (08/2026)", beside its level, while the far level is asked.</summary>
+    [ObservableProperty]
+    private string? _farTypedLabel;
+
+    [ObservableProperty]
+    private string? _farTypedLevel;
 
     /// <summary>The value already there for the month typed, which the operator is offered to correct, or null.</summary>
     [ObservableProperty]
@@ -139,17 +227,30 @@ public sealed partial class IndicesViewModel : ObservableObject
     [ObservableProperty]
     private string? _refusalMessage;
 
+    /// <summary>What the last new value that landed says, or null. Cleared when the next action starts.</summary>
+    [ObservableProperty]
+    private string? _savedMessage;
+
+    /// <summary>The notice of the correction just saved, or null until "Listo" or the next action.</summary>
+    [ObservableProperty]
+    private string? _correctionDone;
+
     partial void OnSelectedIndexChanged(IndexRow? value)
     {
         Values.Clear();
+        var unit = value is null ? string.Empty : IndexGuidance.Unit(value.Name);
         foreach (var listing in value?.Listing.Values ?? [])
         {
-            Values.Add(new IndexValueRow(listing));
+            Values.Add(new IndexValueRow(listing, unit));
         }
+
+        OnPropertyChanged(nameof(CountText));
 
         if (!_reloading)
         {
             Fetched.Clear();
+            IsBringOpen = false;
+            BringPeriodText = string.Empty;
             ClearForm();
         }
     }
@@ -170,14 +271,42 @@ public sealed partial class IndicesViewModel : ObservableObject
 
     private bool CanAct() => !Runner.IsBusy;
 
+    private void ClearMessages()
+    {
+        RefusalMessage = null;
+        SavedMessage = null;
+        CorrectionDone = null;
+        DoneAdjustments.Clear();
+    }
+
     private void ClearForm()
     {
         PeriodText = string.Empty;
         LevelText = string.Empty;
         Editing = null;
-        RefusalMessage = null;
+        PeriodError = null;
+        LevelError = null;
+        ClearMessages();
         Corrections.Clear();
         WithdrawPending();
+    }
+
+    private void OpenBring()
+    {
+        ClearMessages();
+        IsBringOpen = true;
+    }
+
+    private void CloseBring()
+    {
+        IsBringOpen = false;
+        Fetched.Clear();
+    }
+
+    private void DismissDone()
+    {
+        CorrectionDone = null;
+        DoneAdjustments.Clear();
     }
 
     private async Task LoadAsync()
@@ -235,12 +364,13 @@ public sealed partial class IndicesViewModel : ObservableObject
 
     private async Task BringFromSourceAsync()
     {
-        RefusalMessage = null;
+        ClearMessages();
         if (SelectedIndex is not { } index || !CanBringFromSource)
         {
             return;
         }
 
+        IsBringOpen = true;
         Fetched.Clear();
         var months = await MonthsToAskAsync(index);
         foreach (var month in months)
@@ -258,21 +388,22 @@ public sealed partial class IndicesViewModel : ObservableObject
     }
 
     /// <summary>
-    /// The month typed or the worklist's, none of them future: that is refused when typed, and the BCRA answers such a date with an
-    /// error rather than with no value. Leaves the reason on screen when there is nothing to ask.
+    /// The month typed in the panel or the worklist's, none that cannot exist yet (spec Decision 53): that is refused when typed,
+    /// and the BCRA answers a future date with an error rather than with no value. Leaves the reason on screen when there is
+    /// nothing to ask.
     /// </summary>
     private async Task<IReadOnlyList<IndexPeriod>> MonthsToAskAsync(IndexRow index)
     {
         var today = _clock.Today;
-        if (!string.IsNullOrWhiteSpace(PeriodText))
+        if (!string.IsNullOrWhiteSpace(BringPeriodText))
         {
-            if (!TryParsePeriod(PeriodText, out var typed))
+            if (!TryParsePeriod(BringPeriodText, out var typed))
             {
                 RefusalMessage = PeriodFormatMessage;
                 return [];
             }
 
-            if (IndexEntryRules.CheckPeriod(typed, today) is { } refusal)
+            if (IndexEntryRules.CheckPeriod(typed, today, index.Name) is { } refusal)
             {
                 RefusalMessage = refusal.OperatorText();
                 return [];
@@ -289,7 +420,7 @@ public sealed partial class IndicesViewModel : ObservableObject
 
         var months = due.Value!
             .SelectMany(adjustment => adjustment.Missing)
-            .Where(missing => missing.EconomicIndexId == index.Id && IndexEntryRules.CheckPeriod(missing.Period, today) is null)
+            .Where(missing => missing.EconomicIndexId == index.Id && IndexEntryRules.CheckPeriod(missing.Period, today, index.Name) is null)
             .Select(missing => missing.Period)
             .Distinct()
             .Order()
@@ -313,35 +444,49 @@ public sealed partial class IndicesViewModel : ObservableObject
             return;
         }
 
-        RefusalMessage = null;
+        ClearMessages();
         Editing = null;
         Corrections.Clear();
+        PeriodError = null;
+        LevelError = null;
         PeriodText = row.PeriodText;
         LevelText = row.LevelText!;
         WithdrawPending();
 
-        await SubmitNewAsync(index.Id, row.Period, level, acceptFarLevel: false);
+        await SubmitNewAsync(index, row.Period, level, acceptFarLevel: false);
     }
 
     private Task CorrectFromFetchedAsync(FetchedValueRow? row) =>
         row is { CanCorrect: true, Stored: { } stored, LevelText: { } level }
-            ? OpenAsync(new IndexValueRow(stored), level)
+            ? OpenAsync(new IndexValueRow(stored, LevelUnit), level)
             : Task.CompletedTask;
 
+    /// <summary>
+    /// The form's own checks first, every one at once beside its field and nothing sent (spec Decisions 44 and 53); then, for a
+    /// correction, what it would change; then the port, whose refusals need the database.
+    /// </summary>
     private async Task SaveAsync()
     {
-        RefusalMessage = null;
+        ClearMessages();
+        PeriodError = null;
+        LevelError = null;
         WithdrawPending();
 
-        if (!IndexLevelParser.TryParse(LevelText, out var level))
-        {
-            RefusalMessage = LevelFormatMessage;
-            return;
-        }
+        var levelRead = IndexLevelParser.TryParse(LevelText, out var level);
+        LevelError = levelRead ? IndexEntryRules.CheckLevel(level)?.OperatorText() : LevelFormatMessage;
 
         if (Editing is { } editing)
         {
-            await PrepareCorrectionAsync(editing, level);
+            if (LevelError is null && level == editing.Listing.Level)
+            {
+                LevelError = UnchangedMessage;
+            }
+
+            if (LevelError is null)
+            {
+                await PrepareCorrectionAsync(editing, level);
+            }
+
             return;
         }
 
@@ -351,23 +496,18 @@ public sealed partial class IndicesViewModel : ObservableObject
             return;
         }
 
-        if (!TryParsePeriod(PeriodText, out var period))
-        {
-            RefusalMessage = PeriodFormatMessage;
-            return;
-        }
+        PeriodError = !TryParsePeriod(PeriodText, out var period)
+            ? PeriodFormatMessage
+            : IndexEntryRules.CheckPeriod(period, _clock.Today, index.Name)?.OperatorText();
 
-        await SubmitNewAsync(index.Id, period, level, acceptFarLevel: false);
+        if (PeriodError is null && LevelError is null)
+        {
+            await SubmitNewAsync(index, period, level, acceptFarLevel: false);
+        }
     }
 
     private async Task PrepareCorrectionAsync(IndexValueRow editing, decimal level)
     {
-        if (IndexEntryRules.CheckLevel(level) is { } refusal)
-        {
-            RefusalMessage = refusal.OperatorText();
-            return;
-        }
-
         var outcome = await Runner.RunAsync(() => _indices.ListAffectedAdjustmentsAsync(editing.Id, level));
         if (!outcome.Completed)
         {
@@ -380,6 +520,9 @@ public sealed partial class IndicesViewModel : ObservableObject
         }
 
         _pendingLevel = level;
+        CorrectionTitle = $"Confirme la corrección de {SelectedIndex?.Name} {editing.PeriodText}";
+        CorrectionOldText = editing.LevelText;
+        CorrectionNewText = Formats.Level(level);
         CorrectionSummary = $"{SelectedIndex?.Name} {editing.PeriodText}: de {editing.LevelText} a {Formats.Level(level)}.";
     }
 
@@ -387,7 +530,7 @@ public sealed partial class IndicesViewModel : ObservableObject
     {
         RefusalMessage = null;
         return Editing is { } editing && _pendingLevel is { } level
-            ? SubmitCorrectionAsync(editing.Id, level, acceptFarLevel: false)
+            ? SubmitCorrectionAsync(editing, level, acceptFarLevel: false)
             : Task.CompletedTask;
     }
 
@@ -398,7 +541,7 @@ public sealed partial class IndicesViewModel : ObservableObject
 
         if (Editing is { } editing && _pendingLevel is { } correction)
         {
-            await SubmitCorrectionAsync(editing.Id, correction, acceptFarLevel: true);
+            await SubmitCorrectionAsync(editing, correction, acceptFarLevel: true);
             return;
         }
 
@@ -406,31 +549,48 @@ public sealed partial class IndicesViewModel : ObservableObject
             && TryParsePeriod(PeriodText, out var period)
             && IndexLevelParser.TryParse(LevelText, out var level))
         {
-            await SubmitNewAsync(index.Id, period, level, acceptFarLevel: true);
+            await SubmitNewAsync(index, period, level, acceptFarLevel: true);
         }
     }
 
-    private async Task SubmitNewAsync(Guid indexId, IndexPeriod period, decimal level, bool acceptFarLevel)
+    private async Task SubmitNewAsync(IndexRow index, IndexPeriod period, decimal level, bool acceptFarLevel)
     {
-        var outcome = await Runner.RunAsync(() => _indices.AddAsync(indexId, period, level, acceptFarLevel));
-        await FinishAsync(outcome);
+        var outcome = await Runner.RunAsync(() => _indices.AddAsync(index.Id, period, level, acceptFarLevel));
+        if (await FinishAsync(outcome, period, level))
+        {
+            SavedMessage = $"Valor guardado. Ya está disponible para los contratos que usan {index.Name}.";
+
+            // The panel stays while it still offers a month to store.
+            IsBringOpen = IsBringOpen && Fetched.Any(row => row.CanStore);
+        }
     }
 
-    private async Task SubmitCorrectionAsync(Guid valueId, decimal level, bool acceptFarLevel)
+    private async Task SubmitCorrectionAsync(IndexValueRow editing, decimal level, bool acceptFarLevel)
     {
-        var outcome = await Runner.RunAsync(() => _indices.CorrectAsync(valueId, level, acceptFarLevel));
-        await FinishAsync(outcome);
+        var affected = AffectedAdjustments.ToList();
+        var name = SelectedIndex?.Name;
+        var outcome = await Runner.RunAsync(() => _indices.CorrectAsync(editing.Id, level, acceptFarLevel));
+        if (await FinishAsync(outcome, editing.Listing.Period, level))
+        {
+            CorrectionDone =
+                $"Corrección guardada: {name} {editing.PeriodText} pasó de {editing.LevelText} a {Formats.Level(level)}. Quedó registrado quién la hizo y cuándo.";
+            foreach (var row in affected)
+            {
+                DoneAdjustments.Add(row);
+            }
+        }
     }
 
     /// <summary>
     /// The list again, refused or not. A failure leaves the generic message on screen and the form as it was. Only a success
     /// clears the form, so a refused level is not typed twice.
     /// </summary>
-    private async Task FinishAsync(OperationOutcome<IndexEntryResult> outcome)
+    /// <returns>True when the write landed.</returns>
+    private async Task<bool> FinishAsync(OperationOutcome<IndexEntryResult> outcome, IndexPeriod period, decimal level)
     {
         if (!outcome.Completed)
         {
-            return;
+            return false;
         }
 
         var result = outcome.Value!;
@@ -439,7 +599,7 @@ public sealed partial class IndicesViewModel : ObservableObject
         if (result.Succeeded)
         {
             ClearForm();
-            return;
+            return true;
         }
 
         var refusal = result.Refusal!.Value;
@@ -449,26 +609,32 @@ public sealed partial class IndicesViewModel : ObservableObject
                 FarLevelWarning = result.Existing is { } earlier
                     ? $"{refusal.OperatorText()} El de {Formats.Period(earlier.Period)} es {Formats.Level(earlier.Level)}."
                     : refusal.OperatorText();
-                return;
+                FarPreviousLabel = result.Existing is { } previous ? $"Valor anterior ({Formats.Period(previous.Period)})" : null;
+                FarPreviousLevel = result.Existing is { } shown ? Formats.Level(shown.Level) : null;
+                FarTypedLabel = $"Valor que escribió ({Formats.Period(period)})";
+                FarTypedLevel = Formats.Level(level);
+                return false;
             case IndexRefusal.DuplicatePeriod:
                 RefusalMessage = refusal.OperatorText();
                 DuplicateOffer = result.Existing;
-                return;
+                return false;
             default:
                 RefusalMessage = refusal.OperatorText();
-                return;
+                return false;
         }
     }
 
     /// <summary>Keeps the level already typed: it is the one the operator wants, and only the month was taken.</summary>
     private Task CorrectExistingAsync() =>
-        DuplicateOffer is { } existing ? OpenAsync(new IndexValueRow(existing), LevelText) : Task.CompletedTask;
+        DuplicateOffer is { } existing ? OpenAsync(new IndexValueRow(existing, LevelUnit), LevelText) : Task.CompletedTask;
 
     private Task EditAsync(IndexValueRow? row) => row is null ? Task.CompletedTask : OpenAsync(row, row.LevelText);
 
     private async Task OpenAsync(IndexValueRow row, string levelText)
     {
-        RefusalMessage = null;
+        ClearMessages();
+        PeriodError = null;
+        LevelError = null;
         Editing = row;
         PeriodText = row.PeriodText;
         LevelText = levelText;
@@ -523,10 +689,15 @@ public sealed class IndexRow(IndexListing listing)
     public Guid Id => Listing.Id;
 
     public string Name => Listing.Name;
+
+    /// <summary>Who publishes it, under its name in the list.</summary>
+    public string SourceText => IndexGuidance.Source(Listing.Name);
 }
 
 /// <summary>One stored value of an index.</summary>
-public sealed class IndexValueRow(IndexValueListing listing)
+/// <param name="listing">The value.</param>
+/// <param name="unit">"$" for an index in pesos, shown before the level in the list; empty otherwise.</param>
+public sealed class IndexValueRow(IndexValueListing listing, string unit = "")
 {
     public IndexValueListing Listing { get; } = listing ?? throw new ArgumentNullException(nameof(listing));
 
@@ -534,7 +705,21 @@ public sealed class IndexValueRow(IndexValueListing listing)
 
     public string PeriodText => Formats.Period(Listing.Period);
 
+    /// <summary>The level as the form takes it back, with no unit.</summary>
     public string LevelText => Formats.Level(Listing.Level);
+
+    /// <summary>The level as the list shows it, with its unit.</summary>
+    public string ShownLevelText => unit.Length == 0 ? LevelText : $"{unit} {LevelText}";
+
+    public bool IsCorrected => Listing.CorrectionCount > 0;
+
+    /// <summary>The list's "Correcciones" column: how many times, or a dash for none.</summary>
+    public string CorrectionsText => Listing.CorrectionCount switch
+    {
+        0 => "—",
+        1 => "Corregido 1 vez",
+        var times => $"Corregido {times} veces",
+    };
 }
 
 /// <summary>A confirmed adjustment a correction affects.</summary>

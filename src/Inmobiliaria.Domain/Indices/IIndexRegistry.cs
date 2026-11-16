@@ -56,7 +56,8 @@ public sealed class IndexListing(Guid id, string name, IndexPeriod? discontinued
 /// <param name="Id">The stored value.</param>
 /// <param name="Period">The month it was published for.</param>
 /// <param name="Level">The published level.</param>
-public sealed record IndexValueListing(Guid Id, IndexPeriod Period, decimal Level);
+/// <param name="CorrectionCount">How many times its level was corrected (spec Decision 42), as the list reads it.</param>
+public sealed record IndexValueListing(Guid Id, IndexPeriod Period, decimal Level, int CorrectionCount = 0);
 
 /// <param name="AdjustmentId">The confirmed adjustment.</param>
 /// <param name="ContractId">Its contract.</param>
@@ -81,6 +82,12 @@ public enum IndexRefusal
 
     /// <summary>The period is a month that has not begun.</summary>
     FuturePeriod,
+
+    /// <summary>The period's year is before 2000 or after the current one, a typing error (spec Decision 53).</summary>
+    YearOutOfRange,
+
+    /// <summary>The current month of an index published after its month, IPC or RIPTE (spec Decision 53).</summary>
+    NotPublishedYet,
 
     /// <summary>The level is zero or negative.</summary>
     LevelNotPositive,
@@ -118,6 +125,8 @@ public static class IndexRefusalText
         IndexRefusal.IndexNotFound => "El índice ya no existe. Actualice la lista.",
         IndexRefusal.ValueNotFound => "El valor ya no existe. Actualice la lista.",
         IndexRefusal.FuturePeriod => "El período no puede ser un mes futuro.",
+        IndexRefusal.YearOutOfRange => $"Revise el año: tiene que estar entre {IndexEntryRules.FirstYear} y el año en curso.",
+        IndexRefusal.NotPublishedYet => "Ese mes todavía no se publicó: el IPC y el RIPTE de un mes salen el mes siguiente.",
         IndexRefusal.LevelNotPositive => "El nivel tiene que ser mayor que cero.",
         IndexRefusal.TooManyDecimals => "El nivel admite hasta seis decimales.",
         IndexRefusal.LevelTooLarge => "El nivel es demasiado grande. Revise el número.",
