@@ -44,6 +44,10 @@ public partial class App : Application
     private ISessionDbContextFactory? _activeSessionFactory;
     private bool _shellShown;
 
+    // One gate for the whole run, so the count of failed logins survives every pass of the bootstrap loop and every
+    // Cerrar sesión (limite-de-intentos-de-login, design D5).
+    private LoginGate? _loginGate;
+
     // async void is deliberate here, not an oversight: WPF's own lifecycle methods
     // (OnStartup/OnExit) return void and have no caller to await them — the well-established
     // pattern for a WPF composition root that must await anything during startup. Every
@@ -78,7 +82,18 @@ public partial class App : Application
 
     protected override async void OnExit(ExitEventArgs e)
     {
-        // The session container goes before the factory it was built from.
+        await EndSessionAsync();
+        _serviceProvider?.Dispose();
+        base.OnExit(e);
+    }
+
+    /// <summary>
+    /// Disposes the signed-in session: on exit, and on Cerrar sesión before the login window shows again (12.3d), so no
+    /// container or connection of the old session outlives it. The session container goes before the factory it was
+    /// built from.
+    /// </summary>
+    private async Task EndSessionAsync()
+    {
         _sessionProvider?.Dispose();
         _sessionProvider = null;
 
@@ -87,9 +102,6 @@ public partial class App : Application
             await _activeSessionFactory.DisposeAsync();
             _activeSessionFactory = null;
         }
-
-        _serviceProvider?.Dispose();
-        base.OnExit(e);
     }
 
     /// <summary>
@@ -102,9 +114,7 @@ public partial class App : Application
     /// </summary>
     private async Task RunBootstrapAsync()
     {
-        // One gate for the whole run, so the count of failed logins survives every pass of the loop below
-        // (limite-de-intentos-de-login, design D5).
-        var loginGate = new LoginGate(TimeProvider.System, OperationRunner.DefaultErrorLog);
+        var loginGate = _loginGate ??= new LoginGate(TimeProvider.System, OperationRunner.DefaultErrorLog);
 
         while (true)
         {
@@ -153,7 +163,6 @@ public partial class App : Application
 
             var settingsProblems = recargo.Problem is null ? Array.Empty<string>() : [recargo.Problem];
             var session = _sessionProvider.GetRequiredService<IUserSession>();
-            var shellViewModel = new ShellViewModel(session, settingsProblems);
 
             // Built only for the role the shell offers it to (spec Requirement 2); the database still decides.
             var goLiveViewModel = session.Role == UserRole.Admin
@@ -214,15 +223,49 @@ public partial class App : Application
                 _sessionProvider.GetRequiredService<IAgencyClock>(),
                 _sessionProvider.GetRequiredService<IDueAdjustmentQuery>());
 
+            // What each screen would lose if the session closed now, so Cerrar sesión asks first (12.3d, Tomás 2026-11-16):
+            // the desk and voiding name a summary not confirmed; every other screen, an operation still running.
+            IPendingWork?[] pendingWork =
+            [
+                cashDeskViewModel, voidingViewModel,
+                new RunningWork(recentViewModel.Runner),
+                goLiveViewModel is null ? null : new RunningWork(goLiveViewModel.Runner),
+                usersViewModel is null ? null : new RunningWork(usersViewModel.Runner),
+                noticesViewModel is null ? null : new RunningWork(noticesViewModel.Runner),
+                new RunningWork(partiesViewModel.Runner),
+                new RunningWork(unitsViewModel.Runner),
+                new RunningWork(indicesViewModel.Runner),
+            ];
+            var shellViewModel = new ShellViewModel(session, settingsProblems, pendingWork.OfType<IPendingWork>().ToList());
+
             mainWindow = new MainWindow(
                 shellViewModel, cashDeskViewModel, recentViewModel, voidingViewModel, goLiveViewModel, usersViewModel,
                 noticesViewModel, partiesViewModel, unitsViewModel, indicesViewModel);
             MainWindow = mainWindow;
             // ShutdownMode is OnExplicitShutdown (App.xaml) precisely so that closing
             // LoginWindow or ChangePasswordWindow mid-bootstrap never ends the process before
-            // the next window in the sequence is shown; MainWindow closing is the one event
-            // that actually should end it.
-            mainWindow.Closed += (_, _) => Shutdown();
+            // the next window in the sequence is shown. Closing MainWindow ends it, unless the
+            // window closed for Cerrar sesión: then the session is disposed and the login shows
+            // again (12.3d, Mateo's guide: "Cerrar sesión vuelve a Inicio de sesión").
+            var loggingOut = false;
+            shellViewModel.LogOutRequested += (_, _) =>
+            {
+                loggingOut = true;
+                mainWindow.Close();
+            };
+            mainWindow.Closed += async (_, _) =>
+            {
+                if (!loggingOut)
+                {
+                    Shutdown();
+                    return;
+                }
+
+                _shellShown = false;
+                MainWindow = null;
+                await EndSessionAsync();
+                await RunBootstrapAsync();
+            };
             mainWindow.Show();
             _shellShown = true;
             return;

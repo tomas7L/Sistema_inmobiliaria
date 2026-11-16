@@ -435,4 +435,32 @@ public class CashDeskCommitTests
         Assert.Equal(DeskTexts.RecibosNotShown(31001, 31002), desk.IssuedNotice);
         Assert.Null(desk.Runner.ErrorMessage);
     }
+
+    /// <summary>12.3d: a summary shown and not confirmed is a cobro Cerrar sesión warns about; once committed, nothing.</summary>
+    [Fact]
+    public async Task ASummaryNotConfirmed_IsPendingWork_UntilCommitted()
+    {
+        var kit = new CashDeskTestKit();
+        var collectionId = Guid.NewGuid();
+        kit.Reader.Payments[collectionId] = Issued(collectionId, 31001);
+        kit.Desk.OnCommit = (_, _) => Task.FromResult(CollectionResult.Committed(collectionId, 31001));
+        var desk = await SummaryAsync(kit);
+
+        Assert.Equal("Hay un cobro sin confirmar.", desk.PendingWork);
+
+        await desk.CommitCommand.ExecuteAsync(null);
+
+        Assert.Null(desk.PendingWork);
+    }
+
+    /// <summary>12.3d, Tomás's live check 2026-11-16: the summary writes the handed amount as every other amount, not as typed.</summary>
+    [Fact]
+    public async Task TheSummary_WritesTheHandedAmountAsAnAmount()
+    {
+        var desk = await new CashDeskTestKit().ChosenAsync();
+        await TypeHandedAsync(desk, "598260");
+        await desk.ContinueCommand.ExecuteAsync(null);
+
+        Assert.Equal("$ 598.260", desk.SummaryHandedAmountText);
+    }
 }

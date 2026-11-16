@@ -1,3 +1,5 @@
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Inmobiliaria.Domain.Access;
 
 namespace Inmobiliaria.Presentation.Shell;
@@ -8,9 +10,11 @@ namespace Inmobiliaria.Presentation.Shell;
 /// arrives with its slice. Hiding the go-live entry from an Empleado is a convenience, never the
 /// enforcement: the database refuses what an Empleado reaches by any other means.
 /// </summary>
-public sealed class ShellViewModel
+public sealed partial class ShellViewModel : ObservableObject
 {
-    public ShellViewModel(IUserSession session, IReadOnlyList<string> settingsProblems)
+    private readonly IReadOnlyList<IPendingWork> _pendingWork;
+
+    public ShellViewModel(IUserSession session, IReadOnlyList<string> settingsProblems, IReadOnlyList<IPendingWork>? pendingWork = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(settingsProblems);
@@ -19,7 +23,32 @@ public sealed class ShellViewModel
         RoleText = session.Role.ToString();
         SettingsProblems = settingsProblems;
         Navigation = BuildNavigation(session.Role, settingsProblems);
+        _pendingWork = pendingWork ?? [];
+        LogOutCommand = new RelayCommand(LogOut);
+        ConfirmLogOutCommand = new RelayCommand(EndSession);
+        CancelLogOutCommand = new RelayCommand(() => LogOutWarning = null);
     }
+
+    /// <summary>The sidebar's last entry, for both roles (12.3d; Mateo's guide: it returns to the login).</summary>
+    public string LogOutText => "Cerrar sesión";
+
+    /// <summary>
+    /// Asks to end the session. With nothing pending it ends at once, as Mateo's guide says; with work pending on any
+    /// screen it shows <see cref="LogOutWarning"/> first (Tomás, 2026-11-16). The shell holds no session to dispose: the
+    /// application does it.
+    /// </summary>
+    public IRelayCommand LogOutCommand { get; }
+
+    public IRelayCommand ConfirmLogOutCommand { get; }
+
+    public IRelayCommand CancelLogOutCommand { get; }
+
+    /// <summary>Each pending work named once, then the question; null when no confirmation is asked.</summary>
+    [ObservableProperty]
+    private string? _logOutWarning;
+
+    /// <summary>Raised once per <see cref="LogOutCommand"/>; the application closes the window and returns to the login.</summary>
+    public event EventHandler? LogOutRequested;
 
     public string DisplayName { get; }
 
@@ -63,5 +92,23 @@ public sealed class ShellViewModel
         }
 
         return entries;
+    }
+
+    private void LogOut()
+    {
+        var pending = _pendingWork.Select(work => work.PendingWork).OfType<string>().Distinct().ToList();
+        if (pending.Count == 0)
+        {
+            EndSession();
+            return;
+        }
+
+        LogOutWarning = string.Join(" ", pending) + " " + PendingWorkTexts.Question;
+    }
+
+    private void EndSession()
+    {
+        LogOutWarning = null;
+        LogOutRequested?.Invoke(this, EventArgs.Empty);
     }
 }

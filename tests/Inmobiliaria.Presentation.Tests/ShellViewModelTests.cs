@@ -1,4 +1,5 @@
 using Inmobiliaria.Domain.Access;
+using Inmobiliaria.Presentation.Common;
 using Inmobiliaria.Presentation.Shell;
 
 namespace Inmobiliaria.Presentation.Tests;
@@ -137,5 +138,93 @@ public sealed class ShellViewModelTests
         var byTarget = ShellFor(role, "Recargo:DailyRate falta.").Navigation.ToDictionary(entry => entry.Target);
         Assert.False(byTarget[NavigationTarget.Notices].IsAvailable);
         Assert.Equal(byTarget[NavigationTarget.CashDesk].UnavailableReason, byTarget[NavigationTarget.Notices].UnavailableReason);
+    }
+
+    /// <summary>12.3d, Cerrar sesión (Tomás, 2026-11-13): the shell asks to end the session; the application does it.</summary>
+    [Theory]
+    [InlineData(UserRole.Admin)]
+    [InlineData(UserRole.Empleado)]
+    public void CerrarSesion_IsOfferedToBothRoles_AndAsksOnceToEndTheSession(UserRole role)
+    {
+        var shell = ShellFor(role);
+        var requests = 0;
+        shell.LogOutRequested += (_, _) => requests++;
+
+        Assert.Equal("Cerrar sesión", shell.LogOutText);
+        Assert.True(shell.LogOutCommand.CanExecute(null));
+        shell.LogOutCommand.Execute(null);
+
+        Assert.Equal(1, requests);
+    }
+
+    private sealed class Pending(string? text) : IPendingWork
+    {
+        public string? PendingWork { get; set; } = text;
+    }
+
+    private static ShellViewModel ShellWith(params IPendingWork[] work) =>
+        new(SessionOf("maria", "María Test", UserRole.Empleado), [], work);
+
+    /// <summary>12.3d, Tomás 2026-11-16: with work pending, Cerrar sesión asks first and names it.</summary>
+    [Fact]
+    public void CerrarSesion_WithWorkPending_AsksFirst_AndNamesTheWork()
+    {
+        var shell = ShellWith(new Pending(null), new Pending("Hay un cobro sin confirmar."));
+        var requests = 0;
+        shell.LogOutRequested += (_, _) => requests++;
+
+        shell.LogOutCommand.Execute(null);
+
+        Assert.Equal(0, requests);
+        Assert.Equal("Hay un cobro sin confirmar. ¿Cerrar sesión igual? Lo que no se confirmó se pierde.", shell.LogOutWarning);
+    }
+
+    [Fact]
+    public void ConfirmingTheWarning_EndsTheSession_AndCancellingKeepsIt()
+    {
+        var shell = ShellWith(new Pending("Hay un cobro sin confirmar."));
+        var requests = 0;
+        shell.LogOutRequested += (_, _) => requests++;
+
+        shell.LogOutCommand.Execute(null);
+        shell.CancelLogOutCommand.Execute(null);
+
+        Assert.Equal(0, requests);
+        Assert.Null(shell.LogOutWarning);
+
+        shell.LogOutCommand.Execute(null);
+        shell.ConfirmLogOutCommand.Execute(null);
+
+        Assert.Equal(1, requests);
+        Assert.Null(shell.LogOutWarning);
+    }
+
+    [Fact]
+    public void EveryPendingWork_IsNamedOnce()
+    {
+        var shell = ShellWith(
+            new Pending("Hay una operación en curso."), new Pending("Hay una operación en curso."), new Pending("Hay una anulación sin confirmar."));
+
+        shell.LogOutCommand.Execute(null);
+
+        Assert.Equal(
+            "Hay una operación en curso. Hay una anulación sin confirmar. ¿Cerrar sesión igual? Lo que no se confirmó se pierde.",
+            shell.LogOutWarning);
+    }
+
+    /// <summary>A screen whose runner is still working has an operation in progress; once it ends, nothing.</summary>
+    [Fact]
+    public async Task ARunningOperation_IsPendingWork_UntilItEnds()
+    {
+        var runner = new OperationRunner();
+        var work = new RunningWork(runner);
+        var gate = new TaskCompletionSource<int>();
+
+        var run = runner.RunAsync(() => gate.Task);
+        Assert.Equal("Hay una operación en curso.", work.PendingWork);
+
+        gate.SetResult(1);
+        await run;
+        Assert.Null(work.PendingWork);
     }
 }
