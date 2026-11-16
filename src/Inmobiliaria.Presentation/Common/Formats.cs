@@ -43,6 +43,20 @@ public static class Formats
         _ => throw new ArgumentOutOfRangeException(nameof(status), status, "A status without a name."),
     };
 
+    /// <summary>The state as the list and the detail name it: a cancelled contract reads Ended, and is named apart.</summary>
+    public static string Status(ContractStatus status, bool isCancelled) => isCancelled ? "Cancelado por error de carga" : Status(status);
+
+    /// <summary>Why a contract ended, in the operator's words (task 12.3d).</summary>
+    public static string EndReason(EndReason reason) => reason switch
+    {
+        Domain.Leasing.EndReason.Expiry => "Vencimiento del contrato",
+        Domain.Leasing.EndReason.EarlyTerminationByTenant => "Rescisión anticipada del inquilino",
+        Domain.Leasing.EndReason.TerminationForCause => "Rescisión por incumplimiento",
+        Domain.Leasing.EndReason.MutualAgreement => "Acuerdo de partes",
+        Domain.Leasing.EndReason.LoadedByMistake => "Cargado por error",
+        _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, "A reason without a name."),
+    };
+
     // Thousands grouped by dots in threes, or no grouping at all; a comma for the cents. A dot anywhere else
     // ("1250.80", "12.5") is refused rather than read as grouping, which would multiply the amount (S3b review).
     private static readonly Regex AgencyAmount = new(@"^-?(\d{1,3}(\.\d{3})+|\d+)(,\d+)?$", RegexOptions.CultureInvariant);

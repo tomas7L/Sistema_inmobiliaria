@@ -17,6 +17,109 @@ public class ContractDetailViewModelTests
 
     private static ContractDetailViewModel New(FakeContractRegistry port) => new(port, ContractId);
 
+    private static async Task<ContractDetailViewModel> LoadedAsync(ContractDetail detail)
+    {
+        var viewModel = New(new FakeContractRegistry { Detail = detail });
+        await viewModel.LoadCommand.ExecuteAsync(null);
+        return viewModel;
+    }
+
+    private static string Offered(ContractDetailViewModel v) => string.Join(
+        ",",
+        new[]
+        {
+            (v.IsEditOffered, "Editar"), (v.IsNoticeOffered, "Registrar aviso"), (v.IsUndoNoticeOffered, "Deshacer aviso"),
+            (v.IsEndOffered, "Terminar"), (v.IsUndoEndOffered, "Deshacer fin"), (v.IsCancelOffered, "Cancelar por error"),
+            (v.IsAccountOffered, "Ver cuenta"),
+        }.Where(b => b.Item1).Select(b => b.Item2));
+
+    /// <summary>Task 12.3d: the buttons each state offers, and a cancelled contract only its account.</summary>
+    [Theory]
+    [InlineData(ContractStatus.Active, null, "Editar,Registrar aviso,Terminar,Cancelar por error,Ver cuenta")]
+    [InlineData(ContractStatus.PendingTermination, null, "Editar,Deshacer aviso,Terminar,Cancelar por error,Ver cuenta")]
+    [InlineData(ContractStatus.Ended, EndReason.Expiry, "Editar,Deshacer fin,Cancelar por error,Ver cuenta")]
+    [InlineData(ContractStatus.Ended, EndReason.LoadedByMistake, "Ver cuenta")]
+    public async Task EachState_OffersItsButtons(ContractStatus status, EndReason? reason, string expected)
+    {
+        var viewModel = await LoadedAsync(Detail(status) with { EndReason = reason });
+
+        Assert.Equal(expected, Offered(viewModel));
+    }
+
+    [Fact]
+    public async Task BeforeTheContractIsRead_NothingIsOffered()
+    {
+        var viewModel = New(new FakeContractRegistry());
+
+        Assert.Equal(string.Empty, Offered(viewModel));
+        Assert.Null(viewModel.StatusText);
+    }
+
+    /// <summary>Task 12.3d: an ended contract corrects only its rate and its codeudores, and the screen says so.</summary>
+    [Theory]
+    [InlineData(ContractStatus.Active, false)]
+    [InlineData(ContractStatus.PendingTermination, false)]
+    [InlineData(ContractStatus.Ended, true)]
+    public async Task OnlyAnEndedContract_EditsLimited(ContractStatus status, bool limited)
+    {
+        var viewModel = await LoadedAsync(Detail(status) with { EndReason = status == ContractStatus.Ended ? EndReason.Expiry : null });
+
+        Assert.Equal(limited, viewModel.IsEditLimited);
+    }
+
+    [Theory]
+    [InlineData(ContractStatus.Active, null, "Vigente")]
+    [InlineData(ContractStatus.PendingTermination, null, "En rescisión")]
+    [InlineData(ContractStatus.Ended, EndReason.MutualAgreement, "Finalizado")]
+    [InlineData(ContractStatus.Ended, EndReason.LoadedByMistake, "Cancelado por error de carga")]
+    public async Task TheState_IsNamed(ContractStatus status, EndReason? reason, string expected)
+    {
+        var viewModel = await LoadedAsync(Detail(status) with { EndReason = reason });
+
+        Assert.Equal(expected, viewModel.StatusText);
+    }
+
+    /// <summary>Task 12.3d: the four reasons offered for ending, in the operator's words, and the one for an ended contract.</summary>
+    [Fact]
+    public async Task EndReasons_HaveTheirSpanishNames()
+    {
+        var viewModel = New(new FakeContractRegistry());
+
+        Assert.Equal(
+            ["Vencimiento del contrato", "Rescisión anticipada del inquilino", "Rescisión por incumplimiento", "Acuerdo de partes"],
+            viewModel.EndReasons.Select(r => r.Text));
+
+        var ended = await LoadedAsync(Detail(ContractStatus.Ended) with { EndReason = EndReason.TerminationForCause });
+        Assert.Equal("Rescisión por incumplimiento", ended.EndReasonText);
+    }
+
+    /// <summary>The event log reads the reason, who and when, oldest first, as the port gave it.</summary>
+    [Fact]
+    public async Task TheEventLog_ReadsWhatWhyWhoAndWhen()
+    {
+        var at = new DateTimeOffset(2026, 11, 3, 14, 30, 0, TimeSpan.FromHours(-3));
+        var viewModel = await LoadedAsync(Detail(ContractStatus.Active) with
+        {
+            Events = [new ContractEventLine(ContractEventKind.NoticeUndone, "Se cargó en otro contrato", null, "ana.torres", at)],
+        });
+
+        var row = Assert.Single(viewModel.Events);
+        Assert.Equal("03/11/2026", row.WhenText);
+        Assert.Equal("Aviso deshecho", row.EventText);
+        Assert.Equal("Se cargó en otro contrato", row.ReasonText);
+        Assert.Equal("ana.torres", row.WhoText);
+        Assert.False(viewModel.HasNoEvents);
+    }
+
+    [Fact]
+    public async Task AContractWithoutEvents_SaysSo()
+    {
+        var viewModel = await LoadedAsync(Detail(ContractStatus.Active));
+
+        Assert.Empty(viewModel.Events);
+        Assert.True(viewModel.HasNoEvents);
+    }
+
     [Fact]
     public async Task Loading_ReadsTheContract()
     {
@@ -317,7 +420,7 @@ public class ContractDetailViewModelTests
     {
         var viewModel = New(new FakeContractRegistry());
 
-        Assert.DoesNotContain(EndReason.LoadedByMistake, viewModel.EndReasons);
+        Assert.DoesNotContain(EndReason.LoadedByMistake, viewModel.EndReasons.Select(r => r.Reason));
         Assert.Equal(Enum.GetValues<EndReason>().Length - 1, viewModel.EndReasons.Count);
     }
 
@@ -335,6 +438,7 @@ public class ContractDetailViewModelTests
         Assert.Contains("Pérez, Juan", pending.Summary, StringComparison.Ordinal);
         Assert.Contains("Alem 1258", pending.Summary, StringComparison.Ordinal);
         Assert.Contains("900.000", pending.Summary, StringComparison.Ordinal);
+        Assert.EndsWith("Esto es definitivo. Una vez cancelado, el contrato no se puede recuperar.", pending.Summary, StringComparison.Ordinal);
         Assert.Null(pending.RetainedLine);
         Assert.Equal("SummarizeCancel", Assert.Single(port.Calls)[0]);
     }

@@ -166,6 +166,8 @@ public sealed record ContractEndSummary(
 /// <param name="NominalEndDate">When it says it ends.</param>
 /// <param name="IsPastEnd">Not ended and past its nominal end date: flagged, never ended by this.</param>
 /// <param name="IsCancelled">Ended as loaded by mistake (spec Requirement 23): stays readable, marked.</param>
+/// <param name="MonthlyRent">The rent today, adjustments included.</param>
+/// <param name="ActualEndDate">The day it really ended, or null while it has not.</param>
 public sealed record ContractListing(
     Guid Id,
     string Tenants,
@@ -175,7 +177,9 @@ public sealed record ContractListing(
     DateOnly StartDate,
     DateOnly NominalEndDate,
     bool IsPastEnd,
-    bool IsCancelled = false);
+    bool IsCancelled = false,
+    decimal MonthlyRent = 0m,
+    DateOnly? ActualEndDate = null);
 
 public sealed record ContractPartyLine(Guid PartyId, string Name, PartyRole Role);
 

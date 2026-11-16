@@ -509,6 +509,9 @@ public sealed class ContractRegistryTests
         Assert.False(onItsLastDay.IsPastEnd);
         Assert.True(past.IsPastEnd);
         Assert.Equal(ContractStatus.Active, past.Status);
+        Assert.Equal((await Registry(world).DetailAsync(created.Id))!.MonthlyRent, past.MonthlyRent);
+        Assert.True(past.MonthlyRent > 0m);
+        Assert.Null(past.ActualEndDate);
         Assert.True((await Registry(world, afterEnd).DetailAsync(created.Id))!.IsPastEnd);
 
         await using (var change = world.NewContext())
@@ -517,7 +520,9 @@ public sealed class ContractRegistryTests
             await change.SaveChangesAsync();
         }
 
-        Assert.False(Assert.Single(await Registry(world, afterEnd).ListAsync(null, null)).IsPastEnd);
+        var ended = Assert.Single(await Registry(world, afterEnd).ListAsync(null, null));
+        Assert.False(ended.IsPastEnd);
+        Assert.Equal(new DateOnly(2028, 11, 30), ended.ActualEndDate);
     }
 
     /// <summary>Spec Requirement 6: found by tenant, lessor, unit and state, as both roles.</summary>

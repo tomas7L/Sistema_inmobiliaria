@@ -7,13 +7,24 @@ using Inmobiliaria.Presentation.Common;
 
 namespace Inmobiliaria.Presentation.Contracts;
 
+/// <summary>The list's state filters (task 12.3d). Cancelled ones are apart from the ended ones, though both read Ended.</summary>
+public enum ContractListFilter
+{
+    All,
+    Active,
+    PendingTermination,
+    Ended,
+    Cancelled,
+}
+
 /// <summary>
-/// The contract list (gestion-de-alquileres spec Requirement 6): by tenant, lessor, unit and state, flagging a contract past
-/// its end without ending it. Both roles; the view arrives in S12.
+/// The contract list (gestion-de-alquileres spec Requirement 6, task 12.3d): by tenant, lessor and unit through the port, by
+/// state on the screen, flagging a contract past its end without ending it. Both roles.
 /// </summary>
 public sealed partial class ContractsViewModel : ObservableObject
 {
     private readonly IContractRegistry _contracts;
+    private IReadOnlyList<ContractListing> _loaded = [];
 
     public ContractsViewModel(IContractRegistry contracts)
     {
@@ -26,6 +37,7 @@ public sealed partial class ContractsViewModel : ObservableObject
 
     public OperationRunner Runner { get; } = new();
 
+    /// <summary>The rows the filter lets through.</summary>
     public ObservableCollection<ContractRow> Contracts { get; } = [];
 
     public IAsyncRelayCommand LoadCommand { get; }
@@ -33,26 +45,50 @@ public sealed partial class ContractsViewModel : ObservableObject
     [ObservableProperty]
     private string _searchText = string.Empty;
 
-    /// <summary>The state to list, or null for all of them.</summary>
+    /// <summary>Which states to show. Changing it filters what was loaded and asks the database nothing.</summary>
     [ObservableProperty]
-    private ContractStatus? _statusFilter;
+    private ContractListFilter _filter = ContractListFilter.All;
 
+    public string CountText => Contracts.Count == 1 ? "1 contrato" : $"{Contracts.Count} contratos";
+
+    public bool IsEmpty => Contracts.Count == 0;
+
+    partial void OnFilterChanged(ContractListFilter value) => Show();
+
+    /// <summary>Every state is asked for, so the filter can then change on the screen alone.</summary>
     private async Task LoadAsync()
     {
         var text = SearchText;
-        var status = StatusFilter;
-        var outcome = await Runner.RunAsync(() => _contracts.ListAsync(text, status));
+        var outcome = await Runner.RunAsync(() => _contracts.ListAsync(text, null));
         if (!outcome.Completed)
         {
             return;
         }
 
+        _loaded = outcome.Value!;
+        Show();
+    }
+
+    private void Show()
+    {
         Contracts.Clear();
-        foreach (var listing in outcome.Value!)
+        foreach (var listing in _loaded.Where(Passes))
         {
             Contracts.Add(new ContractRow(listing));
         }
+
+        OnPropertyChanged(nameof(CountText));
+        OnPropertyChanged(nameof(IsEmpty));
     }
+
+    private bool Passes(ContractListing listing) => Filter switch
+    {
+        ContractListFilter.Active => listing.Status == ContractStatus.Active,
+        ContractListFilter.PendingTermination => listing.Status == ContractStatus.PendingTermination,
+        ContractListFilter.Ended => listing.Status == ContractStatus.Ended && !listing.IsCancelled,
+        ContractListFilter.Cancelled => listing.IsCancelled,
+        _ => true,
+    };
 
     private void OnRunnerChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -83,8 +119,14 @@ public sealed class ContractRow
 
     public string Units => Listing.Units;
 
-    public string StatusText => Listing.IsCancelled ? "Cancelado por error de carga" : Formats.Status(Listing.Status);
+    public string StatusText => Formats.Status(Listing.Status, Listing.IsCancelled);
 
     /// <summary>Beside the state, which stays as it is: passing the end date does not end a contract.</summary>
     public string? PastEndFlag => Listing.IsPastEnd ? "Fecha de fin vencida" : null;
+
+    /// <summary>The day it really ended, once it has; until then the day it says it ends.</summary>
+    public string EndText => Formats.Date(Listing.ActualEndDate ?? Listing.NominalEndDate);
+
+    /// <summary>The rent today, adjustments included.</summary>
+    public string RentText => Formats.Money(Listing.MonthlyRent);
 }

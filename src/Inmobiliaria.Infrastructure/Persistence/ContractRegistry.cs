@@ -261,7 +261,9 @@ public sealed partial class ContractRegistry : IContractRegistry
                 c.StartDate,
                 c.NominalEndDate,
                 IsPastEnd(c),
-                c.EndReason == EndReason.LoadedByMistake))
+                c.EndReason == EndReason.LoadedByMistake,
+                c.MonthlyRent,
+                c.ActualEndDate))
             .ToList();
     }
 
