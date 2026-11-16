@@ -18,13 +18,13 @@ public class ReciboViewModelTests
         Assert.Equal(
             ("N° 31001", "Locatario", "Perez, Maria", "Gomez, Juan; Ibáñez, Rosa", "Bv. Belgrano 123, Sunchales", "01/2026", "15/01/2026"),
             (locatario.NumberText, locatario.CopyName, locatario.Tenant, locatario.Lessors, locatario.Units, locatario.PeriodText, locatario.ReceivedOnText));
-        Assert.Equal([("Alquiler", "500.000"), ("Recargo por mora", "98.260")], locatario.Lines.Select(l => (l.Label, l.AmountText)));
-        Assert.Equal("598.260", locatario.TotalText);
+        Assert.Equal([("Alquiler", "$ 500.000"), ("Recargo por mora", "$ 98.260")], locatario.Lines.Select(l => (l.Label, l.AmountText)));
+        Assert.Equal("$ 598.260", locatario.TotalText);
         Assert.Equal(Recibo.NonFiscalLegend, locatario.Legend);
 
         Assert.Equal(("N° 31002", "Propietario"), (propietario.NumberText, propietario.CopyName));
-        Assert.Equal([("Alquiler", "500.000"), ("Honorarios de administración", "-47.860")], propietario.Lines.Select(l => (l.Label, l.AmountText)));
-        Assert.Equal("452.140", propietario.TotalText);
+        Assert.Equal([("Alquiler", "$ 500.000"), ("Honorarios de administración", "-$ 47.860")], propietario.Lines.Select(l => (l.Label, l.AmountText)));
+        Assert.Equal("$ 452.140", propietario.TotalText);
 
         Assert.False(recibo.IsAnnulled);
         Assert.Null(recibo.AnnulmentText);

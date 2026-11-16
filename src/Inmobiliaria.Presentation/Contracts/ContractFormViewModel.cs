@@ -216,7 +216,7 @@ public sealed partial class ContractFormViewModel : ObservableObject
         // Whatever the operator typed while this was out stays theirs.
         if (outcome is { Completed: true, Value: { } rate } && string.IsNullOrWhiteSpace(HonorariosText))
         {
-            HonorariosText = Formats.Money(rate);
+            HonorariosText = Formats.Number(rate);
         }
     }
 

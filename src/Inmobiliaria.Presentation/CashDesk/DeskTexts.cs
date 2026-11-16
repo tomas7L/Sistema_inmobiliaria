@@ -11,6 +11,10 @@ public static class DeskTexts
 {
     public const string LedgerFigureLabel = "Saldo del período";
 
+    /// <summary>Under the summary's title: what confirming does, and that it prints nothing (12.3d).</summary>
+    public const string SummaryNote =
+        "Al confirmar se registra el cobro y se emiten los dos recibos. No se imprime nada automáticamente.";
+
     public const string LocatarioTotalLabel = "Total del recibo locatario";
 
     public const string PropietarioTotalLabel = "Total del recibo propietario";

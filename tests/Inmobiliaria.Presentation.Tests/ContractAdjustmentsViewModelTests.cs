@@ -71,11 +71,11 @@ public class ContractAdjustmentsViewModelTests
         var latest = world.ViewModel.History[0];
         Assert.Equal("01/07/2026", latest.DueDateText);
         Assert.Equal("11/2026", latest.AppliesFromText);
-        Assert.Equal("100.000", latest.PreviousCanonText);
-        Assert.Equal("110.000", latest.NewCanonText);
+        Assert.Equal("$ 100.000", latest.PreviousCanonText);
+        Assert.Equal("$ 110.000", latest.NewCanonText);
         Assert.Equal("10", latest.CoefficientText);
         Assert.Equal("Tomás", latest.ConfirmedByText);
-        Assert.Equal("Diferencia de 40.000 cobrada", latest.DifferenceText);
+        Assert.Equal("Diferencia de $ 40.000 cobrada", latest.DifferenceText);
         Assert.Equal("Sin registro", world.ViewModel.History[1].ConfirmedByText);
         Assert.False(world.ViewModel.HasNoAdjustments);
     }
@@ -107,8 +107,8 @@ public class ContractAdjustmentsViewModelTests
         var world = await CorrectingAsync(Correction());
 
         Assert.Equal([(ContractId, LatestId)], world.Desk.CorrectionsOpened);
-        Assert.Equal("112.000", world.ViewModel.NewCanonText);
-        Assert.Equal("100.000", world.ViewModel.PreviousCanonText);
+        Assert.Equal("$ 112.000", world.ViewModel.NewCanonText);
+        Assert.Equal("$ 100.000", world.ViewModel.PreviousCanonText);
         Assert.Equal("Corrección del ajuste vencido el 01/07/2026. Se agrega como un ajuste nuevo; el anterior queda como está.", world.ViewModel.CorrectionText);
         Assert.True(world.ViewModel.IsSummaryOpen);
     }
@@ -131,7 +131,7 @@ public class ContractAdjustmentsViewModelTests
     {
         var world = await CorrectingAsync(Correction(reversed: 40_000m));
 
-        Assert.Equal("La diferencia de 40.000 que cobró el ajuste corregido no se pagó: se revierte al confirmar.", world.ViewModel.DifferenceOutcomeText);
+        Assert.Equal("La diferencia de $ 40.000 que cobró el ajuste corregido no se pagó: se revierte al confirmar.", world.ViewModel.DifferenceOutcomeText);
     }
 
     /// <summary>Spec Test 60.</summary>
@@ -140,7 +140,7 @@ public class ContractAdjustmentsViewModelTests
     {
         var world = await CorrectingAsync(Correction(paidStays: 40_000m));
 
-        Assert.Equal("La diferencia de 40.000 ya se pagó: queda como está y se resuelve a mano.", world.ViewModel.DifferenceOutcomeText);
+        Assert.Equal("La diferencia de $ 40.000 ya se pagó: queda como está y se resuelve a mano.", world.ViewModel.DifferenceOutcomeText);
         Assert.False(world.ViewModel.HasDifference);
     }
 
@@ -150,7 +150,7 @@ public class ContractAdjustmentsViewModelTests
         var world = await CorrectingAsync(Correction(offer: new DifferenceOffer(50_000m, [July])));
 
         Assert.True(world.ViewModel.HasDifference);
-        Assert.Equal("Diferencia de 50.000 por el mes 07/2026, ya cobrado con el canon anterior.", world.ViewModel.DifferenceText);
+        Assert.Equal("Diferencia de $ 50.000 por el mes 07/2026, ya cobrado con el canon anterior.", world.ViewModel.DifferenceText);
         Assert.False(world.ViewModel.ChargeDifference);
     }
 
@@ -169,7 +169,7 @@ public class ContractAdjustmentsViewModelTests
         Assert.Equal([(correction, true)], world.Desk.CorrectionsConfirmed);
         Assert.Empty(world.Desk.Confirmed);
         Assert.False(world.ViewModel.IsSummaryOpen);
-        Assert.Equal("Ajuste corregido: el canon pasa a 112.000 desde 12/2026.", world.ViewModel.ConfirmedMessage);
+        Assert.Equal("Ajuste corregido: el canon pasa a $ 112.000 desde 12/2026.", world.ViewModel.ConfirmedMessage);
         Assert.Equal("Avise a Maria Prueba del nuevo canon. El sistema no le envía nada.", world.ViewModel.NoticeReminder);
         Assert.Equal(2, world.Desk.HistoryAsked.Count);
         Assert.Equal(112_000m, world.Detail.Detail!.MonthlyRent);

@@ -34,7 +34,7 @@ public static class NoticesTexts
 
     /// <summary>A press that failed as a whole. What Gmail accepted before the failure is recorded and shows as already sent.</summary>
     public const string SendFailed =
-        "No se pudo completar el envío. Actualizá la lista: los avisos que salieron figuran como ya enviados.";
+        "No se pudo completar el envío. Actualice la lista: los avisos que salieron figuran como ya enviados.";
 
     public const string SaveFailed = "No se pudo guardar la casilla de Gmail en esta PC.";
 }

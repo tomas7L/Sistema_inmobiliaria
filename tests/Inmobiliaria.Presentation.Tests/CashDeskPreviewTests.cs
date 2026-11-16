@@ -23,7 +23,7 @@ public class CashDeskPreviewTests
         var request = Assert.Single(kit.PreviewRequests);
         Assert.Equal(new CollectionRequest(account.AccountId, null, null, 0m), request);
         Assert.Equal(DeskState.Owed, desk.State);
-        Assert.Equal("598.260", desk.LedgerFigureText);
+        Assert.Equal("$ 598.260", desk.LedgerFigureText);
         Assert.Equal("01/2026", desk.PeriodText);
     }
 
@@ -208,7 +208,7 @@ public class CashDeskPreviewTests
 
         desk.SeguroText = "4.000";
         await desk.PreviewInFlight;
-        Assert.Equal(("598.260", "602.260"), (desk.LedgerFigureText, desk.LocatarioTotalText));
+        Assert.Equal(("$ 598.260", "$ 602.260"), (desk.LedgerFigureText, desk.LocatarioTotalText));
 
         await TypeHandedAsync(desk, "602.260");
         Assert.Equal(CollectionRefusal.AmountNotTotal.OperatorText(), desk.RefusalMessage);
@@ -231,7 +231,7 @@ public class CashDeskPreviewTests
         await desk.PreviewInFlight;
 
         Assert.Equal(1_250.80m, kit.PreviewRequests[^1].Seguro);
-        Assert.Equal("1.250", desk.LocatarioLines.Single(l => l.Label == "Seguro").AmountText);
+        Assert.Equal("$ 1.250", desk.LocatarioLines.Single(l => l.Label == "Seguro").AmountText);
     }
 
     /// <summary>A value that is not a number is named, and no preview is requested for it.</summary>
@@ -268,8 +268,8 @@ public class CashDeskPreviewTests
         slow.SetResult(PreviewFor(new CollectionRequest(Guid.Empty, null, null, 0m, Seguro: 1m), 700_000m, Today));
         await older;
 
-        Assert.Equal("598.260", desk.LedgerFigureText);
-        Assert.Equal("2", desk.LocatarioLines.Single(l => l.Label == "Seguro").AmountText);
+        Assert.Equal("$ 598.260", desk.LedgerFigureText);
+        Assert.Equal("$ 2", desk.LocatarioLines.Single(l => l.Label == "Seguro").AmountText);
         Assert.False(desk.Runner.IsBusy);
     }
 
@@ -306,7 +306,7 @@ public class CashDeskPreviewTests
         await older;
 
         Assert.Null(desk.Runner.ErrorMessage);
-        Assert.Equal("2", desk.LocatarioLines.Single(l => l.Label == "Seguro").AmountText);
+        Assert.Equal("$ 2", desk.LocatarioLines.Single(l => l.Label == "Seguro").AmountText);
     }
 
     /// <summary>

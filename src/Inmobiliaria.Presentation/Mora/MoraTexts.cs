@@ -10,7 +10,7 @@ public static class MoraTexts
 
     public const string Empty = "No hay ninguna cuenta en mora.";
 
-    public const string AccountGone = "Esta cuenta ya no se puede abrir en la caja. Actualizá la lista.";
+    public const string AccountGone = "Esta cuenta ya no se puede abrir en la caja. Actualice la lista.";
 
     public static string FrozenOn(string date) => $"Recargo congelado el {date}";
 }

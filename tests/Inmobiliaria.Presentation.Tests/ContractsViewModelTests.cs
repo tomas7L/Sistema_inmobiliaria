@@ -94,7 +94,7 @@ public class ContractsViewModelTests
         var cancelado = viewModel.Contracts.Single(r => r.Id == Cancelado.Id);
 
         Assert.Equal("28/02/2027", vigente.EndText);
-        Assert.Equal("428.025", vigente.RentText);
+        Assert.Equal("$ 428.025", vigente.RentText);
         Assert.Equal("31/10/2026", finalizado.EndText);
         Assert.Equal("Finalizado", finalizado.StatusText);
         Assert.Equal("Cancelado por error de carga", cancelado.StatusText);

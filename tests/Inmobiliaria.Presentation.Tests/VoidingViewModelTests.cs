@@ -116,8 +116,8 @@ public class VoidingViewModelTests
         var voiding = await PreviewedAsync(kit, UserRole.Empleado);
 
         Assert.Equal((kit.Payment.Locatario.ReciboId, "Cobrado por error", UserRole.Empleado), kit.Desk.VoidPreviews.Single());
-        Assert.Equal(["Corrección: 500.000", "Corrección: -98.260"], voiding.Corrections);
-        Assert.Equal("598.260", voiding.ResultingAmountOwedText);
+        Assert.Equal(["Corrección: $ 500.000", "Corrección: -$ 98.260"], voiding.Corrections);
+        Assert.Equal("$ 598.260", voiding.ResultingAmountOwedText);
         Assert.Equal("Se anularán los recibos N° 31001 y N° 31002.", voiding.AnnulmentsText);
         Assert.True(voiding.ConfirmCommand.CanExecute(null));
     }
@@ -169,7 +169,7 @@ public class VoidingViewModelTests
         Assert.Equal(1, kit.Desk.VoidCalls);
         Assert.Equal(2, kit.Desk.VoidPreviews.Count);
         Assert.Equal(VoidingRefusal.PreviewStale.OperatorText(), voiding.StaleMessage);
-        Assert.Equal("610.000", voiding.ResultingAmountOwedText);
+        Assert.Equal("$ 610.000", voiding.ResultingAmountOwedText);
         Assert.True(voiding.ConfirmCommand.CanExecute(null));
         Assert.Null(voiding.DoneMessage);
     }
