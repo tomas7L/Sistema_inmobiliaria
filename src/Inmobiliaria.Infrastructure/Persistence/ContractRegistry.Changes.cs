@@ -105,7 +105,7 @@ public sealed partial class ContractRegistry
             contractId,
             locked =>
             {
-                if (ContractLifecycleRules.CheckNotice(locked.Contract.Status, noticeDate, moveOutDate, _clock.Today) is { } refusal)
+                if (ContractLifecycleRules.CheckNotice(locked.Contract.Status, locked.Contract.StartDate, noticeDate, moveOutDate, _clock.Today) is { } refusal)
                 {
                     return Task.FromResult<ContractResult?>(ContractResult.Refused(refusal));
                 }
@@ -390,6 +390,12 @@ public sealed partial class ContractRegistry
         if (locked.Contract.EndReason == EndReason.LoadedByMistake)
         {
             return ContractResult.Refused(ContractRefusal.ContractCancelled);
+        }
+
+        var tenant = locked.Contract.Parties.FirstOrDefault(p => p.Role == PartyRole.Tenant)?.PartyId;
+        if (ContractDraftRules.TenantIsCodebtor(tenant, wanted))
+        {
+            return ContractResult.Refused(ContractRefusal.TenantIsCodebtor);
         }
 
         var persons = await _context.Parties.AsNoTracking().Where(p => wanted.Contains(p.Id)).ToDictionaryAsync(p => p.Id, ct);

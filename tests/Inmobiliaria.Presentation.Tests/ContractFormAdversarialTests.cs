@@ -19,7 +19,7 @@ public class ContractFormAdversarialTests
 
     private static async Task<ContractFormViewModel> FilledAsync(FakeContractRegistry port, bool admin = false)
     {
-        var viewModel = new ContractFormViewModel(port, admin) { Tenant = Juan };
+        var viewModel = new ContractFormViewModel(port, admin, new FakeClock(new DateOnly(2026, 11, 15))) { Tenant = Juan };
         await viewModel.AddLessorCommand.ExecuteAsync(Ana);
         viewModel.Units.Add(new ContractFormUnit(Unit()));
         viewModel.StartDate = new DateOnly(2026, 12, 1);
@@ -42,7 +42,8 @@ public class ContractFormAdversarialTests
 
         await viewModel.SaveCommand.ExecuteAsync(null);
 
-        Assert.NotNull(viewModel.RefusalMessage);
+        Assert.NotNull(viewModel.Errors[ContractField.Shares]);
+        Assert.Empty(port.Created);
     }
 
     /// <summary>Too large for a decimal: the form refuses it itself and the port is never called.</summary>
@@ -55,18 +56,21 @@ public class ContractFormAdversarialTests
 
         await viewModel.SaveCommand.ExecuteAsync(null);
 
-        Assert.Equal(ContractRefusal.RentNotWholePositive.OperatorText(), viewModel.RefusalMessage);
+        Assert.Equal(ContractRefusal.RentNotWholePositive.OperatorText(), viewModel.Errors[ContractField.Rent]);
         Assert.Empty(port.Created);
     }
 
-    /// <summary>Whatever parses is the port's to judge, so the form sends it as typed. The expected value is invariant text.</summary>
+    /// <summary>
+    /// Odd canons that parse are judged by the form itself (spec Decision 44): beyond the bound, with cents, zero or negative,
+    /// each is refused beside the canon and the port is never called.
+    /// </summary>
     [Theory]
-    [InlineData("79228162514264337593543950335", "79228162514264337593543950335")]
-    [InlineData("1,123456789012345678901234567890123", "1.1234567890123456789012345679")]
-    [InlineData("-1", "-1")]
-    [InlineData("0", "0")]
-    [InlineData("1.000.000.000.000", "1000000000000")]
-    public async Task OddCanonsThatParse_ReachThePortAsTyped(string typed, string expected)
+    [InlineData("79228162514264337593543950335")]
+    [InlineData("1,123456789012345678901234567890123")]
+    [InlineData("-1")]
+    [InlineData("0")]
+    [InlineData("1.000.000.000.000")]
+    public async Task OddCanonsThatParse_AreRefusedByTheForm(string typed)
     {
         var port = new FakeContractRegistry();
         var viewModel = await FilledAsync(port);
@@ -74,8 +78,21 @@ public class ContractFormAdversarialTests
 
         await viewModel.SaveCommand.ExecuteAsync(null);
 
-        Assert.Equal(decimal.Parse(expected, CultureInfo.InvariantCulture), Assert.Single(port.Created).Draft.MonthlyRent);
-        Assert.Null(viewModel.RefusalMessage);
+        Assert.Equal(ContractRefusal.RentNotWholePositive.OperatorText(), viewModel.Errors[ContractField.Rent]);
+        Assert.Empty(port.Created);
+    }
+
+    /// <summary>The largest whole canon the column holds reaches the port as typed.</summary>
+    [Fact]
+    public async Task TheLargestWholeCanon_ReachesThePortAsTyped()
+    {
+        var port = new FakeContractRegistry();
+        var viewModel = await FilledAsync(port);
+        viewModel.MonthlyRentText = "999.999.999.999";
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal(999_999_999_999m, Assert.Single(port.Created).Draft.MonthlyRent);
     }
 
     [Fact]

@@ -21,12 +21,20 @@ public static class ContractLifecycleRules
         return due > endDate && !(cutoverDate is { } cutover && due <= cutover) ? month : null;
     }
 
-    /// <summary>Why notice cannot be recorded, or null: only from <c>Active</c>, not after today, and a move-out not before it.</summary>
-    public static ContractRefusal? CheckNotice(ContractStatus status, DateOnly noticeDate, DateOnly moveOutDate, DateOnly today)
+    /// <summary>
+    /// Why notice cannot be recorded, or null: only from <c>Active</c>, not before the contract started (spec Decision 51), not
+    /// after today, and a move-out not before it.
+    /// </summary>
+    public static ContractRefusal? CheckNotice(ContractStatus status, DateOnly startDate, DateOnly noticeDate, DateOnly moveOutDate, DateOnly today)
     {
         if (status != ContractStatus.Active)
         {
             return ContractRefusal.NoticeNeedsActive;
+        }
+
+        if (noticeDate < startDate)
+        {
+            return ContractRefusal.NoticeBeforeStart;
         }
 
         if (noticeDate > today)

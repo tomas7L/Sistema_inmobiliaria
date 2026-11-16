@@ -237,7 +237,7 @@ public class ContractClauseViewModelTests
     [Fact]
     public void TheCreationForm_ShowsTheMonths_ForTheOffsetInForce()
     {
-        var viewModel = new ContractFormViewModel(new FakeContractRegistry(), false)
+        var viewModel = new ContractFormViewModel(new FakeContractRegistry(), false, new FakeClock(new DateOnly(2026, 11, 15)))
         {
             ClauseIndexNames = Names,
             StartDate = new DateOnly(2026, 1, 1),

@@ -20,7 +20,7 @@ public class ContractFormViewModelTests
 
     private static async Task<ContractFormViewModel> FilledAsync(FakeContractRegistry port, bool admin = false)
     {
-        var viewModel = new ContractFormViewModel(port, admin) { Tenant = Juan };
+        var viewModel = new ContractFormViewModel(port, admin, new FakeClock(new DateOnly(2026, 11, 15))) { Tenant = Juan };
         await viewModel.AddLessorCommand.ExecuteAsync(Ana);
         viewModel.Units.Add(new ContractFormUnit(Unit()));
         viewModel.StartDate = new DateOnly(2026, 12, 1);
@@ -30,7 +30,10 @@ public class ContractFormViewModelTests
         return viewModel;
     }
 
-    /// <summary>Text that is no number is refused, never replaced by the suggestion; a number out of range is the port's to refuse.</summary>
+    /// <summary>
+    /// Text that is no number is refused, never replaced by the suggestion; a number out of range is refused by the form too
+    /// (spec Decision 44), and one in range reaches the port as typed.
+    /// </summary>
     [Fact]
     public async Task ATypedClauseOffset_IsNeverReplacedByTheSuggestion()
     {
@@ -45,12 +48,18 @@ public class ContractFormViewModelTests
         await viewModel.SaveCommand.ExecuteAsync(null);
 
         Assert.Empty(port.Created);
-        Assert.Equal(ContractRefusal.ClauseInvalid.OperatorText(), viewModel.RefusalMessage);
+        Assert.Equal(ContractRefusal.ClauseInvalid.OperatorText(), viewModel.Errors[ContractField.Clause]);
 
         viewModel.ClauseOffsetText = "4";
         await viewModel.SaveCommand.ExecuteAsync(null);
 
-        Assert.Equal(4, Assert.Single(port.Created).Draft.Clause!.WindowOffsetMonths);
+        Assert.Empty(port.Created);
+        Assert.Equal(ContractRefusal.ClauseInvalid.OperatorText(), viewModel.Errors[ContractField.Clause]);
+
+        viewModel.ClauseOffsetText = "2";
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal(2, Assert.Single(port.Created).Draft.Clause!.WindowOffsetMonths);
     }
 
     /// <summary>Spec Decision 15: an offset left blank takes the suggestion of the indices chosen, as the months shown said.</summary>
@@ -240,6 +249,7 @@ public class ContractFormViewModelTests
         var port = new FakeContractRegistry();
         var viewModel = await FilledAsync(port, admin: true);
         Assert.True(viewModel.IsCutoverOffered);
+        viewModel.StartDate = new DateOnly(2026, 6, 1);
         viewModel.CutoverDate = new DateOnly(2026, 6, 30);
 
         await viewModel.SaveCommand.ExecuteAsync(null);
@@ -253,7 +263,7 @@ public class ContractFormViewModelTests
     {
         var port = new FakeContractRegistry();
         port.Rates[Ana.Id] = 6m;
-        var viewModel = new ContractFormViewModel(port, false);
+        var viewModel = new ContractFormViewModel(port, false, new FakeClock(new DateOnly(2026, 11, 15)));
 
         await viewModel.AddLessorCommand.ExecuteAsync(Ana);
 
@@ -272,11 +282,11 @@ public class ContractFormViewModelTests
     {
         var port = new FakeContractRegistry();
         port.Rates[Ana.Id] = 6m;
-        var noHistory = new ContractFormViewModel(port, false);
+        var noHistory = new ContractFormViewModel(port, false, new FakeClock(new DateOnly(2026, 11, 15)));
         await noHistory.AddLessorCommand.ExecuteAsync(Raul);
         Assert.Equal(string.Empty, noHistory.HonorariosText);
 
-        var typed = new ContractFormViewModel(port, false) { HonorariosText = "0" };
+        var typed = new ContractFormViewModel(port, false, new FakeClock(new DateOnly(2026, 11, 15))) { HonorariosText = "0" };
         await typed.AddLessorCommand.ExecuteAsync(Ana);
         Assert.Equal("0", typed.HonorariosText);
     }
@@ -284,7 +294,7 @@ public class ContractFormViewModelTests
     [Fact]
     public async Task TheSameLessorTwice_IsOneLessor()
     {
-        var viewModel = new ContractFormViewModel(new FakeContractRegistry(), false);
+        var viewModel = new ContractFormViewModel(new FakeContractRegistry(), false, new FakeClock(new DateOnly(2026, 11, 15)));
 
         await viewModel.AddLessorCommand.ExecuteAsync(Ana);
         await viewModel.AddLessorCommand.ExecuteAsync(Ana);
@@ -378,7 +388,8 @@ public class ContractFormViewModelTests
 
         await viewModel.SaveCommand.ExecuteAsync(null);
 
-        Assert.Equal(expected.OperatorText(), viewModel.RefusalMessage);
+        Assert.Equal(expected.OperatorText(), viewModel.Errors[ExpectedField(field)]);
+        Assert.Equal(1, viewModel.Errors.Count);
         Assert.Empty(port.Created);
     }
 
@@ -394,7 +405,88 @@ public class ContractFormViewModelTests
 
         await viewModel.SaveCommand.ExecuteAsync(null);
 
-        Assert.Equal(ContractRefusal.RentNotWholePositive.OperatorText(), viewModel.RefusalMessage);
+        Assert.Equal(ContractRefusal.RentNotWholePositive.OperatorText(), viewModel.Errors[ContractField.Rent]);
+        Assert.Null(viewModel.Errors[ContractField.Shares]);
+        Assert.Empty(port.Created);
+    }
+
+    private static ContractField ExpectedField(string field) => field switch
+    {
+        "rent" => ContractField.Rent,
+        "dueDay" => ContractField.DueDay,
+        "rate" => ContractField.Honorarios,
+        "fee" => ContractField.FeePlan,
+        "interval" => ContractField.Clause,
+        _ => ContractField.Shares,
+    };
+
+    /// <summary>
+    /// Spec Test 106 and Requirement 27's scenario: no tenant, an end before the start and a canon of "abc" give three errors
+    /// together, each beside its field, under one summary, and the port is not called.
+    /// </summary>
+    [Fact]
+    public async Task ThreeMistakes_ShowThreeErrorsTogether_AndCallNoPort()
+    {
+        var port = new FakeContractRegistry();
+        var viewModel = await FilledAsync(port);
+        viewModel.Tenant = null;
+        viewModel.NominalEndDate = new DateOnly(2026, 6, 30);
+        viewModel.MonthlyRentText = "abc";
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal(3, viewModel.Errors.Count);
+        Assert.Equal(ContractRefusal.TenantMissing.OperatorText(), viewModel.Errors[ContractField.Tenant]);
+        Assert.Equal(ContractRefusal.EndBeforeStart.OperatorText(), viewModel.Errors[ContractField.EndDate]);
+        Assert.Equal(ContractRefusal.RentNotWholePositive.OperatorText(), viewModel.Errors[ContractField.Rent]);
+        Assert.Equal(ContractFieldErrors.SummaryText, viewModel.Errors.Summary);
+        Assert.Null(viewModel.RefusalMessage);
+        Assert.Empty(port.Created);
+    }
+
+    /// <summary>Spec Test 113 on the form: the tenant among the codeudores is refused beside the codeudores.</summary>
+    [Fact]
+    public async Task TheTenantAmongTheCodebtors_IsRefusedBesideThem()
+    {
+        var port = new FakeContractRegistry();
+        var viewModel = await FilledAsync(port);
+        viewModel.Codebtors.Add(Juan);
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal(ContractRefusal.TenantIsCodebtor.OperatorText(), viewModel.Errors[ContractField.Codebtors]);
+        Assert.Empty(port.Created);
+    }
+
+    /// <summary>Fixing the mistakes and saving again clears every error and sends the contract.</summary>
+    [Fact]
+    public async Task FixingTheMistakes_ClearsTheErrors_AndSends()
+    {
+        var port = new FakeContractRegistry();
+        var viewModel = await FilledAsync(port);
+        viewModel.MonthlyRentText = "abc";
+        await viewModel.SaveCommand.ExecuteAsync(null);
+        Assert.Equal(1, viewModel.Errors.Count);
+
+        viewModel.MonthlyRentText = "450.000";
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal(0, viewModel.Errors.Count);
+        Assert.Null(viewModel.Errors.Summary);
+        Assert.Single(port.Created);
+    }
+
+    /// <summary>A start before this month is caught by the form, which now reads the agency's date.</summary>
+    [Fact]
+    public async Task AStartBeforeThisMonth_IsRefusedBesideTheStart()
+    {
+        var port = new FakeContractRegistry();
+        var viewModel = await FilledAsync(port);
+        viewModel.StartDate = new DateOnly(2026, 10, 1);
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal(ContractRefusal.StartBeforeCurrentMonth.OperatorText(), viewModel.Errors[ContractField.StartDate]);
         Assert.Empty(port.Created);
     }
 

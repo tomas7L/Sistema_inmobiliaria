@@ -123,7 +123,7 @@ public sealed class ContractCreationRoleTests
         await using var world = await DeskWorld.CreateAsync(_fixture);
         var today = DeskWorld.Today;
         var current = DeskWorld.FirstOfMonth(today);
-        var tenant = new Party(Guid.NewGuid(), "Juan", "Pérez");
+        var tenant = new Party(Guid.NewGuid(), "Juan", "Pérez", email: "juan@ejemplo.test");
         var lessor = new Party(Guid.NewGuid(), "Ana", "Gómez");
         var unit = new PropertyUnit(Guid.NewGuid(), new Address("Alem", "1", "Sunchales", "Santa Fe", "2322"));
         await using (var seed = world.NewContext())
@@ -173,7 +173,7 @@ public sealed class ContractCreationRoleTests
     {
         Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
         await using var world = await DeskWorld.CreateAsync(_fixture);
-        var tenant = new Party(Guid.NewGuid(), "Juan", "Pérez");
+        var tenant = new Party(Guid.NewGuid(), "Juan", "Pérez", email: "juan@ejemplo.test");
         var lessor = new Party(Guid.NewGuid(), "Ana", "Gómez");
         var unit = new PropertyUnit(Guid.NewGuid(), new Address("Alem", "1", "Sunchales", "Santa Fe", "2322"));
         var index = new EconomicIndex(Guid.NewGuid(), "OLD-" + Guid.NewGuid().ToString("N")[..6]);

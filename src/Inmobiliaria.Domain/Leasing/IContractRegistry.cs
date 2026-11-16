@@ -221,6 +221,18 @@ public enum ContractRefusal
     StartNotOnTheFirst,
     EndBeforeStart,
 
+    /// <summary>The end is more than 50 years after the start, the legal ceiling for any lease (spec Decision 51).</summary>
+    EndPastLegalCeiling,
+
+    /// <summary>The tenant is also among the codeudores of the same contract (spec Decision 51).</summary>
+    TenantIsCodebtor,
+
+    /// <summary>The fee plan's amount has cents; it is in whole pesos (spec Decision 51).</summary>
+    FeePlanNotWholePesos,
+
+    /// <summary>The notice is dated before the contract started (spec Decision 51).</summary>
+    NoticeBeforeStart,
+
     /// <summary>A start before the current month carries a cutover date, which only an Admin can load (spec Decision 31).</summary>
     StartBeforeCurrentMonth,
     CutoverAfterToday,
@@ -285,12 +297,19 @@ public enum ContractWarningKind
 
     /// <summary>A unit is under a <c>PendingTermination</c> contract, with its move-out date.</summary>
     UnitBeingVacated,
+
+    /// <summary>The tenant has no email, so the system's notices will not reach them (spec Decision 51).</summary>
+    TenantWithoutEmail,
 }
 
 /// <param name="Kind">What it warns about.</param>
 /// <param name="Date">The month overdue, or the move-out date.</param>
 /// <param name="Unit">The unit being vacated.</param>
-public sealed record ContractWarning(ContractWarningKind Kind, DateOnly? Date = null, string? Unit = null);
+/// <param name="Kind">What is warned about.</param>
+/// <param name="Date">The date it names, for a passed due date or a move-out.</param>
+/// <param name="Unit">The unit it names, for one being vacated.</param>
+/// <param name="Person">The person it names, for a tenant without email.</param>
+public sealed record ContractWarning(ContractWarningKind Kind, DateOnly? Date = null, string? Unit = null, string? Person = null);
 
 /// <param name="Refusal">Why nothing was written, or null.</param>
 /// <param name="Contract">The contract written, on success.</param>
@@ -326,7 +345,11 @@ public static class ContractRefusalText
         ContractRefusal.UnitMissing => "Elija al menos una unidad.",
         ContractRefusal.DatesMissing => "Escriba la fecha de inicio y la de fin.",
         ContractRefusal.StartNotOnTheFirst => "Un contrato empieza a regir el día 1 del mes.",
-        ContractRefusal.EndBeforeStart => "La fecha de fin no puede ser anterior a la de inicio.",
+        ContractRefusal.EndBeforeStart => "La fecha de fin tiene que ser posterior a la de inicio.",
+        ContractRefusal.EndPastLegalCeiling => "Un contrato no puede durar más de 50 años, el máximo que permite la ley.",
+        ContractRefusal.TenantIsCodebtor => "El inquilino no puede ser también codeudor del mismo contrato.",
+        ContractRefusal.FeePlanNotWholePesos => "El monto del plan de honorarios va en pesos enteros, sin centavos.",
+        ContractRefusal.NoticeBeforeStart => "La fecha del aviso no puede ser anterior al inicio del contrato.",
         ContractRefusal.StartBeforeCurrentMonth => "Un contrato anterior al mes actual lleva fecha de corte, y tiene que cargarlo un Admin.",
         ContractRefusal.CutoverAfterToday => "La fecha de corte no puede ser posterior a hoy.",
         ContractRefusal.CutoverBeforeStart => "La fecha de corte no puede ser anterior al inicio del contrato.",
@@ -375,6 +398,8 @@ public static class ContractRefusalText
                 $"El primer vencimiento ya pasó: {Months[warning.Date!.Value.Month - 1]} queda vencido.",
             ContractWarningKind.UnitBeingVacated =>
                 $"{warning.Unit} se desocupa el {warning.Date!.Value:dd/MM/yyyy}.",
+            ContractWarningKind.TenantWithoutEmail =>
+                $"{warning.Person ?? "El inquilino"} no tiene email: los avisos que manda el sistema no le van a llegar.",
             _ => throw new ArgumentOutOfRangeException(nameof(warning), warning.Kind, "A warning without operator text."),
         };
     }
