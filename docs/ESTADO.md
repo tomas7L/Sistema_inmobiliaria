@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-14 (cierre), con las validaciones de Personas mergeadas (#136)_
+_Última actualización: 2026-11-16 (cierre), con la cláusula leyendo el catálogo de índices mergeada (#142)_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -8,22 +8,21 @@ _Última actualización: 2026-11-14 (cierre), con las validaciones de Personas m
 
 ## En qué estamos
 
-**Change activo: `gestion-de-alquileres`, Phase 12 (Pantallas).** Hechas: el menú (12.1, 12.2, #134), el tema y la pantalla de
-Personas (#135) y sus validaciones (#136). La spec sumó las Decisiones 43 a 55 y los Requirements 26 a 30 (validación de todo lo que
-escribe el operador). `limite-de-intentos-de-login` quedó probado en vivo y archivado (#133).
+**Change activo: `gestion-de-alquileres`, Phase 12 (Pantallas).** Con vista: Personas, Propiedades e Índices. **Contratos y
+Ajustes tienen toda la lógica hecha pero no su vista**, que espera las pantallas finales de Mateo (está enfermo, puede tardar).
+El detalle de lo hecho y lo que falta: `gestion-de-alquileres/tasks.md`, 12.3d y 12.3e.
 
 ## Próximos pasos
 
-1. **Tarea 12.3e, siguiente pantalla: Propiedades**, con su vista y sus validaciones (Requirement 28: provincia de una lista,
-   largos máximos). Antes de mostrarla, revisar las lecciones de Engram `conventions/s12-screen-lessons`.
-2. **Mateo:** Tomás le manda el mensaje del 2026-11-14: redibujar **cada pantalla que obliga a bajar** para que entre en ~950 px
-   de alto (las de 1000 a 1500 px seguro, las de 900 al límite), el borde rojo en el campo con error y los textos nuevos. **El
-   diseño lo cambia Mateo y nosotros lo copiamos:** un achicado propio del tema se probó y se revirtió el mismo día (Engram
-   `conventions/s12-screen-fit`). Lo que conteste puede tocar `Themes/Controls.xaml` y `Views/PartiesView.xaml`.
-3. **Reunión con Nicolás, la semana del 2026-11-16:** `lectura-reunion-nicolas.md` (raíz, local). Se sumaron N12 a N22 (sección C2;
-   quedan ocho, Tomás respondió tres).
-4. **Pendiente de la 12.3e:** alinear el control de email del buzón de avisos con la Decisión 54.
-5. **Panorama de lo que falta:** Engram `plan/remaining-work-panorama`. `carga-inicial` espera el Excel de la reunión.
+1. **Cuando lleguen las pantallas de Mateo:** las vistas de Contratos (listado, detalle, formulario, cláusula) y Ajustes,
+   copiando su lienzo. La lógica ya está: `src/Inmobiliaria.Presentation/Contracts/` y `Adjustments/`. Antes de mostrar cada
+   una, revisar `memory/wpf-screen-lessons.md` y Engram `conventions/s12-screen-lessons`. Si cambia tamaños de las ya hechas,
+   se toca `Themes/Controls.xaml` y cada `Views/*View.xaml`; la lógica no.
+2. **Mientras tanto, sin Mateo:** de 12.3d quedan los textos fuera de pantalla ("Actualice", "un Administrador", el pie del
+   login, "$" antes de los importes y en el recibo impreso) y **Cerrar sesión**. De 12.3e, alinear el email del buzón de avisos
+   con la Decisión 54.
+3. **Reunión con Nicolás:** `lectura-reunion-nicolas.md` (raíz, local), preguntas N1 a N22 que siguen abiertas.
+4. **Panorama de lo que falta:** Engram `plan/remaining-work-panorama`. `carga-inicial` espera el Excel de la reunión.
 
 ## Pendientes / bloqueos
 
@@ -35,7 +34,6 @@ escribe el operador). `limite-de-intentos-de-login` quedó probado en vivo y arc
 - **Seguimiento sin urgencia del login:** la espera usa el reloj de Windows (archivo del change, `archive-report.md`).
 - **La contraseña de aplicación de Gmail de la prueba** (credencial `SistemaInmobiliaria/Gmail` en esta PC): Tomás la revoca en
   su cuenta de Google cuando ya no la necesite.
-- **El botón de Traer índices todavía no se apretó en una pantalla:** no hay vista hasta S12, `tasks.md` 12.3b. Se probó contra las fuentes reales con un programa temporal.
 - **Producción no tiene backups:** el plan gratis de Supabase no hace backups automáticos. Pro (USD 25/mes) guarda uno por día
   durante 7 días; recomendado con convicción fuerte, para llevar a la charla de precio. Detalle en Engram
   `decisions/notificaciones-c-and-pro`.
@@ -77,7 +75,7 @@ escribe el operador). `limite-de-intentos-de-login` quedó probado en vivo y arc
 | | |
 |---|---|
 | **Docker** | **Sí**, para la suite completa (Testcontainers `postgres:17.6`) |
-| **Supabase** | **PRUEBA** solo al final de cada pantalla, cuando Tomás la prueba con capturas. Antes de abrir la app, `grep` del `appsettings.json` compilado |
+| **Supabase** | **PRUEBA** solo al final de cada pantalla con vista, cuando Tomás la prueba con capturas. Antes de abrir la app, `grep` del `appsettings.json` compilado. La lógica sin vista no la necesita |
 | **Límite diario** | Tomás pasa el porcentaje al arrancar |
 
 ## Para retomar
@@ -96,7 +94,7 @@ dotnet test Inmobiliaria.Core.slnf --configuration Release
 dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure
 ```
 
-Esperado en `develop` (#136): **2297 pasados (Domain 783, Presentation 581, Infrastructure 933), 0 fallas, 0 omitidos**, build
+Esperado en `develop` (#142): **2439 pasados (Domain 842, Presentation 650, Infrastructure 947), 0 fallas, 0 omitidos**, build
 sin advertencias y el modelo en sintonía con `20261113165451_RevokeSupabaseApiRoles`. Si el build de Desktop falla con MSB3027,
 la aplicación está abierta y tiene tomadas sus DLL: cerrarla. La app la abre siempre el asistente (Tomás, 2026-11-13).
 
@@ -112,7 +110,7 @@ máquina dotnet responde en español ("Superado", "Con error", "Omitido").
 | Para qué | Dónde |
 |---|---|
 | Cómo trabajamos | `CLAUDE.md` (raíz) |
-| Lo último cerrado | `openspec/changes/archive/2026-11-14-limite-de-intentos-de-login/archive-report.md` |
+| Lo hecho y lo que falta de pantallas | `openspec/changes/gestion-de-alquileres/tasks.md`, 12.3c a 12.3e |
 | Las pantallas a programar | `gestion-de-alquileres/tasks.md` (S12: 12.3d, 12.3e), `notificaciones/tasks.md` (Phase 4), `mora/tasks.md` (Phase 2) |
 | Qué falta de alquileres | `openspec/changes/gestion-de-alquileres/spec.md` y `proposal.md` |
 | Reglas de lo que falta | `openspec/specs/lease-contract`, `party-registry`, `unit-registry`, `economic-index`, `rent-adjustment`, `contract-account` |
