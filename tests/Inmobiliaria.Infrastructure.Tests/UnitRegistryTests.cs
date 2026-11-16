@@ -283,6 +283,38 @@ public sealed class UnitRegistryTests
         Assert.Equal(before, await UnitRowAsync(world, unit.Id));
     }
 
+    /// <summary>
+    /// Spec Tests 111 and 119 and Decision 48: the port refuses a province off the list, a text past its length and a postal
+    /// code malformed or of another province, each with its own refusal, and stores nothing, both creating and correcting.
+    /// </summary>
+    [SkippableTheory]
+    [InlineData("Sta Fe", null, "2322", UnitRefusal.ProvinceNotInList)]
+    [InlineData("Santa Fe", 81, "2322", UnitRefusal.AddressTooLong)]
+    [InlineData("Santa Fe", null, "23", UnitRefusal.PostalCodeMalformed)]
+    [InlineData("Santa Fe", null, "X5000ABC", UnitRefusal.PostalCodeOfAnotherProvince)]
+    public async Task AnAddressTheRulesRefuse_IsRefused_AndWritesNothing(
+        string province, int? streetLength, string postalCode, UnitRefusal expected)
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+        await using var world = await WorldAsync();
+        var refused = AlemDraft with
+        {
+            Province = province,
+            PostalCode = postalCode,
+            Street = streetLength is { } length ? new string('a', length) : AlemDraft.Street,
+        };
+        var unit = await SavedAsync(Registry(world).CreateAsync(UnitType.Property, AlemDraft, false));
+        var before = await UnitRowAsync(world, unit.Id);
+
+        var created = await Registry(world).CreateAsync(UnitType.Property, refused, true);
+        var relocated = await Registry(world).RelocateAsync(unit.Id, refused, true);
+
+        Assert.Equal(expected, created.Refusal);
+        Assert.Equal(expected, relocated.Refusal);
+        Assert.Equal(1, await CountUnitsAsync(world));
+        Assert.Equal(before, await UnitRowAsync(world, unit.Id));
+    }
+
     /// <summary>Spec Test 9 and Requirement 5's scenario: an identical address warns naming the unit, and the operator can proceed.</summary>
     [SkippableTheory]
     [InlineData("Alem", "1258", "2", "B")]

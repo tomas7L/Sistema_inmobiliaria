@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-14, con `limite-de-intentos-de-login` probado en vivo y archivado_
+_Última actualización: 2026-11-14 (cierre), con las validaciones de Personas mergeadas (#136)_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -8,20 +8,22 @@ _Última actualización: 2026-11-14, con `limite-de-intentos-de-login` probado e
 
 ## En qué estamos
 
-**`limite-de-intentos-de-login` está cerrado:** probado en vivo en PRUEBA y archivado el 2026-11-14
-(`openspec/changes/archive/2026-11-14-limite-de-intentos-de-login/`). Las **pantallas de Mateo están
-cerradas**: 80 pantallas en su lienzo, con las siete correcciones aplicadas y verificadas; lo que nos toca construir está en
-`gestion-de-alquileres/tasks.md` 12.3d. `notificaciones`, `mora` y `gestion-de-alquileres` siguen abiertos, esperando S12.
+**Change activo: `gestion-de-alquileres`, Phase 12 (Pantallas).** Hechas: el menú (12.1, 12.2, #134), el tema y la pantalla de
+Personas (#135) y sus validaciones (#136). La spec sumó las Decisiones 43 a 55 y los Requirements 26 a 30 (validación de todo lo que
+escribe el operador). `limite-de-intentos-de-login` quedó probado en vivo y archivado (#133).
 
 ## Próximos pasos
 
-1. **Commit del archivo del login** (Tomás): la prueba en vivo, el spec mergeado y la carpeta movida al archivo.
-2. **Reunión con Nicolás, la semana del 2026-11-16:** todo lo que hay que llevar está en `lectura-reunion-nicolas.md` (raíz,
-   local, fuera de git). Además: cuántas PC entran al sistema (proposal P2 del login) y cómo quiere redactado el mail de los avisos.
-3. **S12 (Pantallas), Phase 4 de `notificaciones` y M2 de `mora`:** ya se pueden programar con el lienzo de Mateo
-   (`gestion-de-alquileres/tasks.md` 12.x y 12.3d, `notificaciones/tasks.md` 4.1 y 4.2, `mora/tasks.md` Phase 2). Incluye
-   "Cerrar sesión", que hoy no existe.
-4. **Panorama de lo que falta:** Engram `plan/remaining-work-panorama`. `carga-inicial` espera el Excel de la reunión.
+1. **Tarea 12.3e, siguiente pantalla: Propiedades**, con su vista y sus validaciones (Requirement 28: provincia de una lista,
+   largos máximos). Antes de mostrarla, revisar las lecciones de Engram `conventions/s12-screen-lessons`.
+2. **Mateo:** Tomás le manda el mensaje del 2026-11-14: redibujar **cada pantalla que obliga a bajar** para que entre en ~950 px
+   de alto (las de 1000 a 1500 px seguro, las de 900 al límite), el borde rojo en el campo con error y los textos nuevos. **El
+   diseño lo cambia Mateo y nosotros lo copiamos:** un achicado propio del tema se probó y se revirtió el mismo día (Engram
+   `conventions/s12-screen-fit`). Lo que conteste puede tocar `Themes/Controls.xaml` y `Views/PartiesView.xaml`.
+3. **Reunión con Nicolás, la semana del 2026-11-16:** `lectura-reunion-nicolas.md` (raíz, local). Se sumaron N12 a N22 (sección C2;
+   quedan ocho, Tomás respondió tres).
+4. **Pendiente de la 12.3e:** alinear el control de email del buzón de avisos con la Decisión 54.
+5. **Panorama de lo que falta:** Engram `plan/remaining-work-panorama`. `carga-inicial` espera el Excel de la reunión.
 
 ## Pendientes / bloqueos
 
@@ -74,8 +76,8 @@ cerradas**: 80 pantallas en su lienzo, con las siete correcciones aplicadas y ve
 
 | | |
 |---|---|
-| **Docker** | **Sí** para la segunda inspección con la suite completa y para S12 (Testcontainers `postgres:17.6`) |
-| **Supabase** | No para programar S12; sí para probarlo en la app. Antes de abrirla, `grep` del `appsettings.json` compilado |
+| **Docker** | **Sí**, para la suite completa (Testcontainers `postgres:17.6`) |
+| **Supabase** | **PRUEBA** solo al final de cada pantalla, cuando Tomás la prueba con capturas. Antes de abrir la app, `grep` del `appsettings.json` compilado |
 | **Límite diario** | Tomás pasa el porcentaje al arrancar |
 
 ## Para retomar
@@ -94,7 +96,7 @@ dotnet test Inmobiliaria.Core.slnf --configuration Release
 dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure
 ```
 
-Esperado en `develop` (#132): **2236 pasados (Domain 738, Presentation 565, Infrastructure 933), 0 fallas, 0 omitidos**, build
+Esperado en `develop` (#136): **2297 pasados (Domain 783, Presentation 581, Infrastructure 933), 0 fallas, 0 omitidos**, build
 sin advertencias y el modelo en sintonía con `20261113165451_RevokeSupabaseApiRoles`. Si el build de Desktop falla con MSB3027,
 la aplicación está abierta y tiene tomadas sus DLL: cerrarla. La app la abre siempre el asistente (Tomás, 2026-11-13).
 
@@ -111,7 +113,7 @@ máquina dotnet responde en español ("Superado", "Con error", "Omitido").
 |---|---|
 | Cómo trabajamos | `CLAUDE.md` (raíz) |
 | Lo último cerrado | `openspec/changes/archive/2026-11-14-limite-de-intentos-de-login/archive-report.md` |
-| Las pantallas a programar | `gestion-de-alquileres/tasks.md` (S12, 12.3d), `notificaciones/tasks.md` (Phase 4), `mora/tasks.md` (Phase 2) |
+| Las pantallas a programar | `gestion-de-alquileres/tasks.md` (S12: 12.3d, 12.3e), `notificaciones/tasks.md` (Phase 4), `mora/tasks.md` (Phase 2) |
 | Qué falta de alquileres | `openspec/changes/gestion-de-alquileres/spec.md` y `proposal.md` |
 | Reglas de lo que falta | `openspec/specs/lease-contract`, `party-registry`, `unit-registry`, `economic-index`, `rent-adjustment`, `contract-account` |
 | Lo que dijo el dueño | `openspec/domain/respuestas-del-dueno.md` |

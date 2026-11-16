@@ -195,6 +195,92 @@
         </Setter>
     </Style>
 
+    <!-- One choice of a list in a pill like the input's, as the province. Chosen, never typed. -->
+    <Style x:Key="Theme.DropdownItem" TargetType="ComboBoxItem">
+        <Setter Property="FontFamily" Value="{StaticResource Theme.Font}" />
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="Foreground" Value="{DynamicResource Theme.Ink}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBoxItem">
+                    <Border x:Name="Row" CornerRadius="10" Padding="12,8" Background="Transparent">
+                        <ContentPresenter />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter Property="FontWeight" Value="SemiBold" />
+                        </Trigger>
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="Row" Property="Background" Value="{DynamicResource Theme.Select}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="Theme.Dropdown" TargetType="ComboBox">
+        <Setter Property="Height" Value="44" />
+        <Setter Property="FontFamily" Value="{StaticResource Theme.Font}" />
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="Foreground" Value="{DynamicResource Theme.Ink}" />
+        <Setter Property="Background" Value="{DynamicResource Theme.Field}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Theme.FieldLine}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="IsEditable" Value="False" />
+        <Setter Property="MaxDropDownHeight" Value="320" />
+        <Setter Property="ItemContainerStyle" Value="{StaticResource Theme.DropdownItem}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBox">
+                    <Grid>
+                        <Border x:Name="Box" CornerRadius="22" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" />
+                        <!-- The same start as the input's text: its 16 of padding plus the 2 the text box keeps. -->
+                        <ContentPresenter Margin="18,0,44,0" VerticalAlignment="Center" IsHitTestVisible="False"
+                                          Content="{TemplateBinding SelectionBoxItem}"
+                                          ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" />
+                        <Path HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,20,0" Data="M0,0 L5,5 L10,0"
+                              Stroke="{DynamicResource Theme.Ink2}" StrokeThickness="2" IsHitTestVisible="False" />
+                        <!-- The whole pill opens the list. -->
+                        <ToggleButton Focusable="False" ClickMode="Press"
+                                      IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                            <ToggleButton.Template>
+                                <ControlTemplate TargetType="ToggleButton">
+                                    <Border Background="Transparent" />
+                                </ControlTemplate>
+                            </ToggleButton.Template>
+                        </ToggleButton>
+                        <Popup x:Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom" VerticalOffset="4"
+                               AllowsTransparency="True" Focusable="False" PopupAnimation="Fade">
+                            <Border Background="{DynamicResource Theme.Field}" BorderBrush="{DynamicResource Theme.FieldLine}"
+                                    BorderThickness="1" CornerRadius="14" Padding="6"
+                                    MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                    MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained" />
+                                </ScrollViewer>
+                            </Border>
+                        </Popup>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource Theme.Ink2}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                            <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource Theme.Focus}" />
+                            <Setter TargetName="Box" Property="BorderThickness" Value="2" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.55" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- One option of a segmented choice, as the role filter. -->
     <Style x:Key="Theme.Segment" TargetType="RadioButton">
         <Setter Property="FontFamily" Value="{StaticResource Theme.Font}" />

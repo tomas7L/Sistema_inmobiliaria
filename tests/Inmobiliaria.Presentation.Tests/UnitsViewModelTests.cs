@@ -95,7 +95,7 @@ public class UnitsViewModelTests
         Assert.Equal(new UnitDraft("Alem", "1258", "Sunchales", "Santa Fe", "2322", "2", "B"), created.Draft);
         Assert.False(created.Accepted);
         Assert.Equal(string.Empty, viewModel.Street);
-        Assert.Equal(string.Empty, viewModel.PostalCode);
+        Assert.Equal(UnitsTexts.DefaultPostalCode, viewModel.PostalCode);
         Assert.Equal(UnitType.Property, viewModel.SelectedType);
         Assert.Equal(lists + 1, port.Lists);
     }
@@ -226,20 +226,64 @@ public class UnitsViewModelTests
         Assert.Null(viewModel.Editing);
     }
 
-    /// <summary>Requirement 5: an incomplete address shows its own text, keeps the form, and writes nothing that was not checked.</summary>
+    /// <summary>
+    /// Requirement 27, Decision 44: every problem of the form at once, each beside its field under one summary, the form
+    /// kept as typed and the port never called.
+    /// </summary>
     [Fact]
-    public async Task AnIncompleteAddress_ShowsItsOwnText_AndKeepsTheForm()
+    public async Task AFormWithSeveralMistakes_ShowsThemAllAtOnce_AndCallsNoPort()
     {
         var port = Port();
-        port.OnCreate = (_, _, _) => UnitResult.Refused(UnitRefusal.AddressIncomplete);
         var viewModel = await LoadedAsync(port);
         viewModel.Street = "Alem";
+        viewModel.Number = string.Empty;
+        viewModel.City = new string('a', 61);
+        viewModel.PostalCode = string.Empty;
 
         await viewModel.SaveCommand.ExecuteAsync(null);
 
-        Assert.Equal(UnitRefusal.AddressIncomplete.OperatorText(), viewModel.RefusalMessage);
+        Assert.Equal(3, viewModel.Errors.Count);
+        Assert.Equal("Escriba el número. Si no tiene, escriba S/N.", viewModel.Errors[UnitField.Number]);
+        Assert.Equal("La localidad admite hasta 60 caracteres.", viewModel.Errors[UnitField.City]);
+        Assert.Equal("Escriba el código postal.", viewModel.Errors[UnitField.PostalCode]);
+        Assert.Null(viewModel.Errors[UnitField.Street]);
+        Assert.Equal(UnitFieldErrors.SummaryText, viewModel.Errors.Summary);
+        Assert.Empty(port.Created);
+        Assert.Equal("Alem", viewModel.Street);
+    }
+
+    /// <summary>Saving again after fixing them clears every error.</summary>
+    [Fact]
+    public async Task FixingTheMistakes_ClearsTheErrors()
+    {
+        var port = Port();
+        var viewModel = await LoadedAsync(port);
+        await viewModel.SaveCommand.ExecuteAsync(null);
+        Assert.NotEqual(0, viewModel.Errors.Count);
+        Fill(viewModel);
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal(0, viewModel.Errors.Count);
+        Assert.Null(viewModel.Errors.Summary);
+        Assert.Single(port.Created);
+    }
+
+    /// <summary>A refusal only the port can give shows its own text and keeps the form.</summary>
+    [Fact]
+    public async Task ARefusalFromThePort_ShowsItsOwnText_AndKeepsTheForm()
+    {
+        var port = Port();
+        port.OnRelocate = (_, _, _) => UnitResult.Refused(UnitRefusal.UnitNotFound);
+        var viewModel = await LoadedAsync(port);
+        viewModel.EditCommand.Execute(Row(viewModel, AlemId));
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal(UnitRefusal.UnitNotFound.OperatorText(), viewModel.RefusalMessage);
         Assert.Null(viewModel.IdenticalAddressWarning);
         Assert.Equal("Alem", viewModel.Street);
+        Assert.Null(viewModel.Saved);
     }
 
     /// <summary>The next action clears the previous refusal.</summary>
@@ -247,11 +291,12 @@ public class UnitsViewModelTests
     public async Task TheNextAction_ClearsThePreviousRefusal()
     {
         var port = Port();
-        port.OnCreate = (_, _, _) => UnitResult.Refused(UnitRefusal.AddressIncomplete);
+        port.OnCreate = (_, _, _) => UnitResult.Refused(UnitRefusal.UnitNotFound);
         var viewModel = await LoadedAsync(port);
-        await viewModel.SaveCommand.ExecuteAsync(null);
-        port.OnCreate = null;
         Fill(viewModel);
+        await viewModel.SaveCommand.ExecuteAsync(null);
+        Assert.NotNull(viewModel.RefusalMessage);
+        port.OnCreate = null;
 
         await viewModel.SaveCommand.ExecuteAsync(null);
 
@@ -271,6 +316,7 @@ public class UnitsViewModelTests
         Assert.True(viewModel.CanChooseType);
         Assert.Equal(UnitType.Property, viewModel.SelectedType);
         Assert.Equal(string.Empty, viewModel.Street);
+        Assert.Equal(Provinces.Default, viewModel.Province);
     }
 
     /// <summary>A write that fails shows the generic text only, keeps what was typed and the commands, and reads nothing.</summary>
@@ -306,5 +352,205 @@ public class UnitsViewModelTests
         Assert.Single(port.Created);
         Assert.Equal(ErrorMessages.Generic, viewModel.Runner.ErrorMessage);
         Assert.Equal(string.Empty, viewModel.Street);
+    }
+
+    /// <summary>Requirement 28: the form opens on Santa Fe, as the designer drew it with the agency's city and postal code, and offers the 24 jurisdictions only.</summary>
+    [Fact]
+    public async Task TheForm_OpensOnSantaFe_AndOffersOnlyTheJurisdictions()
+    {
+        var viewModel = await LoadedAsync(Port());
+
+        viewModel.NewCommand.Execute(null);
+
+        Assert.True(viewModel.IsFormOpen);
+        Assert.Equal("Santa Fe", viewModel.Province);
+        Assert.Equal("Sunchales", viewModel.City);
+        Assert.Equal("2322", viewModel.PostalCode);
+        Assert.Equal(Provinces.All, viewModel.Provinces);
+        Assert.Equal(UnitsTexts.NewTitle, viewModel.FormTitle);
+        Assert.Equal(UnitsTexts.SaveNew, viewModel.SaveText);
+    }
+
+    /// <summary>Test 112: "PB", "Local 3" and "S/N" reach the port as typed.</summary>
+    [Fact]
+    public async Task FloorApartmentAndNumber_ReachThePort_AsTyped()
+    {
+        var port = Port();
+        var viewModel = await LoadedAsync(port);
+        viewModel.NewCommand.Execute(null);
+        viewModel.Street = "Alem";
+        viewModel.Number = "S/N";
+        viewModel.Floor = "PB";
+        viewModel.Apartment = "Local 3";
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        var created = Assert.Single(port.Created);
+        Assert.Equal(new UnitDraft("Alem", "S/N", "Sunchales", "Santa Fe", "2322", "PB", "Local 3"), created.Draft);
+    }
+
+    /// <summary>A province the list does not hold, as one stored before the list, is refused beside the field.</summary>
+    [Fact]
+    public async Task AProvinceOffTheList_IsRefusedBesideItsField()
+    {
+        var port = Port();
+        var viewModel = await LoadedAsync(port);
+        Fill(viewModel);
+        viewModel.Province = "Sta Fe";
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal("Elija una provincia de la lista.", viewModel.Errors[UnitField.Province]);
+        Assert.Empty(port.Created);
+    }
+
+    /// <summary>Test 119: a malformed postal code and a CPA of another province are refused beside the field, each in its words.</summary>
+    [Theory]
+    [InlineData("23", "Escriba el código postal como 2322 o como S2322ABC.")]
+    [InlineData("x5000abc", "Un código postal de Santa Fe empieza con S, no con X.")]
+    public async Task APostalCodeTheRulesRefuse_IsRefusedBesideItsField(string postalCode, string expected)
+    {
+        var port = Port();
+        var viewModel = await LoadedAsync(port);
+        Fill(viewModel);
+        viewModel.PostalCode = postalCode;
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal(expected, viewModel.Errors[UnitField.PostalCode]);
+        Assert.Empty(port.Created);
+    }
+
+    /// <summary>A CPA typed in lower case reaches the port in capitals.</summary>
+    [Fact]
+    public async Task ACpaInLowerCase_ReachesThePortInCapitals()
+    {
+        var port = Port();
+        var viewModel = await LoadedAsync(port);
+        Fill(viewModel);
+        viewModel.PostalCode = "s2322abc";
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal("S2322ABC", Assert.Single(port.Created).Draft.Normalized().PostalCode);
+    }
+
+    /// <summary>The canvas: a write that lands ends on the saved notice naming the address, and the way back closes the form.</summary>
+    [Fact]
+    public async Task ASavedUnit_EndsOnTheNotice_AndGoesBackToTheList()
+    {
+        var port = Port();
+        port.OnCreate = (_, _, _) => UnitResult.Saved(Alem);
+        var viewModel = await LoadedAsync(port);
+        viewModel.NewCommand.Execute(null);
+        Fill(viewModel);
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal(UnitFormStep.Saved, viewModel.Step);
+        Assert.Equal(new UnitSaved("Propiedad guardada", "Alem 1258, piso 2, depto B, Sunchales quedó cargada."), viewModel.Saved);
+
+        viewModel.BackCommand.Execute(null);
+
+        Assert.False(viewModel.IsFormOpen);
+        Assert.Null(viewModel.Saved);
+        Assert.Equal(UnitFormStep.Fields, viewModel.Step);
+    }
+
+    /// <summary>A correction ends on its own notice; the form's title and subtitle name the unit while it is open.</summary>
+    [Fact]
+    public async Task ACorrection_IsTitledByTheUnit_AndEndsOnItsOwnNotice()
+    {
+        var port = Port();
+        port.OnRelocate = (_, _, _) => UnitResult.Saved(Alem);
+        var viewModel = await LoadedAsync(port);
+        viewModel.SelectedUnit = Row(viewModel, AlemId);
+
+        viewModel.EditCommand.Execute(viewModel.SelectedUnit);
+
+        Assert.True(viewModel.IsFormOpen);
+        Assert.Equal(UnitsTexts.EditTitle, viewModel.FormTitle);
+        Assert.Equal("Alem 1258, piso 2, depto B, Sunchales", viewModel.FormSubtitle);
+        Assert.Equal(UnitsTexts.SaveCorrection, viewModel.SaveText);
+        Assert.Equal("Propiedad", viewModel.TypeText);
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal(new UnitSaved("Cambios guardados", "Alem 1258, piso 2, depto B, Sunchales quedó actualizada."), viewModel.Saved);
+    }
+
+    /// <summary>"Editar" needs a unit chosen in the list.</summary>
+    [Fact]
+    public async Task Editing_NeedsAUnitChosen()
+    {
+        var viewModel = await LoadedAsync(Port());
+
+        Assert.False(viewModel.EditCommand.CanExecute(null));
+        Assert.True(viewModel.EditCommand.CanExecute(Row(viewModel, AlemId)));
+    }
+
+    /// <summary>The warning is a step of its own; "Volver a revisar" goes back to the fields as typed.</summary>
+    [Fact]
+    public async Task TheWarning_IsItsOwnStep()
+    {
+        var port = Port();
+        port.OnCreate = (_, _, _) => UnitResult.Refused(UnitRefusal.IdenticalAddressNotAccepted, Alem);
+        var viewModel = await LoadedAsync(port);
+        Fill(viewModel);
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal(UnitFormStep.Warning, viewModel.Step);
+
+        viewModel.CancelCommand.Execute(null);
+
+        Assert.Equal(UnitFormStep.Fields, viewModel.Step);
+        Assert.Equal("Alem", viewModel.Street);
+    }
+
+    /// <summary>The canvas's type filter and search work on what was read, asking the database nothing.</summary>
+    [Fact]
+    public async Task TheTypeFilterAndTheSearch_NarrowTheList_WithoutReadingAgain()
+    {
+        var port = Port();
+        port.Units.Add(new UnitListing(Guid.NewGuid(), UnitType.Property, new Address("Pellegrini", "455", "Sunchales", "Santa Fe", "2322"), null));
+        var viewModel = await LoadedAsync(port);
+        var lists = port.Lists;
+        Assert.Equal("3 unidades", viewModel.CountText);
+
+        viewModel.TypeFilter = UnitType.ParkingSpace;
+
+        Assert.Equal([CocheraId], viewModel.Units.Select(u => u.Id).ToList());
+        Assert.Equal("1 unidad", viewModel.CountText);
+
+        viewModel.TypeFilter = null;
+        viewModel.SearchText = "ALÉM";
+
+        Assert.Equal([AlemId], viewModel.Units.Select(u => u.Id).ToList());
+
+        viewModel.SearchText = "Mitre";
+
+        Assert.True(viewModel.IsEmpty);
+        Assert.Equal(lists, port.Lists);
+    }
+
+    /// <summary>The list's columns, as the canvas draws them; a missing floor or apartment shows a dash.</summary>
+    [Fact]
+    public async Task TheRow_SplitsTheAddressIntoTheCanvasColumns()
+    {
+        var viewModel = await LoadedAsync(Port());
+
+        var alem = Row(viewModel, AlemId);
+        Assert.Equal("Alem 1258", alem.StreetText);
+        Assert.Equal("2", alem.FloorText);
+        Assert.Equal("B", alem.ApartmentText);
+        Assert.Equal("Sunchales", alem.City);
+        Assert.Equal("Santa Fe", alem.Province);
+        Assert.Equal("2322", alem.PostalCode);
+        Assert.False(alem.IsParking);
+
+        var cochera = Row(viewModel, CocheraId);
+        Assert.Equal(UnitRow.AbsentValue, cochera.FloorText);
+        Assert.Equal(UnitRow.AbsentValue, cochera.ApartmentText);
+        Assert.True(cochera.IsParking);
     }
 }
