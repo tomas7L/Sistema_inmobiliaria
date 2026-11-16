@@ -48,4 +48,24 @@ public class FormatsTests
     [Fact]
     public void AFigureForAField_HasNoPesoSign() =>
         Assert.Equal("1.250,8", Formats.Number(1_250.80m));
+
+    // Tomás 2026-11-16: an amount typed without its dots gets them when the field is left; nothing else changes.
+    [Theory]
+    [InlineData("1611000", "1.611.000")]
+    [InlineData(" 1611000 ", "1.611.000")]
+    [InlineData("1250,80", "1.250,80")]
+    [InlineData("1234567,5", "1.234.567,5")]
+    [InlineData("-500000", "-500.000")]
+    [InlineData("1.611.000", "1.611.000")]
+    [InlineData("500", "500")]
+    public void ATypedAmount_IsTidiedToTheAgencysConvention_KeepingEveryDecimal(string typed, string tidy) =>
+        Assert.Equal(tidy, Formats.TidyMoney(typed));
+
+    [Theory]
+    [InlineData("1250.80")]
+    [InlineData("cuatro mil")]
+    [InlineData("")]
+    [InlineData("  ")]
+    public void WhatIsNotAnAmount_IsLeftAsTyped(string typed) =>
+        Assert.Equal(typed, Formats.TidyMoney(typed));
 }

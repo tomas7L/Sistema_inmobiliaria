@@ -162,13 +162,22 @@ public sealed partial class ContractFormViewModel : ObservableObject
 
     partial void OnCutoverDateChanged(DateOnly? value) => WithdrawWarnings();
 
-    partial void OnMonthlyRentTextChanged(string value) => WithdrawWarnings();
+    // An amount typed without its dots is shown with them (Tomás, 2026-11-16); the view binds these fields on leaving them.
+    partial void OnMonthlyRentTextChanged(string value)
+    {
+        MonthlyRentText = Formats.TidyMoney(value);
+        WithdrawWarnings();
+    }
 
     partial void OnDueDayTextChanged(string value) => WithdrawWarnings();
 
     partial void OnHonorariosTextChanged(string value) => WithdrawWarnings();
 
-    partial void OnFeePlanAmountTextChanged(string value) => WithdrawWarnings();
+    partial void OnFeePlanAmountTextChanged(string value)
+    {
+        FeePlanAmountText = Formats.TidyMoney(value);
+        WithdrawWarnings();
+    }
 
     partial void OnFeePlanInstalmentsTextChanged(string value) => WithdrawWarnings();
 
@@ -533,4 +542,7 @@ public sealed partial class ContractFormUnit : ObservableObject
 
     [ObservableProperty]
     private string _shareText = string.Empty;
+
+    // An amount typed without its dots is shown with them (Tomás, 2026-11-16).
+    partial void OnShareTextChanged(string value) => ShareText = Formats.TidyMoney(value);
 }

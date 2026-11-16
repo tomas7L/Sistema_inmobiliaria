@@ -616,4 +616,17 @@ public class ContractFormViewModelTests
         Assert.Null(viewModel.Contracts[1].PastEndFlag);
         Assert.Equal("Pérez, Juan", viewModel.Contracts[0].Tenants);
     }
+
+    /// <summary>Tomás 2026-11-16: the contract's amounts show their dots once typed.</summary>
+    [Fact]
+    public async Task EveryAmountField_ShowsItsDots()
+    {
+        var viewModel = await FilledAsync(new FakeContractRegistry());
+
+        viewModel.MonthlyRentText = "450000";
+        viewModel.FeePlanAmountText = "5000";
+        viewModel.Units[0].ShareText = "225000";
+
+        Assert.Equal(("450.000", "5.000", "225.000"), (viewModel.MonthlyRentText, viewModel.FeePlanAmountText, viewModel.Units[0].ShareText));
+    }
 }

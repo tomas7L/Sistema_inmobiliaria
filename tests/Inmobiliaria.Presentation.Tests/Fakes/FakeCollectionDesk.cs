@@ -15,8 +15,13 @@ internal sealed class FakeCollectionDesk : ICollectionDesk
 
     public int CommitCalls { get; private set; }
 
-    public Task<CollectionPreview> PreviewAsync(CollectionRequest request, CancellationToken ct = default) =>
-        (OnPreview ?? throw new InvalidOperationException("PreviewAsync was not scripted."))(request);
+    public int PreviewCalls { get; private set; }
+
+    public Task<CollectionPreview> PreviewAsync(CollectionRequest request, CancellationToken ct = default)
+    {
+        PreviewCalls++;
+        return (OnPreview ?? throw new InvalidOperationException("PreviewAsync was not scripted."))(request);
+    }
 
     public Task<CollectionResult> CommitAsync(
         CollectionPreview preview, CollectionRequest request, CancellationToken ct = default)
