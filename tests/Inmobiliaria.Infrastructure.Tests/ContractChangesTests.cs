@@ -867,7 +867,7 @@ public sealed class ContractChangesTests
         var first = await PersonAsync(world);
         var second = await PersonAsync(world, "Lía", "Sosa");
 
-        AssertDone(await Registry(world).CorrectAsync(seeded.Contract, Standing(seeded) with { LessorIds = [first, second, first] }, false));
+        AssertDone(await Registry(world).CorrectAsync(seeded.Contract, Standing(seeded) with { LessorIds = [first, second] }, false));
 
         var lessors = (await Registry(world).DetailAsync(seeded.Contract))!.Parties.Where(p => p.Role == PartyRole.Lessor).Select(p => p.PartyId).ToHashSet();
         Assert.Equal(new HashSet<Guid> { first, second }, lessors);

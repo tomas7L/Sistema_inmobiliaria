@@ -289,6 +289,12 @@ public enum ContractRefusal
 
     /// <summary>Another <c>Active</c> or <c>PendingTermination</c> contract now covers one of its units (spec Requirement 24).</summary>
     UnitCoveredByAnotherContract,
+
+    /// <summary>The same person twice among the lessors (Mateo's redraw, accepted by Tomás 2026-11-16).</summary>
+    LessorRepeated,
+
+    /// <summary>The same unit twice on one contract, refused in its own words rather than as shares (same origin).</summary>
+    UnitRepeated,
 }
 
 public enum ContractWarningKind
@@ -386,6 +392,8 @@ public static class ContractRefusalText
         ContractRefusal.CancellationStale => "La cuenta cambió mientras se revisaba. Vuelva a abrir el resumen.",
         ContractRefusal.NoNoticeToUndo => "Este contrato no tiene un aviso de rescisión para deshacer.",
         ContractRefusal.NoEndToUndo => "Este contrato no está terminado.",
+        ContractRefusal.LessorRepeated => "Esa persona ya está como propietaria.",
+        ContractRefusal.UnitRepeated => "Esa unidad ya está elegida.",
         ContractRefusal.UnitCoveredByAnotherContract => $"Una de sus unidades ya está en otro contrato, de {currentTenant ?? "otra persona"}.",
         _ => throw new ArgumentOutOfRangeException(nameof(refusal), refusal, "A refusal without operator text."),
     };

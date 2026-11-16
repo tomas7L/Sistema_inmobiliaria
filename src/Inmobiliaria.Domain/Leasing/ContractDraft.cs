@@ -152,6 +152,10 @@ public static class ContractDraftRules
         {
             problems.Add(new ContractProblem(ContractField.Lessors, ContractRefusal.LessorMissing));
         }
+        else if (draft.LessorIds.Distinct().Count() != draft.LessorIds.Count)
+        {
+            problems.Add(new ContractProblem(ContractField.Lessors, ContractRefusal.LessorRepeated));
+        }
 
         if (TenantIsCodebtor(draft.TenantId, draft.CodebtorIds))
         {
@@ -161,6 +165,10 @@ public static class ContractDraftRules
         if (draft.Shares.Count == 0)
         {
             problems.Add(new ContractProblem(ContractField.Units, ContractRefusal.UnitMissing));
+        }
+        else if (draft.Shares.Select(s => s.UnitId).Distinct().Count() != draft.Shares.Count)
+        {
+            problems.Add(new ContractProblem(ContractField.Units, ContractRefusal.UnitRepeated));
         }
     }
 
@@ -260,8 +268,8 @@ public static class ContractDraftRules
     private static ContractRefusal? Shares(ContractDraft draft)
     {
         var shares = draft.Shares;
-        var valid = shares.Select(s => s.UnitId).Distinct().Count() == shares.Count
-            && shares.All(s => s.Percentage is > 0m and <= 100m && s.Percentage == decimal.Round(s.Percentage, SharePlaces))
+        // A unit twice is refused under the units (UnitRepeated), so only the percentages are checked here.
+        var valid = shares.All(s => s.Percentage is > 0m and <= 100m && s.Percentage == decimal.Round(s.Percentage, SharePlaces))
             && shares.Sum(s => s.Percentage) == 100m;
 
         return valid ? null : ContractRefusal.SharesNotHundred;

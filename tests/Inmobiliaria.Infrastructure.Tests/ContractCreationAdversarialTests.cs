@@ -535,14 +535,15 @@ public sealed class ContractCreationAdversarialTests
     // ---- Duplicates -----------------------------------------------------------------------------------------------------
 
     [SkippableFact]
-    public async Task ADuplicateLessor_IsOneRow()
+    public async Task ADuplicateLessor_IsRefused_AndNothingIsWritten()
     {
         Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
         await using var world = await DeskWorld.CreateAsync(_fixture);
         var cast = await CastAsync(world);
+        var before = await HashAsync(world);
         var result = await new ContractRegistry(world.NewContext(), Clock).CreateAsync(Draft(cast) with { LessorIds = [cast.Lessor, cast.Lessor] }, false);
-        Assert.True(result.Succeeded, $"{result.Refusal}");
-        Assert.Equal(1, await world.CountAsync("SELECT count(*) FROM contract_parties WHERE role = 'Lessor'"));
+        Assert.Equal(ContractRefusal.LessorRepeated, result.Refusal);
+        Assert.Equal(before, await HashAsync(world));
     }
 
     /// <summary>
@@ -578,7 +579,7 @@ public sealed class ContractCreationAdversarialTests
         var before = await HashAsync(world);
         var result = await new ContractRegistry(world.NewContext(), Clock).CreateAsync(
             Draft(cast) with { Shares = [new UnitShare(cast.Unit, 50m), new UnitShare(cast.Unit, 50m)] }, false);
-        Assert.Equal(ContractRefusal.SharesNotHundred, result.Refusal);
+        Assert.Equal(ContractRefusal.UnitRepeated, result.Refusal);
         Assert.Equal(before, await HashAsync(world));
     }
 

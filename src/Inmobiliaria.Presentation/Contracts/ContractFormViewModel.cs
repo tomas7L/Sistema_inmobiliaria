@@ -209,8 +209,15 @@ public sealed partial class ContractFormViewModel : ObservableObject
 
     private async Task AddLessorAsync(PartyListing? lessor)
     {
-        if (lessor is null || Lessors.Any(l => l.Id == lessor.Id))
+        if (lessor is null)
         {
+            return;
+        }
+
+        // Chosen again: said under the lessors instead of ignored (Mateo's redraw, accepted by Tomás 2026-11-16).
+        if (Lessors.Any(l => l.Id == lessor.Id))
+        {
+            Errors = new ContractFieldErrors([new ContractProblem(ContractField.Lessors, ContractRefusal.LessorRepeated)]);
             return;
         }
 

@@ -629,4 +629,16 @@ public class ContractFormViewModelTests
 
         Assert.Equal(("450.000", "5.000", "225.000"), (viewModel.MonthlyRentText, viewModel.FeePlanAmountText, viewModel.Units[0].ShareText));
     }
+
+    /// <summary>Choosing a lessor already on the form says so under the lessors, instead of doing nothing.</summary>
+    [Fact]
+    public async Task ChoosingTheSameLessorAgain_SaysSo_AndKeepsOne()
+    {
+        var viewModel = await FilledAsync(new FakeContractRegistry());
+
+        await viewModel.AddLessorCommand.ExecuteAsync(Ana);
+
+        Assert.Single(viewModel.Lessors);
+        Assert.Equal("Esa persona ya está como propietaria.", viewModel.Errors[ContractField.Lessors]);
+    }
 }
