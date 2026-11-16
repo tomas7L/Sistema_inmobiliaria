@@ -1,3 +1,4 @@
+using Inmobiliaria.Domain.Indices;
 using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Presentation.CashDesk;
 using Inmobiliaria.Presentation.Contracts;
@@ -11,7 +12,10 @@ public class ContractClauseViewModelTests
     private static readonly Guid Contract = Guid.NewGuid();
     private static readonly Guid Ipc = Guid.NewGuid();
     private static readonly Guid Icl = Guid.NewGuid();
-    private static readonly Dictionary<Guid, string> Names = new() { [Ipc] = "IPC", [Icl] = "ICL" };
+    private static FakeIndexRegistry Catalog() => new()
+    {
+        Indices = [new IndexListing(Ipc, "IPC", null, []), new IndexListing(Icl, "ICL", null, [])],
+    };
 
     private static ContractDetail Detail(
         ContractClauseLine? clause = null,
@@ -28,7 +32,7 @@ public class ContractClauseViewModelTests
     private static async Task<(ContractClauseViewModel ViewModel, FakeContractRegistry Port)> LoadedAsync(ContractDetail detail)
     {
         var port = new FakeContractRegistry { Detail = detail };
-        var viewModel = new ContractClauseViewModel(port, Contract) { IndexNames = Names };
+        var viewModel = new ContractClauseViewModel(port, Catalog(), Contract);
         await viewModel.LoadCommand.ExecuteAsync(null);
         return (viewModel, port);
     }
@@ -47,6 +51,24 @@ public class ContractClauseViewModelTests
 
         Assert.Contains(due, viewModel.WindowText, StringComparison.Ordinal);
         Assert.Contains($"de {from} a {to}", viewModel.WindowText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Task 12.3c: loading reads the catalog with the contract, so an offset left blank takes the chosen index's suggestion
+    /// (ICL, 0) and not the default of 1, both in the months shown and in what is sent.
+    /// </summary>
+    [Fact]
+    public async Task Loading_ReadsTheCatalog_SoABlankOffsetTakesTheSuggestion()
+    {
+        var (viewModel, _) = await LoadedAsync(Detail(IpcEverySix));
+        viewModel.IndexIds.Clear();
+        viewModel.IndexIds.Add(Icl);
+
+        viewModel.OffsetText = string.Empty;
+
+        Assert.Equal(["IPC", "ICL"], viewModel.IndexOptions.Select(o => o.Name));
+        Assert.Equal(0, viewModel.SuggestedOffset);
+        Assert.Contains("de 01/2026 a 07/2026", viewModel.WindowText, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -235,13 +257,13 @@ public class ContractClauseViewModelTests
     // ---- The creation form --------------------------------------------------------------------------------------------------
 
     [Fact]
-    public void TheCreationForm_ShowsTheMonths_ForTheOffsetInForce()
+    public async Task TheCreationForm_ShowsTheMonths_ForTheOffsetInForce()
     {
-        var viewModel = new ContractFormViewModel(new FakeContractRegistry(), false, new FakeClock(new DateOnly(2026, 11, 15)))
+        var viewModel = new ContractFormViewModel(new FakeContractRegistry(), false, new FakeClock(new DateOnly(2026, 11, 15)), Catalog())
         {
-            ClauseIndexNames = Names,
             StartDate = new DateOnly(2026, 1, 1),
         };
+        await viewModel.LoadCommand.ExecuteAsync(null);
         var notified = new List<string?>();
         viewModel.PropertyChanged += (_, e) => notified.Add(e.PropertyName);
 

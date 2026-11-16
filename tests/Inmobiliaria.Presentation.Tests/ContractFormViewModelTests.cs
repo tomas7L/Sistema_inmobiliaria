@@ -1,3 +1,4 @@
+using Inmobiliaria.Domain.Indices;
 using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Domain.Parties;
 using Inmobiliaria.Domain.Shared;
@@ -18,9 +19,22 @@ public class ContractFormViewModelTests
     private static UnitListing Unit(string number = "1258") =>
         new(Guid.NewGuid(), UnitType.Property, new Address("Alem", number, "Sunchales", "Santa Fe", "2322"), null);
 
+    private static readonly Guid IpcIndex = Guid.NewGuid();
+
+    /// <summary>IPC still published, CER discontinued: a new clause is offered only the first.</summary>
+    private static FakeIndexRegistry Catalog() => new()
+    {
+        Indices =
+        [
+            new IndexListing(IpcIndex, "IPC", null, []),
+            new IndexListing(Guid.NewGuid(), "CER", new IndexPeriod(2020, 1), []),
+        ],
+    };
+
     private static async Task<ContractFormViewModel> FilledAsync(FakeContractRegistry port, bool admin = false)
     {
-        var viewModel = new ContractFormViewModel(port, admin, new FakeClock(new DateOnly(2026, 11, 15))) { Tenant = Juan };
+        var viewModel = new ContractFormViewModel(port, admin, new FakeClock(new DateOnly(2026, 11, 15)), Catalog()) { Tenant = Juan };
+        await viewModel.LoadCommand.ExecuteAsync(null);
         await viewModel.AddLessorCommand.ExecuteAsync(Ana);
         viewModel.Units.Add(new ContractFormUnit(Unit()));
         viewModel.StartDate = new DateOnly(2026, 12, 1);
@@ -39,8 +53,7 @@ public class ContractFormViewModelTests
     {
         var port = new FakeContractRegistry();
         var viewModel = await FilledAsync(port);
-        var ipc = Guid.NewGuid();
-        viewModel.ClauseIndexNames = new Dictionary<Guid, string> { [ipc] = "IPC" };
+        var ipc = IpcIndex;
         viewModel.ClauseIndexIds.Add(ipc);
         viewModel.ClauseIntervalText = "6";
         viewModel.ClauseOffsetText = "x";
@@ -62,14 +75,32 @@ public class ContractFormViewModelTests
         Assert.Equal(2, Assert.Single(port.Created).Draft.Clause!.WindowOffsetMonths);
     }
 
+    /// <summary>
+    /// Task 12.3c: opening the form reads the index catalog, so the indices chosen are named and the suggestion follows them;
+    /// a discontinued index is not offered for a new clause.
+    /// </summary>
+    [Fact]
+    public async Task Loading_ReadsTheIndexCatalog_OfferingOnlyThePublishedOnes()
+    {
+        var indices = Catalog();
+        var viewModel = new ContractFormViewModel(new FakeContractRegistry(), false, new FakeClock(new DateOnly(2026, 11, 15)), indices);
+
+        await viewModel.LoadCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, indices.Lists);
+        Assert.Equal(["IPC"], viewModel.ClauseIndexOptions.Select(o => o.Name));
+        Assert.Equal(IpcIndex, viewModel.ClauseIndexOptions[0].Id);
+        viewModel.ClauseIndexIds.Add(IpcIndex);
+        Assert.Equal(2, viewModel.SuggestedClauseOffset);
+    }
+
     /// <summary>Spec Decision 15: an offset left blank takes the suggestion of the indices chosen, as the months shown said.</summary>
     [Fact]
     public async Task AClauseOffsetLeftBlank_SendsTheSuggestion()
     {
         var port = new FakeContractRegistry();
         var viewModel = await FilledAsync(port);
-        var ipc = Guid.NewGuid();
-        viewModel.ClauseIndexNames = new Dictionary<Guid, string> { [ipc] = "IPC" };
+        var ipc = IpcIndex;
         viewModel.ClauseIndexIds.Add(ipc);
         viewModel.ClauseIntervalText = "6";
 
@@ -263,7 +294,7 @@ public class ContractFormViewModelTests
     {
         var port = new FakeContractRegistry();
         port.Rates[Ana.Id] = 6m;
-        var viewModel = new ContractFormViewModel(port, false, new FakeClock(new DateOnly(2026, 11, 15)));
+        var viewModel = new ContractFormViewModel(port, false, new FakeClock(new DateOnly(2026, 11, 15)), new FakeIndexRegistry());
 
         await viewModel.AddLessorCommand.ExecuteAsync(Ana);
 
@@ -282,11 +313,11 @@ public class ContractFormViewModelTests
     {
         var port = new FakeContractRegistry();
         port.Rates[Ana.Id] = 6m;
-        var noHistory = new ContractFormViewModel(port, false, new FakeClock(new DateOnly(2026, 11, 15)));
+        var noHistory = new ContractFormViewModel(port, false, new FakeClock(new DateOnly(2026, 11, 15)), new FakeIndexRegistry());
         await noHistory.AddLessorCommand.ExecuteAsync(Raul);
         Assert.Equal(string.Empty, noHistory.HonorariosText);
 
-        var typed = new ContractFormViewModel(port, false, new FakeClock(new DateOnly(2026, 11, 15))) { HonorariosText = "0" };
+        var typed = new ContractFormViewModel(port, false, new FakeClock(new DateOnly(2026, 11, 15)), new FakeIndexRegistry()) { HonorariosText = "0" };
         await typed.AddLessorCommand.ExecuteAsync(Ana);
         Assert.Equal("0", typed.HonorariosText);
     }
@@ -294,7 +325,7 @@ public class ContractFormViewModelTests
     [Fact]
     public async Task TheSameLessorTwice_IsOneLessor()
     {
-        var viewModel = new ContractFormViewModel(new FakeContractRegistry(), false, new FakeClock(new DateOnly(2026, 11, 15)));
+        var viewModel = new ContractFormViewModel(new FakeContractRegistry(), false, new FakeClock(new DateOnly(2026, 11, 15)), new FakeIndexRegistry());
 
         await viewModel.AddLessorCommand.ExecuteAsync(Ana);
         await viewModel.AddLessorCommand.ExecuteAsync(Ana);
