@@ -18,12 +18,14 @@ public sealed partial class ContractDetailViewModel : ObservableObject
     private readonly IContractRegistry _contracts;
     private readonly Guid _contractId;
 
-    public ContractDetailViewModel(IContractRegistry contracts, Guid contractId)
+    public ContractDetailViewModel(IContractRegistry contracts, IAdjustmentDesk adjustments, Guid contractId)
     {
         ArgumentNullException.ThrowIfNull(contracts);
+        ArgumentNullException.ThrowIfNull(adjustments);
 
         _contracts = contracts;
         _contractId = contractId;
+        Adjustments = new ContractAdjustmentsViewModel(adjustments, Runner, LoadAsync);
         LoadCommand = new AsyncRelayCommand(LoadAsync, CanAct);
         ReviewNoticeCommand = new RelayCommand(ReviewNotice, CanAct);
         ReviewEndCommand = new AsyncRelayCommand(ReviewEndAsync, CanAct);
@@ -36,6 +38,9 @@ public sealed partial class ContractDetailViewModel : ObservableObject
     }
 
     public OperationRunner Runner { get; } = new();
+
+    /// <summary>The adjustment history, the one place the latest is corrected (task 12.3d).</summary>
+    public ContractAdjustmentsViewModel Adjustments { get; }
 
     public IAsyncRelayCommand LoadCommand { get; }
 
@@ -154,9 +159,15 @@ public sealed partial class ContractDetailViewModel : ObservableObject
     private async Task LoadAsync()
     {
         var outcome = await Runner.RunAsync(() => _contracts.DetailAsync(_contractId));
-        if (outcome.Completed)
+        if (!outcome.Completed)
         {
-            Detail = outcome.Value;
+            return;
+        }
+
+        Detail = outcome.Value;
+        if (Detail is { } detail)
+        {
+            await Adjustments.ShowAsync(_contractId, canCorrect: !detail.IsCancelled);
         }
     }
 

@@ -15,7 +15,7 @@ public class ContractDetailViewModelTests
     private static ContractDetail Detail(ContractStatus status) => new(
         ContractId, status, new DateOnly(2026, 1, 1), new DateOnly(2027, 12, 31), false, null, null, null, null, null, 450_000m, 10, 8m, null, [], [], null, []);
 
-    private static ContractDetailViewModel New(FakeContractRegistry port) => new(port, ContractId);
+    private static ContractDetailViewModel New(FakeContractRegistry port) => new(port, new FakeAdjustmentDesk(), ContractId);
 
     private static async Task<ContractDetailViewModel> LoadedAsync(ContractDetail detail)
     {
