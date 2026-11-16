@@ -12,8 +12,8 @@ namespace Inmobiliaria.Presentation.Adjustments;
 /// The Ajustes screen (gestion-de-alquileres spec Requirements 14 and 15, design §3.4): the contracts with an adjustment due,
 /// naming the index and month a waiting one still lacks; the summary of the one chosen, with every figure; confirming exactly
 /// that summary; and, once confirmed, the new canon, the first period it applies to and the reminder to tell the tenant,
-/// since nothing is sent (spec Decision P13). The list is read again after every confirmation, refused or not. Both roles;
-/// the view arrives in slice S12.
+/// since nothing is sent (spec Decision P13). The list is read again after every confirmation, refused or not. The contract's
+/// history is shown to read: correcting an adjustment is the contract detail's (task 12.3d). Both roles.
 /// </summary>
 public sealed partial class AdjustmentsViewModel : ObservableObject
 {
@@ -21,7 +21,6 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
     private readonly IAdjustmentDesk _desk;
     private readonly IContractRegistry _contracts;
     private readonly IAgencyClock _clock;
-    private Guid? _historyContract;
 
     public AdjustmentsViewModel(IDueAdjustmentQuery worklist, IAdjustmentDesk desk, IContractRegistry contracts, IAgencyClock clock)
     {
@@ -37,7 +36,6 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
         LoadCommand = new AsyncRelayCommand(LoadAsync, CanAct);
         OpenCommand = new AsyncRelayCommand(OpenAsync, () => CanAct() && SelectedRow is not null);
         ConfirmCommand = new AsyncRelayCommand(ConfirmAsync, () => CanAct() && Summary is not null);
-        CorrectCommand = new AsyncRelayCommand<AdjustmentHistoryRow>(CorrectAsync, row => CanAct() && row is { CanCorrect: true });
         Runner.PropertyChanged += OnRunnerChanged;
     }
 
@@ -49,7 +47,7 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
     /// <summary>Each index of the open summary: its base and end month and level, and its variation.</summary>
     public ObservableCollection<AdjustmentIndexRow> SummaryLines { get; } = [];
 
-    /// <summary>The open contract's confirmed adjustments, the most recently confirmed first.</summary>
+    /// <summary>The open contract's confirmed adjustments, the most recently confirmed first, to read only.</summary>
     public ObservableCollection<AdjustmentHistoryRow> History { get; } = [];
 
     public IAsyncRelayCommand LoadCommand { get; }
@@ -60,22 +58,6 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
     /// <summary>Confirms the open summary, exactly as shown.</summary>
     public IAsyncRelayCommand ConfirmCommand { get; }
 
-    /// <summary>Opens the correction of a history row, the latest adjustment only (spec Requirement 18). Writes nothing.</summary>
-    public IAsyncRelayCommand<AdjustmentHistoryRow> CorrectCommand { get; }
-
-    /// <summary>On a correction's summary: which adjustment it corrects, and that it is appended. Null on a regular one.</summary>
-    public string? CorrectionText => Summary is { CorrectsAdjustmentId: not null } s
-        ? $"Corrección del ajuste vencido el {Formats.Date(s.DueDate)}. Se agrega como un ajuste nuevo; el anterior queda como está."
-        : null;
-
-    /// <summary>On a correction's summary: what happens to the difference the corrected adjustment charged, or null.</summary>
-    public string? DifferenceOutcomeText => Summary switch
-    {
-        { ReversedDifference: { } reversed } => $"La diferencia de {Formats.Money(reversed)} que cobró el ajuste corregido no se pagó: se revierte al confirmar.",
-        { PaidDifferenceStays: { } stays } => $"La diferencia de {Formats.Money(stays)} ya se pagó: queda como está y se resuelve a mano.",
-        _ => null,
-    };
-
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(OpenCommand))]
     private DueAdjustmentRow? _selectedRow;
@@ -85,7 +67,7 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
     [NotifyPropertyChangedFor(nameof(TenantText), nameof(PreviousCanonText), nameof(CoefficientText), nameof(NewCanonText))]
     [NotifyPropertyChangedFor(nameof(DueDateText), nameof(AppliesFromText), nameof(LateText))]
-    [NotifyPropertyChangedFor(nameof(HasDifference), nameof(DifferenceText), nameof(CorrectionText), nameof(DifferenceOutcomeText))]
+    [NotifyPropertyChangedFor(nameof(HasDifference), nameof(DifferenceText))]
     private AdjustmentPreview? _summary;
 
     /// <summary>After a confirmation: the new canon and the first period it applies to.</summary>
@@ -108,11 +90,7 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
     public bool HasDifference => Summary?.Difference is not null;
 
     /// <summary>The difference offered and the months it covers, or null when none is offered.</summary>
-    public string? DifferenceText => Summary?.Difference is not { } offer
-        ? null
-        : offer.Months.Count == 1
-        ? $"Diferencia de {Formats.Money(offer.Amount)} por el mes {Formats.Period(offer.Months[0])}, ya cobrado con el canon anterior."
-        : $"Diferencia de {Formats.Money(offer.Amount)} por los meses {Formats.Period(offer.Months[0])} a {Formats.Period(offer.Months[^1])}, ya cobrados con el canon anterior.";
+    public string? DifferenceText => AdjustmentTexts.Difference(Summary);
 
     public string? TenantText => Summary?.TenantName;
 
@@ -127,9 +105,7 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
     public string? AppliesFromText => Summary is { } s ? Formats.Period(s.AppliesFrom) : null;
 
     /// <summary>Set only when the adjustment prices from a later month than the one it fell due in.</summary>
-    public string? LateText => Summary is { IsLate: true } s
-        ? $"Se confirma tarde: el nuevo canon rige desde {Formats.Period(s.AppliesFrom)}. Los meses anteriores quedan con el canon anterior."
-        : null;
+    public string? LateText => AdjustmentTexts.Late(Summary);
 
     private bool CanAct() => !Runner.IsBusy;
 
@@ -140,7 +116,6 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
             LoadCommand.NotifyCanExecuteChanged();
             OpenCommand.NotifyCanExecuteChanged();
             ConfirmCommand.NotifyCanExecuteChanged();
-            CorrectCommand.NotifyCanExecuteChanged();
         }
     }
 
@@ -203,27 +178,9 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
             return;
         }
 
-        _historyContract = contractId;
-        var latest = true;
         foreach (var entry in outcome.Value.History)
         {
-            var row = new AdjustmentHistoryRow(
-                Formats.Date(entry.DueDate),
-                Formats.Period(entry.AppliesFrom ?? entry.DueDate),
-                Formats.Money(entry.PreviousCanon),
-                Formats.Money(entry.NewCanon),
-                Formats.Level(entry.Coefficient),
-                entry.ConfirmedBy ?? "Sin registro",
-                entry.DifferenceAmount is { } offered
-                    ? $"Diferencia de {Formats.Money(offered)} {(entry.DifferenceCharged ? "cobrada" : "no cobrada")}"
-                    : string.Empty)
-            {
-                // The history comes the most recently confirmed first, and only that one can be corrected (spec Decision 26).
-                AdjustmentId = entry.Id,
-                CanCorrect = latest,
-            };
-            History.Add(row);
-            latest = false;
+            History.Add(AdjustmentTexts.HistoryRow(entry, canCorrect: false));
         }
 
         var result = outcome.Value.Preview;
@@ -250,9 +207,7 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
         NoticeReminder = null;
 
         var charge = ChargeDifference && preview.Difference is not null;
-        var outcome = await Runner.RunAsync(
-            () => preview.CorrectsAdjustmentId is null ? _desk.ConfirmAsync(preview, charge) : _desk.ConfirmCorrectionAsync(preview, charge),
-            OperationKind.Commit);
+        var outcome = await Runner.RunAsync(() => _desk.ConfirmAsync(preview, charge), OperationKind.Commit);
         if (!outcome.Completed)
         {
             return;
@@ -262,11 +217,8 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
         if (result.Confirmed is { } confirmed)
         {
             SetSummary(null);
-            var from = Formats.Period(confirmed.AppliesFrom ?? confirmed.DueDate);
-            ConfirmedMessage = confirmed is { DifferenceCharged: true, DifferenceAmount: { } charged }
-                ? $"Ajuste confirmado: el canon pasa a {Formats.Money(confirmed.NewCanon)} desde {from}. Se cobra una diferencia de {Formats.Money(charged)} con {from}."
-                : $"Ajuste confirmado: el canon pasa a {Formats.Money(confirmed.NewCanon)} desde {from}.";
-            NoticeReminder = $"Avise a {preview.TenantName ?? "el inquilino"} del nuevo canon. El sistema no le envía nada.";
+            ConfirmedMessage = AdjustmentTexts.Confirmed(confirmed, "Ajuste confirmado");
+            NoticeReminder = AdjustmentTexts.Reminder(preview.TenantName);
             await ReloadAsync();
             return;
         }
@@ -275,14 +227,7 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
         if (refusal == AdjustmentRefusal.PreviewStale)
         {
             // The summary is opened again with what is true now; the operator confirms that one or nothing.
-            if (preview.CorrectsAdjustmentId is { } corrected)
-            {
-                await ShowCorrectionAsync(preview.ContractId, corrected);
-            }
-            else
-            {
-                await ShowSummaryAsync(preview.ContractId);
-            }
+            await ShowSummaryAsync(preview.ContractId);
         }
         else
         {
@@ -293,38 +238,6 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
         RefusalMessage = refusal.OperatorText();
     }
 
-    private async Task CorrectAsync(AdjustmentHistoryRow? row)
-    {
-        if (row is not { CanCorrect: true } || _historyContract is not { } contractId)
-        {
-            return;
-        }
-
-        RefusalMessage = null;
-        ConfirmedMessage = null;
-        NoticeReminder = null;
-        await ShowCorrectionAsync(contractId, row.AdjustmentId);
-    }
-
-    private async Task ShowCorrectionAsync(Guid contractId, Guid adjustmentId)
-    {
-        SetSummary(null);
-
-        var outcome = await Runner.RunAsync(() => _desk.PreviewCorrectionAsync(contractId, adjustmentId));
-        if (!outcome.Completed)
-        {
-            return;
-        }
-
-        if (outcome.Value!.Refusal is { } refusal)
-        {
-            RefusalMessage = refusal.OperatorText();
-            return;
-        }
-
-        SetSummary(outcome.Value.Preview);
-    }
-
     private void SetSummary(AdjustmentPreview? preview)
     {
         // A choice covers only the summary it was made on.
@@ -333,13 +246,7 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
         SummaryLines.Clear();
         foreach (var line in preview?.Indices ?? [])
         {
-            SummaryLines.Add(new AdjustmentIndexRow(
-                line.IndexName,
-                Formats.Period(line.BasePeriod),
-                Formats.Level(line.BaseLevel),
-                Formats.Period(line.EndPeriod),
-                Formats.Level(line.EndLevel),
-                Formats.Level(line.Variation)));
+            SummaryLines.Add(AdjustmentTexts.IndexRow(line));
         }
     }
 
@@ -360,6 +267,7 @@ public sealed record AdjustmentIndexRow(
 
 /// <param name="AppliesFromText">The first period it priced; for a row from before this was recorded, its due month.</param>
 /// <param name="ConfirmedByText">Who confirmed it, or "Sin registro" on rows from before that was recorded.</param>
+/// <param name="CanCorrect">Only the latest adjustment, and only on the contract detail (spec Decision 26, task 12.3d).</param>
 public sealed record AdjustmentHistoryRow(
     string DueDateText, string AppliesFromText, string PreviousCanonText, string NewCanonText, string CoefficientText, string ConfirmedByText,
     string DifferenceText = "")
