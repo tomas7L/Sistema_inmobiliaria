@@ -1293,4 +1293,67 @@ public sealed class ContractChangesTests
         Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
         Assert.Equal("ck_contract_events_reason_not_blank", refusal.ConstraintName);
     }
+
+    /// <summary>Spec Test 113: the tenant cannot become a codeudor of the same contract; the codeudores stay as they were.</summary>
+    [SkippableFact]
+    public async Task TheTenantAddedAsCodebtor_IsRefused_AndChangesNothing()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+        await using var world = await WorldAsync();
+        var seeded = await SeedAsync(world);
+        var before = await HashAsync(world);
+
+        var result = await Registry(world).SetCodebtorsAsync(seeded.Contract, [await PersonAsync(world), seeded.Tenant]);
+
+        Assert.Equal(ContractRefusal.TenantIsCodebtor, result.Refusal);
+        Assert.Equal(before, await HashAsync(world));
+    }
+
+    /// <summary>Spec Test 115: a notice dated before the contract started is refused, and nothing is written.</summary>
+    [SkippableFact]
+    public async Task ANoticeBeforeTheStart_IsRefused_AndChangesNothing()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+        await using var world = await WorldAsync();
+        var seeded = await SeedAsync(world);
+        var before = await HashAsync(world);
+
+        var result = await Registry(world).GiveNoticeAsync(seeded.Contract, Today, NextMonth.AddMonths(2));
+
+        Assert.Equal(ContractRefusal.NoticeBeforeStart, result.Refusal);
+        Assert.Equal(before, await HashAsync(world));
+    }
+
+    /// <summary>
+    /// Spec Test 117: a tenant with no email warns, naming them, and the contract is written once accepted; the tenant as one of
+    /// its own codeudores is refused on creation too (Test 113).
+    /// </summary>
+    [SkippableFact]
+    public async Task ATenantWithNoEmail_Warns_AndTheContractIsWrittenOnAccepting()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+        await using var world = await WorldAsync();
+        var tenant = await PersonAsync(world, "Ana", "Sosa");
+        var draft = new ContractDraft
+        {
+            TenantId = tenant,
+            LessorIds = [await PersonAsync(world)],
+            Shares = [new UnitShare(await UnitAsync(world, "77"), 100m)],
+            StartDate = NextMonth,
+            NominalEndDate = NextMonth.AddYears(2).AddDays(-1),
+            MonthlyRent = 450_000m,
+            HonorariosPercentage = 8m,
+        };
+
+        Assert.Equal(ContractRefusal.TenantIsCodebtor, (await Registry(world).CreateAsync(draft with { CodebtorIds = [tenant] }, true)).Refusal);
+
+        var warned = await Registry(world).CreateAsync(draft, false);
+
+        var warning = Assert.Single(warned.Warnings);
+        Assert.Equal(ContractWarningKind.TenantWithoutEmail, warning.Kind);
+        Assert.StartsWith("Ana Sosa no tiene email", warning.OperatorText(), StringComparison.Ordinal);
+        Assert.Null(warned.Contract);
+
+        Assert.True((await Registry(world).CreateAsync(draft, true)).Succeeded);
+    }
 }

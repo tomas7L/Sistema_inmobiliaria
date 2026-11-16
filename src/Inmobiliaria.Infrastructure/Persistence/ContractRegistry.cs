@@ -152,6 +152,7 @@ public sealed partial class ContractRegistry : IContractRegistry
             .Concat(named
                 .Where(u => u.Covering?.Status == ContractStatus.PendingTermination)
                 .Select(u => new ContractWarning(ContractWarningKind.UnitBeingVacated, u.Covering!.MoveOutDate, u.AddressText)))
+            .Concat(WithoutEmail(persons[tenantId]))
             .ToList();
         if (warnings.Count > 0 && !acceptWarnings)
         {
@@ -302,6 +303,12 @@ public sealed partial class ContractRegistry : IContractRegistry
         ex.InnerException is PostgresException database
             ? ContractRegistryErrorMap.For(database.SqlState, database.ConstraintName)
             : null;
+
+    /// <summary>The warning for a tenant the notices cannot reach (spec Decision 51), or none.</summary>
+    private static IEnumerable<ContractWarning> WithoutEmail(Party tenant) =>
+        string.IsNullOrWhiteSpace(tenant.Email)
+            ? [new ContractWarning(ContractWarningKind.TenantWithoutEmail, Person: $"{tenant.FirstName} {tenant.LastName}")]
+            : [];
 }
 
 /// <summary>

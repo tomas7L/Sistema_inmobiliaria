@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Inmobiliaria.Domain.Accounts;
 using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Domain.Parties;
 using Inmobiliaria.Domain.Units;
@@ -12,9 +13,10 @@ using Inmobiliaria.Presentation.Common;
 namespace Inmobiliaria.Presentation.Contracts;
 
 /// <summary>
-/// The new-contract form (gestion-de-alquileres spec Requirements 7 and 8, design §6). The port applies every rule again, and
-/// the database decides who may set a cutover date: offering it only to an Admin is a courtesy, not the guard. Editing
-/// anything withdraws warnings waiting to be accepted, so what is accepted is what is written. The view arrives in S12.
+/// The new-contract form (gestion-de-alquileres spec Requirements 7, 8, 27 and 29, design §6). The form shows every error it
+/// can find on its own at once, each beside its field (Decision 44), and sends nothing while any remains; the port applies
+/// every rule again, and the database decides who may set a cutover date: offering it only to an Admin is a courtesy, not
+/// the guard. Editing anything withdraws warnings waiting to be accepted, so what is accepted is what is written.
 /// </summary>
 public sealed partial class ContractFormViewModel : ObservableObject
 {
@@ -22,15 +24,18 @@ public sealed partial class ContractFormViewModel : ObservableObject
     public const string FormChangedWhileSaving = "El formulario cambió mientras se guardaba. Revíselo y guarde de nuevo.";
 
     private readonly IContractRegistry _contracts;
+    private readonly IAgencyClock _clock;
 
     /// <summary>Counts edits, so a reply can tell whether it still describes what the form holds.</summary>
     private int _edits;
 
-    public ContractFormViewModel(IContractRegistry contracts, bool canSetCutover)
+    public ContractFormViewModel(IContractRegistry contracts, bool canSetCutover, IAgencyClock clock)
     {
         ArgumentNullException.ThrowIfNull(contracts);
+        ArgumentNullException.ThrowIfNull(clock);
 
         _contracts = contracts;
+        _clock = clock;
         IsCutoverOffered = canSetCutover;
         SaveCommand = new AsyncRelayCommand(SaveAsync, CanAct);
         AcceptWarningsCommand = new AsyncRelayCommand(AcceptWarningsAsync, () => CanAct() && HasWarnings);
@@ -130,6 +135,10 @@ public sealed partial class ContractFormViewModel : ObservableObject
     [ObservableProperty]
     private string? _refusalMessage;
 
+    /// <summary>Each field's error from the last save, all at once (spec Decision 44). Cleared when the next starts.</summary>
+    [ObservableProperty]
+    private ContractFieldErrors _errors = ContractFieldErrors.None;
+
     /// <summary>The contract just written, or null.</summary>
     [ObservableProperty]
     private ContractListing? _created;
@@ -216,10 +225,12 @@ public sealed partial class ContractFormViewModel : ObservableObject
     {
         RefusalMessage = null;
         Created = null;
+        Errors = ContractFieldErrors.None;
 
-        if (TryBuildDraft(out var refused) is not { } draft)
+        var draft = BuildDraft(out var problems);
+        if (problems.Count > 0)
         {
-            RefusalMessage = refused!.Value.OperatorText();
+            Errors = new ContractFieldErrors(problems);
             return;
         }
 
@@ -256,56 +267,79 @@ public sealed partial class ContractFormViewModel : ObservableObject
         }
     }
 
-    /// <summary>What was typed, or null with the refusal for text that is not even a number. Everything else is the rules' to say.</summary>
-    private ContractDraft? TryBuildDraft(out ContractRefusal? refused)
+    /// <summary>
+    /// What was typed, with every problem the form can find on its own (spec Decision 44): text that is not even a number,
+    /// beside its field, and the rules' own (<see cref="ContractDraftRules.Problems"/>) for the rest, in the form's order.
+    /// A field whose text could not be read gets only that problem, not the rules' about the blank it leaves.
+    /// </summary>
+    private ContractDraft BuildDraft(out IReadOnlyList<ContractProblem> problems)
     {
-        refused = null;
+        var unread = new List<ContractProblem>();
 
-        if (!Formats.TryParseMoney(MonthlyRentText, out var rent) || (SharesAsAmounts && rent is not > 0m))
+        var rentRead = Formats.TryParseMoney(MonthlyRentText, out var rent);
+        if (!rentRead || (SharesAsAmounts && rent is not > 0m))
         {
-            refused = ContractRefusal.RentNotWholePositive;
+            unread.Add(new ContractProblem(ContractField.Rent, ContractRefusal.RentNotWholePositive));
         }
-        else if (!int.TryParse(DueDayText, NumberStyles.None, CultureInfo.InvariantCulture, out var dueDay))
+
+        if (!int.TryParse(DueDayText, NumberStyles.None, CultureInfo.InvariantCulture, out var dueDay))
         {
-            refused = ContractRefusal.DueDayOutOfRange;
+            unread.Add(new ContractProblem(ContractField.DueDay, ContractRefusal.DueDayOutOfRange));
+            dueDay = Contract.DefaultDueDay;
         }
-        else if (!Formats.TryParseMoney(HonorariosText, out var rate))
+
+        if (!Formats.TryParseMoney(HonorariosText, out var rate))
         {
-            refused = ContractRefusal.HonorariosOutOfRange;
+            unread.Add(new ContractProblem(ContractField.Honorarios, ContractRefusal.HonorariosOutOfRange));
         }
-        else if (!TryParseFeePlan(out var feeAmount, out var feeInstalments))
+
+        if (!TryParseFeePlan(out var feeAmount, out var feeInstalments))
         {
-            refused = ContractRefusal.FeePlanInvalid;
+            unread.Add(new ContractProblem(ContractField.FeePlan, ContractRefusal.FeePlanInvalid));
+            (feeAmount, feeInstalments) = (null, null);
         }
-        else if (!TryParseClause(out var clause))
+
+        if (!TryParseClause(out var clause))
         {
-            refused = ContractRefusal.ClauseInvalid;
+            unread.Add(new ContractProblem(ContractField.Clause, ContractRefusal.ClauseInvalid));
         }
-        else if (!TryBuildShares(rent, out var shares))
+
+        // Amounts convert against the canon, so with no canon the problem is the canon's alone, not the shares'.
+        var canonMissing = SharesAsAmounts && rent is not > 0m;
+        if (!TryBuildShares(rent, out var shares))
         {
-            refused = ContractRefusal.SharesNotHundred;
-        }
-        else
-        {
-            return new ContractDraft
+            if (!canonMissing)
             {
-                TenantId = Tenant?.Id,
-                LessorIds = Lessors.Select(l => l.Id).ToList(),
-                CodebtorIds = Codebtors.Select(c => c.Id).ToList(),
-                Shares = shares,
-                StartDate = StartDate,
-                NominalEndDate = NominalEndDate,
-                MonthlyRent = rent,
-                DueDay = dueDay,
-                HonorariosPercentage = rate,
-                CutoverDate = IsCutoverOffered ? CutoverDate : null,
-                FeePlanAmount = feeAmount,
-                FeePlanInstalments = feeInstalments,
-                Clause = clause,
-            };
+                unread.Add(new ContractProblem(ContractField.Shares, ContractRefusal.SharesNotHundred));
+            }
+
+            shares = RentSplit.Equal(Units.Select(u => u.Unit.Id).ToList());
         }
 
-        return null;
+        var draft = new ContractDraft
+        {
+            TenantId = Tenant?.Id,
+            LessorIds = Lessors.Select(l => l.Id).ToList(),
+            CodebtorIds = Codebtors.Select(c => c.Id).ToList(),
+            Shares = shares,
+            StartDate = StartDate,
+            NominalEndDate = NominalEndDate,
+            MonthlyRent = rentRead ? rent : null,
+            DueDay = dueDay,
+            HonorariosPercentage = rate,
+            CutoverDate = IsCutoverOffered ? CutoverDate : null,
+            FeePlanAmount = feeAmount,
+            FeePlanInstalments = feeInstalments,
+            Clause = clause,
+        };
+
+        var unreadFields = unread.Select(p => p.Field).ToHashSet();
+        problems = unread
+            .Concat(ContractDraftRules.Problems(draft, _clock.Today).Where(p => !unreadFields.Contains(p.Field)))
+            .OrderBy(p => p.Field)
+            .ToList();
+
+        return draft;
     }
 
     private bool TryParseFeePlan(out decimal? amount, out int? instalments)
@@ -337,6 +371,11 @@ public sealed partial class ContractFormViewModel : ObservableObject
     private bool TryBuildShares(decimal? rent, out IReadOnlyList<UnitShare> shares)
     {
         shares = [];
+        if (SharesAsAmounts && rent is not > 0m)
+        {
+            return false;
+        }
+
         if (Units.Count == 0)
         {
             return true;
@@ -421,6 +460,32 @@ public sealed partial class ContractFormViewModel : ObservableObject
             AcceptWarningsCommand.NotifyCanExecuteChanged();
         }
     }
+}
+
+/// <summary>Each field's error text, or null for a field without one; the screen shows each beside its field.</summary>
+public sealed class ContractFieldErrors
+{
+    public const string SummaryText = "No se pudo guardar: revise los datos marcados.";
+
+    public static readonly ContractFieldErrors None = new([]);
+
+    private readonly Dictionary<ContractField, string> _texts;
+
+    /// <param name="problems">In the form's order; a field with two problems shows the first.</param>
+    public ContractFieldErrors(IEnumerable<ContractProblem> problems)
+    {
+        ArgumentNullException.ThrowIfNull(problems);
+        _texts = problems
+            .GroupBy(p => p.Field)
+            .ToDictionary(g => g.Key, g => g.First().Refusal.OperatorText());
+    }
+
+    public string? this[ContractField field] => _texts.GetValueOrDefault(field);
+
+    public int Count => _texts.Count;
+
+    /// <summary>The line over the form while any field has an error.</summary>
+    public string? Summary => _texts.Count > 0 ? SummaryText : null;
 }
 
 /// <summary>A unit on the form, with what was typed for its share. Everything blank splits equally.</summary>

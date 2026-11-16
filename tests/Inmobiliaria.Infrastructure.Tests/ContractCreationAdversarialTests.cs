@@ -37,7 +37,7 @@ public sealed class ContractCreationAdversarialTests
     private static async Task<Guid> PartyAsync(DeskWorld world, string first, string last)
     {
         await using var seed = world.NewContext();
-        var party = new Party(Guid.NewGuid(), first, last);
+        var party = new Party(Guid.NewGuid(), first, last, email: "persona@ejemplo.test");
         seed.Parties.Add(party);
         await seed.SaveChangesAsync();
         return party.Id;
@@ -545,19 +545,26 @@ public sealed class ContractCreationAdversarialTests
         Assert.Equal(1, await world.CountAsync("SELECT count(*) FROM contract_parties WHERE role = 'Lessor'"));
     }
 
-    /// <summary>No rule forbids it; it must not reach a generic error, and readers cope.</summary>
+    /// <summary>
+    /// The tenant as a lessor of their own contract is allowed and readers cope; as one of its codeudores it is refused with
+    /// its own text, never the generic error (spec Decision 51).
+    /// </summary>
     [SkippableFact]
-    public async Task APersonBothTenantAndLessor_AndCodebtor_DoesNotThrow_AndReadersCope()
+    public async Task APersonBothTenantAndLessor_IsWritten_AndAsCodebtorIsRefused()
     {
         Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
         await using var world = await DeskWorld.CreateAsync(_fixture);
         var cast = await CastAsync(world);
         await using var context = world.NewContext();
         var registry = new ContractRegistry(context, Clock);
-        var result = await registry.CreateAsync(Draft(cast) with { LessorIds = [cast.Tenant], CodebtorIds = [cast.Tenant] }, false);
+        Assert.Equal(
+            ContractRefusal.TenantIsCodebtor,
+            (await registry.CreateAsync(Draft(cast) with { LessorIds = [cast.Tenant], CodebtorIds = [cast.Tenant] }, false)).Refusal);
+
+        var result = await registry.CreateAsync(Draft(cast) with { LessorIds = [cast.Tenant] }, false);
         Assert.True(result.Succeeded, $"{result.Refusal}");
-        Assert.Equal(3, await world.CountAsync("SELECT count(*) FROM contract_parties"));
-        Assert.Equal(3, (await registry.DetailAsync(result.Contract!.Id))!.Parties.Count);
+        Assert.Equal(2, await world.CountAsync("SELECT count(*) FROM contract_parties"));
+        Assert.Equal(2, (await registry.DetailAsync(result.Contract!.Id))!.Parties.Count);
         await using var directory = world.NewContext();
         Assert.Single(await new AccountDirectory(directory, Clock).SearchAsync("Pérez"));
     }
@@ -596,11 +603,13 @@ public sealed class ContractCreationAdversarialTests
         { "rate negative", 1000m, -0.01m, null, null, false },
         { "rate huge", 1000m, decimal.MaxValue, null, null, false },
         { "rate tiny", 1000m, 0.0000000000000000000000000001m, null, null, false },
-        { "fee max", 1000m, 8m, 999_999_999_999.99m, 6, true },
-        { "fee cents", 1000m, 8m, 0.01m, 1, true },
+        { "fee max", 1000m, 8m, 999_999_999_999m, 6, true },
+        { "fee max with cents", 1000m, 8m, 999_999_999_999.99m, 6, false },
+        { "fee cents", 1000m, 8m, 0.01m, 1, false },
         { "fee over", 1000m, 8m, 1_000_000_000_000m, 6, false },
         { "fee three places", 1000m, 8m, 1.005m, 1, false },
-        { "fee scaled", 1000m, 8m, 1.5000m, 1, true },
+        { "fee scaled", 1000m, 8m, 1.0000m, 1, true },
+        { "fee scaled with cents", 1000m, 8m, 1.5000m, 1, false },
         { "fee huge", 1000m, 8m, decimal.MaxValue, 6, false },
         { "fee zero", 1000m, 8m, 0m, 1, false },
         { "fee negative", 1000m, 8m, -5m, 1, false },
@@ -685,11 +694,14 @@ public sealed class ContractCreationAdversarialTests
         Assert.Equal(writes, result.Succeeded);
     }
 
-    /// <summary>Extreme dates an operator can type, written or refused but never thrown, and the readers still read them.</summary>
+    /// <summary>
+    /// Extreme dates an operator can type, written or refused but never thrown, and the readers still read them. An end past
+    /// the 50-year ceiling is refused (spec Decision 51).
+    /// </summary>
     [SkippableTheory]
-    [InlineData(2026, 12, 1, 9999, 12, 31)]
-    [InlineData(9999, 12, 1, 9999, 12, 31)]
-    public async Task ExtremeDates_DoNotThrow(int sy, int sm, int sd, int ey, int em, int ed)
+    [InlineData(2026, 12, 1, 9999, 12, 31, ContractRefusal.EndPastLegalCeiling)]
+    [InlineData(9999, 12, 1, 9999, 12, 31, null)]
+    public async Task ExtremeDates_DoNotThrow(int sy, int sm, int sd, int ey, int em, int ed, ContractRefusal? refusal)
     {
         Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
         await using var world = await DeskWorld.CreateAsync(_fixture);
@@ -697,9 +709,12 @@ public sealed class ContractCreationAdversarialTests
         await using var context = world.NewContext();
         var registry = new ContractRegistry(context, Clock);
         var result = await registry.CreateAsync(Draft(cast) with { StartDate = new DateOnly(sy, sm, sd), NominalEndDate = new DateOnly(ey, em, ed) }, true);
-        Assert.True(result.Succeeded, $"{result.Refusal}");
-        Assert.NotNull(await registry.DetailAsync(result.Contract!.Id));
-        Assert.Single(await registry.ListAsync(null, null));
+        Assert.Equal(refusal, result.Refusal);
+        Assert.Equal(refusal is null ? 1 : 0, (await registry.ListAsync(null, null)).Count);
+        if (result.Succeeded)
+        {
+            Assert.NotNull(await registry.DetailAsync(result.Contract!.Id));
+        }
     }
 
     [SkippableFact]
@@ -710,7 +725,7 @@ public sealed class ContractCreationAdversarialTests
         var cast = await CastAsync(world);
         await using var context = world.NewContext();
         var result = await new ContractRegistry(context, Clock).CreateAsync(
-            Draft(cast) with { StartDate = new DateOnly(1, 1, 1), NominalEndDate = new DateOnly(1, 1, 1), CutoverDate = new DateOnly(1, 1, 1) }, true);
+            Draft(cast) with { StartDate = new DateOnly(1, 1, 1), NominalEndDate = new DateOnly(1, 1, 2), CutoverDate = new DateOnly(1, 1, 1) }, true);
         Assert.True(result.Succeeded, $"{result.Refusal}");
     }
 

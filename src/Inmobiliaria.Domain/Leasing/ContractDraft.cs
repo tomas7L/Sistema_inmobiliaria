@@ -38,6 +38,27 @@ public sealed record ContractDraft
 /// <param name="IntervalMonths">Months between adjustments.</param>
 public sealed record ClauseDraft(IReadOnlyList<Guid> IndexIds, int IntervalMonths, int WindowOffsetMonths = AdjustmentClause.DefaultWindowOffsetMonths);
 
+/// <summary>The field of the contract form a problem belongs to, in the form's order, so the screen shows it beside that field.</summary>
+public enum ContractField
+{
+    Tenant,
+    Lessors,
+    Codebtors,
+    Units,
+    StartDate,
+    EndDate,
+    Cutover,
+    Rent,
+    DueDay,
+    Honorarios,
+    FeePlan,
+    Shares,
+    Clause,
+}
+
+/// <summary>One thing wrong with a draft, and the field it belongs to.</summary>
+public sealed record ContractProblem(ContractField Field, ContractRefusal Refusal);
+
 /// <summary>
 /// The form's rules, pure and without a database (design D19). They are separate from <see cref="Contract"/>'s
 /// constructor, which keeps tolerating what existing rules and tests use, such as a start date that is not on the 1st
@@ -45,24 +66,49 @@ public sealed record ClauseDraft(IReadOnlyList<Guid> IndexIds, int IntervalMonth
 /// </summary>
 public static class ContractDraftRules
 {
+    /// <summary>The longest a lease may run, for any use (spec Decision 51, Civil and Commercial Code art. 1197).</summary>
+    public const int MaximumYears = 50;
+
     /// <summary>Largest amount <c>numeric(14,2)</c> holds, for the canon and a fee instalment.</summary>
     private const decimal MaximumAmount = 999_999_999_999.99m;
 
     private const int SharePlaces = 6;
     private const int AmountPlaces = 2;
 
-    /// <summary>The first refusal <paramref name="draft"/> earns, or null when it can be written.</summary>
+    /// <summary>The first refusal <paramref name="draft"/> earns, or null when it can be written: the port's guard.</summary>
     /// <param name="draft">The form.</param>
     /// <param name="today">The agency's date.</param>
     /// <param name="standingStart">
     /// On a correction, the start date the contract already has. It is not refused for being in the past or off the 1st: a
     /// contract that has simply waited a month must stay correctable, and an older one was allowed its date when created.
     /// </param>
-    public static ContractRefusal? Check(ContractDraft draft, DateOnly today, DateOnly? standingStart = null)
+    public static ContractRefusal? Check(ContractDraft draft, DateOnly today, DateOnly? standingStart = null) =>
+        Problems(draft, today, standingStart).FirstOrDefault()?.Refusal;
+
+    /// <summary>
+    /// Every problem <paramref name="draft"/> has, in the form's order, each with its field (spec Requirements 27 and 29,
+    /// Decision 44): what the form shows at once. Empty when it can be written. Parameters as in <see cref="Check"/>.
+    /// </summary>
+    public static IReadOnlyList<ContractProblem> Problems(ContractDraft draft, DateOnly today, DateOnly? standingStart = null)
     {
         ArgumentNullException.ThrowIfNull(draft);
 
-        return Parties(draft) ?? Dates(draft, today, standingStart) ?? Money(draft) ?? Shares(draft) ?? Clause(draft);
+        var problems = new List<ContractProblem>();
+        Parties(draft, problems);
+        Dates(draft, today, standingStart, problems);
+        Money(draft, problems);
+
+        if (draft.Shares.Count > 0 && Shares(draft) is { } shares)
+        {
+            problems.Add(new ContractProblem(ContractField.Shares, shares));
+        }
+
+        if (Clause(draft) is { } clause)
+        {
+            problems.Add(new ContractProblem(ContractField.Clause, clause));
+        }
+
+        return problems;
     }
 
     /// <summary>A rate as the form takes it: 0 to 100, with up to two decimals.</summary>
@@ -91,71 +137,114 @@ public static class ContractDraftRules
         return warnings;
     }
 
-    private static ContractRefusal? Parties(ContractDraft draft)
+    /// <summary>Whether the tenant is also among the codeudores, which a contract cannot hold (spec Decision 51).</summary>
+    public static bool TenantIsCodebtor(Guid? tenantId, IEnumerable<Guid> codebtorIds) =>
+        tenantId is { } tenant && codebtorIds.Contains(tenant);
+
+    private static void Parties(ContractDraft draft, List<ContractProblem> problems)
     {
         if (draft.TenantId is null)
         {
-            return ContractRefusal.TenantMissing;
+            problems.Add(new ContractProblem(ContractField.Tenant, ContractRefusal.TenantMissing));
         }
 
         if (draft.LessorIds.Count == 0)
         {
-            return ContractRefusal.LessorMissing;
+            problems.Add(new ContractProblem(ContractField.Lessors, ContractRefusal.LessorMissing));
         }
 
-        return draft.Shares.Count == 0 ? ContractRefusal.UnitMissing : null;
+        if (TenantIsCodebtor(draft.TenantId, draft.CodebtorIds))
+        {
+            problems.Add(new ContractProblem(ContractField.Codebtors, ContractRefusal.TenantIsCodebtor));
+        }
+
+        if (draft.Shares.Count == 0)
+        {
+            problems.Add(new ContractProblem(ContractField.Units, ContractRefusal.UnitMissing));
+        }
     }
 
-    private static ContractRefusal? Dates(ContractDraft draft, DateOnly today, DateOnly? standingStart)
+    private static void Dates(ContractDraft draft, DateOnly today, DateOnly? standingStart, List<ContractProblem> problems)
     {
+        if (draft.StartDate is null)
+        {
+            problems.Add(new ContractProblem(ContractField.StartDate, ContractRefusal.DatesMissing));
+        }
+
+        if (draft.NominalEndDate is null)
+        {
+            problems.Add(new ContractProblem(ContractField.EndDate, ContractRefusal.DatesMissing));
+        }
+
         if (draft is not { StartDate: { } start, NominalEndDate: { } end })
         {
-            return ContractRefusal.DatesMissing;
+            return;
         }
 
         if (start.Day != 1 && start != standingStart)
         {
-            return ContractRefusal.StartNotOnTheFirst;
+            problems.Add(new ContractProblem(ContractField.StartDate, ContractRefusal.StartNotOnTheFirst));
         }
 
-        if (end < start)
+        if (end <= start)
         {
-            return ContractRefusal.EndBeforeStart;
+            problems.Add(new ContractProblem(ContractField.EndDate, ContractRefusal.EndBeforeStart));
+        }
+        // A start within 50 years of the calendar's last day cannot have an end past the ceiling, and adding would overflow.
+        else if (start.Year <= DateOnly.MaxValue.Year - MaximumYears && end > start.AddYears(MaximumYears))
+        {
+            problems.Add(new ContractProblem(ContractField.EndDate, ContractRefusal.EndPastLegalCeiling));
         }
 
         if (draft.CutoverDate is { } cutover)
         {
-            return Contract.CheckCutoverBounds(cutover, start, today) switch
+            var refusal = Contract.CheckCutoverBounds(cutover, start, today) switch
             {
                 CutoverRefusal.AfterToday => ContractRefusal.CutoverAfterToday,
                 CutoverRefusal.BeforeContractStart => ContractRefusal.CutoverBeforeStart,
-                _ => null,
+                _ => (ContractRefusal?)null,
             };
+            if (refusal is { } cutoverRefusal)
+            {
+                problems.Add(new ContractProblem(ContractField.Cutover, cutoverRefusal));
+            }
+
+            return;
         }
 
-        return start < new DateOnly(today.Year, today.Month, 1) && start != standingStart ? ContractRefusal.StartBeforeCurrentMonth : null;
+        if (start < new DateOnly(today.Year, today.Month, 1) && start != standingStart)
+        {
+            problems.Add(new ContractProblem(ContractField.StartDate, ContractRefusal.StartBeforeCurrentMonth));
+        }
     }
 
-    private static ContractRefusal? Money(ContractDraft draft)
+    private static void Money(ContractDraft draft, List<ContractProblem> problems)
     {
         if (draft.MonthlyRent is not { } rent || rent <= 0m || rent != decimal.Truncate(rent) || rent > MaximumAmount)
         {
-            return ContractRefusal.RentNotWholePositive;
+            problems.Add(new ContractProblem(ContractField.Rent, ContractRefusal.RentNotWholePositive));
         }
 
         if (draft.DueDay is < 1 or > 31)
         {
-            return ContractRefusal.DueDayOutOfRange;
+            problems.Add(new ContractProblem(ContractField.DueDay, ContractRefusal.DueDayOutOfRange));
         }
 
         if (draft.HonorariosPercentage is { } rate && !IsValidRate(rate))
         {
-            return ContractRefusal.HonorariosOutOfRange;
+            problems.Add(new ContractProblem(ContractField.Honorarios, ContractRefusal.HonorariosOutOfRange));
         }
 
-        return FeePlan(draft);
+        if (FeePlan(draft) is { } feePlan)
+        {
+            problems.Add(new ContractProblem(ContractField.FeePlan, feePlan));
+        }
     }
 
+    /// <summary>
+    /// An amount and 1 to 6 instalments, or neither. The amount is in whole pesos (spec Decision 51, `lease-contract/spec.md:359`),
+    /// refused with its own text when it carries cents.
+    /// </summary>
     private static ContractRefusal? FeePlan(ContractDraft draft) => (draft.FeePlanAmount, draft.FeePlanInstalments) switch
     {
         (null, null) => null,
@@ -163,7 +252,8 @@ public static class ContractDraftRules
             when amount > 0m
                 && amount <= MaximumAmount
                 && amount == decimal.Round(amount, AmountPlaces)
-                && instalments is >= 1 and <= ContractualFeePlan.MaxInstalments => null,
+                && instalments is >= 1 and <= ContractualFeePlan.MaxInstalments =>
+            amount == decimal.Truncate(amount) ? null : ContractRefusal.FeePlanNotWholePesos,
         _ => ContractRefusal.FeePlanInvalid,
     };
 

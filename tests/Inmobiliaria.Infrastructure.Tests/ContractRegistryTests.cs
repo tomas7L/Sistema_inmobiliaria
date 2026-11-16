@@ -62,7 +62,7 @@ public sealed class ContractRegistryTests
     private static async Task<Guid> PartyAsync(DeskWorld world, string first, string last)
     {
         await using var seed = world.NewContext();
-        var party = new Party(Guid.NewGuid(), first, last);
+        var party = new Party(Guid.NewGuid(), first, last, email: "persona@ejemplo.test");
         seed.Parties.Add(party);
         await seed.SaveChangesAsync();
         return party.Id;

@@ -246,7 +246,7 @@ public class ContractLifecycleRulesTests
     [InlineData("2026-10-10", "2026-12-31")]
     public void Notice_NotAfterTodayWithAMoveOutNotBeforeIt_IsAllowed(string notice, string moveOut)
     {
-        Assert.Null(ContractLifecycleRules.CheckNotice(ContractStatus.Active, DateOnly.Parse(notice), DateOnly.Parse(moveOut), Today));
+        Assert.Null(ContractLifecycleRules.CheckNotice(ContractStatus.Active, Start, DateOnly.Parse(notice), DateOnly.Parse(moveOut), Today));
     }
 
     [Fact]
@@ -254,7 +254,7 @@ public class ContractLifecycleRulesTests
     {
         Assert.Equal(
             ContractRefusal.NoticeAfterToday,
-            ContractLifecycleRules.CheckNotice(ContractStatus.Active, Today.AddDays(1), Today.AddDays(5), Today));
+            ContractLifecycleRules.CheckNotice(ContractStatus.Active, Start, Today.AddDays(1), Today.AddDays(5), Today));
     }
 
     [Fact]
@@ -262,7 +262,7 @@ public class ContractLifecycleRulesTests
     {
         Assert.Equal(
             ContractRefusal.MoveOutBeforeNotice,
-            ContractLifecycleRules.CheckNotice(ContractStatus.Active, new DateOnly(2026, 10, 10), new DateOnly(2026, 10, 1), Today));
+            ContractLifecycleRules.CheckNotice(ContractStatus.Active, Start, new DateOnly(2026, 10, 10), new DateOnly(2026, 10, 1), Today));
     }
 
     [Theory]
@@ -270,7 +270,7 @@ public class ContractLifecycleRulesTests
     [InlineData(ContractStatus.Ended)]
     public void Notice_FromAnyStateButActive_IsRefused(ContractStatus status)
     {
-        Assert.Equal(ContractRefusal.NoticeNeedsActive, ContractLifecycleRules.CheckNotice(status, Today, Today, Today));
+        Assert.Equal(ContractRefusal.NoticeNeedsActive, ContractLifecycleRules.CheckNotice(status, Start, Today, Today, Today));
     }
 
     [Theory]
