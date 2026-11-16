@@ -569,17 +569,17 @@ public class ContractFormViewModelTests
         Assert.True(viewModel.SaveCommand.CanExecute(null));
     }
 
-    /// <summary>Spec Test 10: the state stays Vigente beside the flag; the search and the state reach the port.</summary>
+    /// <summary>Spec Test 10: the state stays Vigente beside the flag; the search reaches the port, the state filters on the screen.</summary>
     [Fact]
     public async Task TheList_FlagsAContractPastItsEnd_WithoutChangingItsState()
     {
         var past = FakeContractRegistry.Saved with { IsPastEnd = true };
         var port = new FakeContractRegistry { Contracts = [past, FakeContractRegistry.Saved] };
-        var viewModel = new ContractsViewModel(port) { SearchText = "perez", StatusFilter = ContractStatus.Active };
+        var viewModel = new ContractsViewModel(port) { SearchText = "perez", Filter = ContractListFilter.Active };
 
         await viewModel.LoadCommand.ExecuteAsync(null);
 
-        Assert.Equal(("perez", ContractStatus.Active), port.Lists.Single());
+        Assert.Equal(("perez", (ContractStatus?)null), port.Lists.Single());
         Assert.Equal("Vigente", viewModel.Contracts[0].StatusText);
         Assert.NotNull(viewModel.Contracts[0].PastEndFlag);
         Assert.Null(viewModel.Contracts[1].PastEndFlag);

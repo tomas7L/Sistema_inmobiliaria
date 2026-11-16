@@ -108,9 +108,11 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
     public bool HasDifference => Summary?.Difference is not null;
 
     /// <summary>The difference offered and the months it covers, or null when none is offered.</summary>
-    public string? DifferenceText => Summary?.Difference is { } offer
-        ? $"Diferencia de {Formats.Money(offer.Amount)} por los meses {Formats.Period(offer.Months[0])} a {Formats.Period(offer.Months[^1])}, ya cobrados con el canon anterior."
-        : null;
+    public string? DifferenceText => Summary?.Difference is not { } offer
+        ? null
+        : offer.Months.Count == 1
+        ? $"Diferencia de {Formats.Money(offer.Amount)} por el mes {Formats.Period(offer.Months[0])}, ya cobrado con el canon anterior."
+        : $"Diferencia de {Formats.Money(offer.Amount)} por los meses {Formats.Period(offer.Months[0])} a {Formats.Period(offer.Months[^1])}, ya cobrados con el canon anterior.";
 
     public string? TenantText => Summary?.TenantName;
 

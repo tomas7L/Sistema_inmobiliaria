@@ -244,6 +244,17 @@ public class AdjustmentsViewModelTests
         Assert.False(world.ViewModel.ChargeDifference);
     }
 
+    /// <summary>Task 12.3d: a difference covering one month names that month alone, not a range from it to itself.</summary>
+    [Fact]
+    public async Task ADifferenceOfOneMonth_NamesThatMonth()
+    {
+        var preview = new AdjustmentPreview(
+            Ready, "Maria Prueba", July, 100_000m, [], CombinationRule.Single, 10m, 110_000m, 110_000m, August, new DifferenceOffer(10_000m, [July]));
+        var world = await OpenedAsync(preview);
+
+        Assert.Equal("Diferencia de 10.000 por el mes 07/2026, ya cobrado con el canon anterior.", world.ViewModel.DifferenceText);
+    }
+
     [Fact]
     public async Task Test53_ASummaryWithNoDifference_OffersNoChoice()
     {

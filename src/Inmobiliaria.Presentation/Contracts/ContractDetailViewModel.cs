@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -9,7 +10,8 @@ namespace Inmobiliaria.Presentation.Contracts;
 /// <summary>
 /// One contract, with notice, end, their undoing and cancelling (gestion-de-alquileres spec Requirements 6, 10, 23 and 24, design §6). Each of them opens a summary
 /// that the operator confirms, and editing what the summary was built from closes it, so what is confirmed is what was read. The
-/// contract is read again after every action. Both roles; the view arrives in S12.
+/// contract is read again after every action. Each state offers its own buttons (task 12.3d); the port refuses the rest anyway.
+/// Both roles.
 /// </summary>
 public sealed partial class ContractDetailViewModel : ObservableObject
 {
@@ -51,12 +53,61 @@ public sealed partial class ContractDetailViewModel : ObservableObject
 
     public IRelayCommand CancelCommand { get; }
 
-    /// <summary>The reasons offered for ending. "Cargado por error" never is: only cancelling uses it (spec Requirement 10).</summary>
-    public IReadOnlyList<EndReason> EndReasons { get; } = Enum.GetValues<EndReason>().Where(r => r != Domain.Leasing.EndReason.LoadedByMistake).ToList();
+    /// <summary>The reasons offered for ending, named. "Cargado por error" never is: only cancelling uses it (spec Requirement 10).</summary>
+    public IReadOnlyList<EndReasonOption> EndReasons { get; } = Enum.GetValues<EndReason>()
+        .Where(r => r != Domain.Leasing.EndReason.LoadedByMistake)
+        .Select(r => new EndReasonOption(r, Formats.EndReason(r)))
+        .ToList();
 
     /// <summary>The contract as last read, or null before that or when it is not there.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusText), nameof(EndReasonText), nameof(IsEditOffered), nameof(IsEditLimited))]
+    [NotifyPropertyChangedFor(nameof(IsNoticeOffered), nameof(IsUndoNoticeOffered), nameof(IsEndOffered), nameof(IsUndoEndOffered))]
+    [NotifyPropertyChangedFor(nameof(IsCancelOffered), nameof(IsAccountOffered), nameof(HasNoEvents))]
     private ContractDetail? _detail;
+
+    /// <summary>The reason, who and when of what was cancelled, undone or removed, oldest first.</summary>
+    public ObservableCollection<ContractEventRow> Events { get; } = [];
+
+    public bool HasNoEvents => Events.Count == 0;
+
+    public string? StatusText => Detail is { } d ? Formats.Status(d.Status, d.IsCancelled) : null;
+
+    /// <summary>Why it ended, once it has and was not cancelled.</summary>
+    public string? EndReasonText => Detail is { EndReason: { } reason, IsCancelled: false } ? Formats.EndReason(reason) : null;
+
+    private bool IsOpen => Detail is { IsCancelled: false };
+
+    private ContractStatus? Status => Detail?.Status;
+
+    public bool IsEditOffered => IsOpen;
+
+    /// <summary>An ended contract corrects only its honorarios rate and its codeudores (task 12.3d).</summary>
+    public bool IsEditLimited => IsOpen && Status == ContractStatus.Ended;
+
+    public bool IsNoticeOffered => IsOpen && Status == ContractStatus.Active;
+
+    public bool IsUndoNoticeOffered => IsOpen && Status == ContractStatus.PendingTermination;
+
+    public bool IsEndOffered => IsOpen && Status is ContractStatus.Active or ContractStatus.PendingTermination;
+
+    public bool IsUndoEndOffered => IsOpen && Status == ContractStatus.Ended;
+
+    public bool IsCancelOffered => IsOpen;
+
+    /// <summary>Every contract read, a cancelled one included, has its account.</summary>
+    public bool IsAccountOffered => Detail is not null;
+
+    partial void OnDetailChanged(ContractDetail? value)
+    {
+        Events.Clear();
+        foreach (var line in value?.Events ?? [])
+        {
+            Events.Add(new ContractEventRow(line));
+        }
+
+        OnPropertyChanged(nameof(HasNoEvents));
+    }
 
     [ObservableProperty]
     private DateOnly? _noticeDate;
@@ -269,6 +320,38 @@ public sealed partial class ContractDetailViewModel : ObservableObject
     public const string MissingEndDate = "Escriba la fecha de fin del contrato.";
 }
 
+/// <summary>A reason offered for ending, with its name.</summary>
+public sealed record EndReasonOption(EndReason Reason, string Text);
+
+/// <summary>One line of the contract's event log, as the screen reads it.</summary>
+public sealed class ContractEventRow
+{
+    public ContractEventRow(ContractEventLine line)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+
+        Line = line;
+    }
+
+    public ContractEventLine Line { get; }
+
+    /// <summary>The agency's day, whatever offset it was written with.</summary>
+    public string WhenText => Formats.Date(DateOnly.FromDateTime(Line.RecordedAt.ToLocalTime().DateTime));
+
+    public string EventText => Line.Kind switch
+    {
+        ContractEventKind.Cancelled => "Cancelado por error",
+        ContractEventKind.NoticeUndone => "Aviso deshecho",
+        ContractEventKind.EndUndone => "Fin deshecho",
+        ContractEventKind.PartyRemoved => "Persona quitada del contrato",
+        _ => throw new ArgumentOutOfRangeException(nameof(Line), Line.Kind, "An event without a name."),
+    };
+
+    public string ReasonText => Line.Reason ?? string.Empty;
+
+    public string WhoText => Line.RecordedBy;
+}
+
 /// <summary>What the operator is about to confirm.</summary>
 public abstract record PendingContractChange;
 
@@ -303,7 +386,8 @@ public sealed record PendingCancel(string Reason, ContractCancellationSummary Fi
 {
     /// <summary>The tenant, the units and the exact amount, since this cannot be undone (spec Requirement 23).</summary>
     public string Summary =>
-        $"Se cancela el contrato de {Figures.Tenants}, sobre {Figures.Units}. Deja de deberse {Formats.Money(Figures.AmountStoppedBeingOwed)}. Esto no se puede deshacer.";
+        $"Se cancela el contrato de {Figures.Tenants}, sobre {Figures.Units}. Deja de deberse {Formats.Money(Figures.AmountStoppedBeingOwed)}. " +
+        "Esto es definitivo. Una vez cancelado, el contrato no se puede recuperar.";
 
     /// <summary>Money past the voiding window, or null when there is none: it stays with its recibos and is returned by hand (spec Decision 36).</summary>
     public string? RetainedLine => Figures.RetainedRecibos.Count == 0
