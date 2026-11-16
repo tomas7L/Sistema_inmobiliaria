@@ -9,19 +9,58 @@ public class IndexEntryRulesTests
     private static readonly IndexPeriod August = new(2026, 8);
     private static readonly IndexValueListing Earlier = new(Guid.NewGuid(), new IndexPeriod(2026, 7), 9_000m);
 
-    [Fact]
-    public void AMonthThatHasNotBegun_IsRefused()
+    [Theory]
+    [InlineData("ICL")]
+    [InlineData("IPC")]
+    [InlineData("RIPTE")]
+    public void AMonthThatHasNotBegun_IsRefused(string index)
     {
-        Assert.Equal(IndexRefusal.FuturePeriod, IndexEntryRules.CheckPeriod(new IndexPeriod(2026, 12), Today));
+        Assert.Equal(IndexRefusal.FuturePeriod, IndexEntryRules.CheckPeriod(new IndexPeriod(2026, 12), Today, index));
     }
 
     [Theory]
     [InlineData(2026, 11)]
     [InlineData(2026, 10)]
     [InlineData(2020, 1)]
-    public void TheCurrentMonthOrAnEarlierOne_IsAllowed(int year, int month)
+    [InlineData(2000, 1)]
+    public void ForIcl_TheCurrentMonthOrAnEarlierOne_IsAllowed(int year, int month)
     {
-        Assert.Null(IndexEntryRules.CheckPeriod(new IndexPeriod(year, month), Today));
+        Assert.Null(IndexEntryRules.CheckPeriod(new IndexPeriod(year, month), Today, "ICL"));
+    }
+
+    /// <summary>Spec Decision 53, Test 118: IPC and RIPTE are published after their month, so the current one is refused.</summary>
+    [Theory]
+    [InlineData("IPC")]
+    [InlineData("RIPTE")]
+    public void ForIpcAndRipte_TheCurrentMonth_IsNotPublishedYet(string index)
+    {
+        Assert.Equal(IndexRefusal.NotPublishedYet, IndexEntryRules.CheckPeriod(new IndexPeriod(2026, 11), Today, index));
+        Assert.Null(IndexEntryRules.CheckPeriod(new IndexPeriod(2026, 10), Today, index));
+    }
+
+    /// <summary>Spec Decision 53, Test 118: a year before 2000 or after the current one cannot be a period, for every index.</summary>
+    [Theory]
+    [InlineData(201)]
+    [InlineData(1)]
+    [InlineData(1999)]
+    [InlineData(2027)]
+    [InlineData(2062)]
+    public void AYearOutOfRange_IsRefused(int year)
+    {
+        Assert.All(
+            new[] { "ICL", "IPC", "RIPTE" },
+            index => Assert.Equal(IndexRefusal.YearOutOfRange, IndexEntryRules.CheckPeriod(new IndexPeriod(year, 1), Today, index)));
+    }
+
+    /// <summary>Decision 50: each refusal of a period says its own problem.</summary>
+    [Fact]
+    public void EachPeriodRefusal_HasItsOwnText()
+    {
+        var texts = new[] { IndexRefusal.FuturePeriod, IndexRefusal.NotPublishedYet, IndexRefusal.YearOutOfRange }
+            .Select(r => r.OperatorText())
+            .ToList();
+
+        Assert.Equal(3, texts.Distinct(StringComparer.Ordinal).Count());
     }
 
     [Theory]

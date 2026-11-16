@@ -183,6 +183,20 @@
                 </views:UnitsView.Style>
             </views:UnitsView>
 
+            <views:IndicesView x:Name="IndicesScreen">
+                <views:IndicesView.Style>
+                    <Style TargetType="views:IndicesView" BasedOn="{StaticResource Theme.Page}">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding SelectedItem.Target, ElementName=NavigationList}"
+                                         Value="{x:Static shell:NavigationTarget.Indices}">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </views:IndicesView.Style>
+            </views:IndicesView>
+
             <views:UsersView x:Name="UsersScreen">
                 <views:UsersView.Style>
                     <Style TargetType="views:UsersView">

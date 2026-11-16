@@ -139,6 +139,26 @@ public sealed class IndexRegistryTests
         await AddedAsync(Registry(world).AddAsync(icl, new IndexPeriod(2026, 11), 25m, false));
     }
 
+    /// <summary>
+    /// Spec Decision 53, Test 118: the port refuses this month's IPC and RIPTE, not out yet, and a year out of range for any
+    /// index, writing nothing.
+    /// </summary>
+    [SkippableTheory]
+    [InlineData("IPC", 2026, 11, IndexRefusal.NotPublishedYet)]
+    [InlineData("RIPTE", 2026, 11, IndexRefusal.NotPublishedYet)]
+    [InlineData("ICL", 201, 1, IndexRefusal.YearOutOfRange)]
+    [InlineData("IPC", 1999, 12, IndexRefusal.YearOutOfRange)]
+    public async Task APeriodThatCannotExistYet_IsRefused(string index, int year, int month, IndexRefusal expected)
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+        await using var world = await WorldAsync();
+
+        var result = await Registry(world).AddAsync(await IndexIdAsync(world, index), new IndexPeriod(year, month), 25m, false);
+
+        Assert.Equal(expected, result.Refusal);
+        Assert.Equal(0, await ValuesAsync(world));
+    }
+
     [SkippableFact]
     public async Task ADuplicate_IsRefused_NamingTheExistingValueToCorrect()
     {
@@ -323,6 +343,24 @@ public sealed class IndexRegistryTests
         var records = await Registry(world).ListCorrectionsAsync(august.Id);
 
         Assert.Equal([9_120m, 9_110m], records.Select(r => r.NewLevel));
+    }
+
+    /// <summary>The list says how many times each value was corrected, as the screen's "Correcciones" column reads.</summary>
+    [SkippableFact]
+    public async Task TheList_CountsEachValuesCorrections()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+        await using var world = await WorldAsync();
+        var ipc = await IndexIdAsync(world, "IPC");
+        var july = await AddedAsync(Registry(world).AddAsync(ipc, July, 9_000m, false));
+        var august = await AddedAsync(Registry(world).AddAsync(ipc, August, 9_100m, false));
+        await AddedAsync(Registry(world).CorrectAsync(august.Id, 9_110m, false));
+        await AddedAsync(Registry(world).CorrectAsync(august.Id, 9_120m, false));
+
+        var values = (await Registry(world).ListAsync()).Single(i => i.Id == ipc).Values;
+
+        Assert.Equal(2, values.Single(v => v.Id == august.Id).CorrectionCount);
+        Assert.Equal(0, values.Single(v => v.Id == july.Id).CorrectionCount);
     }
 
     [SkippableFact]

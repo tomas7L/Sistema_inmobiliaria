@@ -33,6 +33,13 @@ public sealed class IndexRegistry : IIndexRegistry
         var indices = await _context.EconomicIndices.AsNoTracking().ToListAsync(ct);
         var values = await _context.IndexValues.AsNoTracking().ToListAsync(ct);
 
+        // One row per correction, a few per value at most, so counting them here is cheaper than a grouped query on a property bag.
+        var corrected = await _context.IndexValueCorrections
+            .AsNoTracking()
+            .Select(row => EF.Property<Guid>(row, "IndexValueId"))
+            .ToListAsync(ct);
+        var corrections = corrected.CountBy(id => id).ToDictionary(pair => pair.Key, pair => pair.Value);
+
         return indices
             .OrderBy(index => index.Name, StringComparer.Ordinal)
             .ThenBy(index => index.Id)
@@ -43,14 +50,24 @@ public sealed class IndexRegistry : IIndexRegistry
                 values
                     .Where(value => value.EconomicIndexId == index.Id)
                     .OrderByDescending(value => value.Period)
-                    .Select(Listing)
+                    .Select(value => Listing(value) with { CorrectionCount = corrections.GetValueOrDefault(value.Id) })
                     .ToList()))
             .ToList();
     }
 
     public async Task<IndexEntryResult> AddAsync(Guid indexId, IndexPeriod period, decimal level, bool acceptFarLevel, CancellationToken ct = default)
     {
-        if (IndexEntryRules.CheckPeriod(period, _clock.Today) is { } periodRefusal)
+        // The period's rule depends on the index (spec Decision 53), so the index is read first.
+        var indexName = await _context.EconomicIndices
+            .Where(index => index.Id == indexId)
+            .Select(index => index.Name)
+            .FirstOrDefaultAsync(ct);
+        if (indexName is null)
+        {
+            return IndexEntryResult.Refused(IndexRefusal.IndexNotFound);
+        }
+
+        if (IndexEntryRules.CheckPeriod(period, _clock.Today, indexName) is { } periodRefusal)
         {
             return IndexEntryResult.Refused(periodRefusal);
         }
@@ -58,11 +75,6 @@ public sealed class IndexRegistry : IIndexRegistry
         if (IndexEntryRules.CheckLevel(level) is { } levelRefusal)
         {
             return IndexEntryResult.Refused(levelRefusal);
-        }
-
-        if (!await _context.EconomicIndices.AnyAsync(index => index.Id == indexId, ct))
-        {
-            return IndexEntryResult.Refused(IndexRefusal.IndexNotFound);
         }
 
         var values = await ValuesOfAsync(indexId, ct);

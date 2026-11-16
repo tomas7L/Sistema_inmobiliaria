@@ -7,6 +7,7 @@ using Inmobiliaria.Domain.Collection;
 using Inmobiliaria.Domain.GoLive;
 using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Domain.Notices;
+using Inmobiliaria.Domain.Indices;
 using Inmobiliaria.Domain.Parties;
 using Inmobiliaria.Domain.Units;
 using Inmobiliaria.Infrastructure.Access;
@@ -15,6 +16,7 @@ using Inmobiliaria.Presentation.CashDesk;
 using Inmobiliaria.Presentation.Common;
 using Inmobiliaria.Desktop.Printing;
 using Inmobiliaria.Presentation.GoLive;
+using Inmobiliaria.Presentation.Indices;
 using Inmobiliaria.Presentation.Login;
 using Inmobiliaria.Presentation.Notices;
 using Inmobiliaria.Presentation.Parties;
@@ -205,9 +207,16 @@ public partial class App : Application
             // Propiedades too (gestion-de-alquileres spec Requirement 22).
             var unitsViewModel = new UnitsViewModel(_sessionProvider.GetRequiredService<IUnitRegistry>());
 
+            // Índices too, with the official source behind "Traer valores" (spec Requirement 25).
+            var indicesViewModel = new IndicesViewModel(
+                _sessionProvider.GetRequiredService<IIndexRegistry>(),
+                _sessionProvider.GetRequiredService<IIndexValueSource>(),
+                _sessionProvider.GetRequiredService<IAgencyClock>(),
+                _sessionProvider.GetRequiredService<IDueAdjustmentQuery>());
+
             mainWindow = new MainWindow(
                 shellViewModel, cashDeskViewModel, recentViewModel, voidingViewModel, goLiveViewModel, usersViewModel,
-                noticesViewModel, partiesViewModel, unitsViewModel);
+                noticesViewModel, partiesViewModel, unitsViewModel, indicesViewModel);
             MainWindow = mainWindow;
             // ShutdownMode is OnExplicitShutdown (App.xaml) precisely so that closing
             // LoginWindow or ChangePasswordWindow mid-bootstrap never ends the process before

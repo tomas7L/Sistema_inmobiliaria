@@ -105,7 +105,8 @@ public class IndicesViewModelTests
         await viewModel.SaveCommand.ExecuteAsync(null);
 
         Assert.Empty(port.Added);
-        Assert.Contains("1.915.878,76", viewModel.RefusalMessage, StringComparison.Ordinal);
+        Assert.Equal(IndicesViewModel.LevelFormatMessage, viewModel.LevelError);
+        Assert.Null(viewModel.PeriodError);
         Assert.Equal(level, viewModel.LevelText);
     }
 
@@ -123,22 +124,23 @@ public class IndicesViewModelTests
         await viewModel.SaveCommand.ExecuteAsync(null);
 
         Assert.Empty(port.Added);
-        Assert.Contains("08/2026", viewModel.RefusalMessage, StringComparison.Ordinal);
+        Assert.Equal(IndicesViewModel.PeriodFormatMessage, viewModel.PeriodError);
+        Assert.Null(viewModel.LevelError);
     }
 
     [Fact]
     public async Task ARefusal_ShowsItsOwnText_AndKeepsWhatWasTyped()
     {
         var port = Port();
-        port.OnAdd = (_, _, _, _) => IndexEntryResult.Refused(IndexRefusal.FuturePeriod);
+        port.OnAdd = (_, _, _, _) => IndexEntryResult.Refused(IndexRefusal.IndexNotFound);
         var viewModel = await LoadedAsync(port);
-        viewModel.PeriodText = "12/2030";
+        viewModel.PeriodText = "09/2026";
         viewModel.LevelText = "9.440";
 
         await viewModel.SaveCommand.ExecuteAsync(null);
 
-        Assert.Equal(IndexRefusal.FuturePeriod.OperatorText(), viewModel.RefusalMessage);
-        Assert.Equal("12/2030", viewModel.PeriodText);
+        Assert.Equal(IndexRefusal.IndexNotFound.OperatorText(), viewModel.RefusalMessage);
+        Assert.Equal("09/2026", viewModel.PeriodText);
         Assert.Equal("9.440", viewModel.LevelText);
     }
 
@@ -315,7 +317,7 @@ public class IndicesViewModelTests
         await viewModel.SaveCommand.ExecuteAsync(null);
 
         Assert.Empty(port.AffectedAsked);
-        Assert.Equal(IndexRefusal.LevelNotPositive.OperatorText(), viewModel.RefusalMessage);
+        Assert.Equal(IndexRefusal.LevelNotPositive.OperatorText(), viewModel.LevelError);
         Assert.False(viewModel.ConfirmCorrectionCommand.CanExecute(null));
     }
 
@@ -333,5 +335,181 @@ public class IndicesViewModelTests
         Assert.Equal(string.Empty, viewModel.PeriodText);
         Assert.Null(viewModel.CorrectionSummary);
         Assert.Empty(viewModel.Corrections);
+    }
+
+    /// <summary>Spec Decision 44: the period's and the level's errors together, each beside its field, and no port called.</summary>
+    [Fact]
+    public async Task BothFieldsWrong_ShowBothErrorsAtOnce_AndCallNothing()
+    {
+        var port = Port();
+        var viewModel = await LoadedAsync(port);
+        viewModel.PeriodText = "agosto";
+        viewModel.LevelText = "0";
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal(IndicesViewModel.PeriodFormatMessage, viewModel.PeriodError);
+        Assert.Equal(IndexRefusal.LevelNotPositive.OperatorText(), viewModel.LevelError);
+        Assert.Empty(port.Added);
+    }
+
+    /// <summary>Spec Decision 53, Test 118, on the form: a year out of range and this month's IPC are refused beside the period.</summary>
+    [Theory]
+    [InlineData("08/0201", IndexRefusal.YearOutOfRange)]
+    [InlineData("01/1999", IndexRefusal.YearOutOfRange)]
+    [InlineData("11/2026", IndexRefusal.NotPublishedYet)]
+    [InlineData("12/2026", IndexRefusal.FuturePeriod)]
+    public async Task APeriodThatCannotExistYet_IsRefusedBesideThePeriod(string period, IndexRefusal expected)
+    {
+        var port = Port();
+        var viewModel = await LoadedAsync(port);
+        viewModel.PeriodText = period;
+        viewModel.LevelText = "9.440";
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal(expected.OperatorText(), viewModel.PeriodError);
+        Assert.Empty(port.Added);
+    }
+
+    /// <summary>Spec Decision 53: ICL takes its current month.</summary>
+    [Fact]
+    public async Task ThisMonthsIcl_IsSent()
+    {
+        var port = Port();
+        var iclId = Guid.NewGuid();
+        port.Indices.Add(new IndexListing(iclId, "ICL", null, []));
+        var viewModel = await LoadedAsync(port);
+        viewModel.SelectedIndex = viewModel.Indices.Single(i => i.Id == iclId);
+        viewModel.PeriodText = "11/2026";
+        viewModel.LevelText = "21,5801";
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Null(viewModel.PeriodError);
+        Assert.Equal(new IndexPeriod(2026, 11), Assert.Single(port.Added).Period);
+    }
+
+    /// <summary>The canvas: a new value that lands says so, naming the index.</summary>
+    [Fact]
+    public async Task ASavedValue_SaysItIsAvailable()
+    {
+        var port = Port();
+        var viewModel = await LoadedAsync(port);
+        viewModel.PeriodText = "09/2026";
+        viewModel.LevelText = "9.500";
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal("Valor guardado. Ya está disponible para los contratos que usan IPC.", viewModel.SavedMessage);
+    }
+
+    /// <summary>The canvas: correcting to the level already stored says nothing changed, and asks nothing.</summary>
+    [Fact]
+    public async Task ACorrectionToTheSameLevel_SaysNothingChanged()
+    {
+        var port = Port();
+        var viewModel = await CorrectingAsync(port);
+        viewModel.LevelText = "9.440";
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal(IndicesViewModel.UnchangedMessage, viewModel.LevelError);
+        Assert.Empty(port.AffectedAsked);
+        Assert.Null(viewModel.CorrectionSummary);
+    }
+
+    /// <summary>The canvas: the correction card names the value and both levels; once saved, its notice keeps the adjustments.</summary>
+    [Fact]
+    public async Task ACorrection_ShowsBothLevels_AndItsNoticeKeepsTheAdjustments()
+    {
+        var port = Port();
+        port.Affected = [new AffectedAdjustment(Guid.NewGuid(), Guid.NewGuid(), "Maria Prueba", new DateOnly(2026, 9, 1), 9_440m)];
+        var viewModel = await CorrectingAsync(port);
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal("Confirme la corrección de IPC 08/2026", viewModel.CorrectionTitle);
+        Assert.Equal("9.440", viewModel.CorrectionOldText);
+        Assert.Equal("9.400", viewModel.CorrectionNewText);
+
+        await viewModel.ConfirmCorrectionCommand.ExecuteAsync(null);
+
+        Assert.Equal(
+            "Corrección guardada: IPC 08/2026 pasó de 9.440 a 9.400. Quedó registrado quién la hizo y cuándo.",
+            viewModel.CorrectionDone);
+        Assert.Equal(["Maria Prueba"], viewModel.DoneAdjustments.Select(a => a.TenantText));
+
+        viewModel.DismissDoneCommand.Execute(null);
+
+        Assert.Null(viewModel.CorrectionDone);
+        Assert.Empty(viewModel.DoneAdjustments);
+    }
+
+    /// <summary>The canvas: the far-level card shows the earlier value and the one typed, each with its month.</summary>
+    [Fact]
+    public async Task AFarLevel_ShowsTheEarlierValueAndTheTypedOne()
+    {
+        var port = Port();
+        port.OnAdd = (_, _, _, _) => IndexEntryResult.Refused(IndexRefusal.FarLevelNotAccepted, August);
+        var viewModel = await LoadedAsync(port);
+        viewModel.PeriodText = "09/2026";
+        viewModel.LevelText = "90.000";
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal("Valor anterior (08/2026)", viewModel.FarPreviousLabel);
+        Assert.Equal("9.440", viewModel.FarPreviousLevel);
+        Assert.Equal("Valor que escribió (09/2026)", viewModel.FarTypedLabel);
+        Assert.Equal("90.000", viewModel.FarTypedLevel);
+    }
+
+    /// <summary>The canvas's list: each value's corrections, and RIPTE's level in pesos.</summary>
+    [Fact]
+    public async Task TheValues_SayHowOftenEachWasCorrected_AndRipteShowsPesos()
+    {
+        var port = Port();
+        port.Indices[0] = new IndexListing(IpcId, "IPC", null, [August with { CorrectionCount = 2 }, new(Guid.NewGuid(), new IndexPeriod(2026, 7), 9_300m)]);
+        port.Indices[1] = new IndexListing(RipteId, "RIPTE", null, [new(Guid.NewGuid(), new IndexPeriod(2026, 6), 1_915_878.76m, 1)]);
+        var viewModel = await LoadedAsync(port);
+
+        Assert.Equal(["Corregido 2 veces", "—"], viewModel.Values.Select(v => v.CorrectionsText));
+        Assert.Equal("2 valores", viewModel.CountText);
+        Assert.Equal("INDEC", viewModel.Indices[0].SourceText);
+
+        viewModel.SelectedIndex = viewModel.Indices[1];
+
+        var ripte = Assert.Single(viewModel.Values);
+        Assert.Equal("$ 1.915.878,76", ripte.ShownLevelText);
+        Assert.Equal("1.915.878,76", ripte.LevelText);
+        Assert.Equal("Corregido 1 vez", ripte.CorrectionsText);
+        Assert.Equal("1 valor", viewModel.CountText);
+        Assert.Equal("$", viewModel.LevelUnit);
+        Assert.Equal("Nivel publicado ($)", viewModel.LevelLabel);
+    }
+
+    /// <summary>Spec Decision 53 on the form's note: ICL takes the current month, IPC and RIPTE do not.</summary>
+    [Theory]
+    [InlineData("ICL", "el mes en curso sí")]
+    [InlineData("IPC", "menos el mes en curso")]
+    [InlineData("RIPTE", "menos el mes en curso")]
+    public void TheFormsNote_SaysWhichMonthsTheIndexTakes(string index, string expected)
+    {
+        Assert.Contains(expected, IndexGuidance.FormHint(index), StringComparison.Ordinal);
+    }
+
+    /// <summary>The form's title and button follow what it does.</summary>
+    [Fact]
+    public async Task TheFormsTitleAndButton_FollowWhatItDoes()
+    {
+        var viewModel = await LoadedAsync(Port());
+
+        Assert.Equal("Cargar un valor", viewModel.FormTitle);
+        Assert.Equal("Agregar valor", viewModel.SaveText);
+
+        viewModel = await CorrectingAsync(Port());
+
+        Assert.Equal("Corregir un valor", viewModel.FormTitle);
+        Assert.Equal("Revisar corrección", viewModel.SaveText);
+        Assert.True(viewModel.IsEditing);
     }
 }
