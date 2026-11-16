@@ -13,8 +13,15 @@ public static class Formats
 {
     public static readonly CultureInfo Agency = CultureInfo.GetCultureInfo("es-AR");
 
-    /// <summary>A signed amount, whole pesos when it has no cents.</summary>
-    public static string Money(decimal amount) => amount.ToString("#,##0.##", Agency);
+    /// <summary>
+    /// A signed amount with the peso sign, whole pesos when it has no cents: "$ 598.260", "-$ 500". Every amount on a
+    /// screen and on the printed recibo goes through here (12.3d); a field the operator edits takes <see cref="Number"/>.
+    /// </summary>
+    public static string Money(decimal amount) =>
+        (amount < 0 ? "-$ " : "$ ") + Math.Abs(amount).ToString("#,##0.##", Agency);
+
+    /// <summary>An amount without the peso sign, for a field the operator edits: "1.250,8".</summary>
+    public static string Number(decimal amount) => amount.ToString("#,##0.##", Agency);
 
     /// <summary>An index level, with up to the six decimals the column keeps: "1.915.878,76".</summary>
     public static string Level(decimal level) => level.ToString("#,##0.######", Agency);

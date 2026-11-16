@@ -129,9 +129,10 @@
                         BorderBrush="#FF1565C0" BorderThickness="2" Padding="8" Margin="0,8,0,0">
                     <StackPanel>
                         <TextBlock Text="Resumen: revise antes de confirmar" FontWeight="SemiBold" />
+                        <TextBlock Text="{x:Static desk:DeskTexts.SummaryNote}" TextWrapping="Wrap" Margin="0,2,0,4" />
                         <TextBlock Text="{Binding PeriodText, StringFormat='Período: {0}'}" />
                         <TextBlock Text="{Binding ReceivedOnText, StringFormat='Fecha de cobro: {0}'}" />
-                        <TextBlock Text="{Binding HandedAmountText, StringFormat='Importe entregado: {0}'}" />
+                        <TextBlock Text="{Binding HandedAmountText, StringFormat='Importe entregado: $ {0}'}" />
                         <TextBlock Text="{Binding LedgerFigureText, StringFormat='Saldo del período: {0}'}" />
                         <TextBlock Text="{Binding LocatarioTotalText, StringFormat='Total del recibo locatario: {0}'}" />
                         <TextBlock Text="{Binding PropietarioTotalText, StringFormat='Total del recibo propietario: {0}'}" />

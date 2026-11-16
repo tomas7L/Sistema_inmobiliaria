@@ -21,7 +21,7 @@ public sealed class MailKitTenantNoticeSender : ITenantNoticeSender
     /// <summary>What a refused login tells the operator, beside the server's own reason (design Finding F6).</summary>
     internal const string LoginRefused =
         "Gmail rechazó la dirección o la contraseña de aplicación. Si se cambió la contraseña de la cuenta de Gmail, todas sus "
-        + "contraseñas de aplicación dejaron de valer: un Admin tiene que crear una nueva y cargarla.";
+        + "contraseñas de aplicación dejaron de valer: un Administrador tiene que crear una nueva y cargarla.";
 
     private readonly Func<ISmtpTransport> _transport;
 

@@ -123,7 +123,7 @@ public class CashDeskCommitTests
         Assert.Equal(previewsBefore + 1, kit.PreviewRequests.Count);
         Assert.Equal(DeskState.Stale, desk.State);
         Assert.Equal(refusal.OperatorText(), desk.StaleMessage);
-        Assert.Contains(desk.Differences, d => d.What == "Saldo del período" && d.Before == "598.260" && d.After == "605.000");
+        Assert.Contains(desk.Differences, d => d.What == "Saldo del período" && d.Before == "$ 598.260" && d.After == "$ 605.000");
         Assert.Null(desk.Summary);
         Assert.Equal("598.260", desk.HandedAmountText);
         Assert.Equal(CollectionRefusal.AmountNotTotal.OperatorText(), desk.RefusalMessage);
@@ -335,7 +335,7 @@ public class CashDeskCommitTests
 
         await desk.ContinueCommand.ExecuteAsync(null);
         Assert.Equal(100m, desk.Summary!.Request.Seguro);
-        Assert.Equal("598.260", desk.LedgerFigureText);
+        Assert.Equal("$ 598.260", desk.LedgerFigureText);
     }
 
     /// <summary>S3b review: when the stale re-preview fails, the rejected pair cannot be confirmed again.</summary>

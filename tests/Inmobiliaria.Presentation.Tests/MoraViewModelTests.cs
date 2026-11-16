@@ -66,12 +66,12 @@ public class MoraViewModelTests
 
         var first = mora.Rows[0];
         Assert.Equal(
-            ("San Martín 45, Sunchales", "ab12cd34", "Vigente", 200, "600.000", "100.000", null),
+            ("San Martín 45, Sunchales", "ab12cd34", "Vigente", 200, "$ 600.000", "$ 100.000", null),
             (first.Units, first.ShortId, first.StatusText, first.DaysOverdue, first.AmountOwedText, first.RecargoText, first.FrozenText));
         Assert.Equal("Recargo congelado el 01/10/2026", mora.Rows[1].FrozenText);
 
         var shown = typeof(MoraRow).GetProperties().Where(p => p.PropertyType == typeof(string)).Select(p => (string?)p.GetValue(first));
-        Assert.DoesNotContain("700.000", shown);
+        Assert.DoesNotContain("$ 700.000", shown);
 
         Assert.Equal(MoraTexts.Coverage, mora.CoverageText);
         Assert.Contains("tasa municipal", mora.CoverageText);

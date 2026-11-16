@@ -72,7 +72,7 @@ public class AdjustmentsViewModelTests
         Assert.Equal([Today], world.Worklist.Calls);
         Assert.Equal(["Maria Prueba", "Ana Prueba"], world.ViewModel.Worklist.Select(r => r.Tenants));
         Assert.Equal(["01/07/2026", "01/07/2026"], world.ViewModel.Worklist.Select(r => r.DueDateText));
-        Assert.Equal(["100.000", "200.000"], world.ViewModel.Worklist.Select(r => r.CurrentCanonText));
+        Assert.Equal(["$ 100.000", "$ 200.000"], world.ViewModel.Worklist.Select(r => r.CurrentCanonText));
     }
 
     [Fact]
@@ -98,9 +98,9 @@ public class AdjustmentsViewModelTests
 
         Assert.Equal([Ready], world.Desk.Previewed);
         Assert.Equal("Maria Prueba", viewModel.TenantText);
-        Assert.Equal("100.000", viewModel.PreviousCanonText);
+        Assert.Equal("$ 100.000", viewModel.PreviousCanonText);
         Assert.Equal("15", viewModel.CoefficientText);
-        Assert.Equal("115.000", viewModel.NewCanonText);
+        Assert.Equal("$ 115.000", viewModel.NewCanonText);
         Assert.Equal("01/07/2026", viewModel.DueDateText);
         Assert.Equal("08/2026", viewModel.AppliesFromText);
         Assert.Equal(
@@ -156,7 +156,7 @@ public class AdjustmentsViewModelTests
         await world.ViewModel.ConfirmCommand.ExecuteAsync(null);
 
         Assert.Same(preview, Assert.Single(world.Desk.Confirmed));
-        Assert.Equal("Ajuste confirmado: el canon pasa a 115.000 desde 08/2026.", world.ViewModel.ConfirmedMessage);
+        Assert.Equal("Ajuste confirmado: el canon pasa a $ 115.000 desde 08/2026.", world.ViewModel.ConfirmedMessage);
         Assert.Equal(
             "Avise a Maria Prueba del nuevo canon. El sistema no le envía nada.",
             world.ViewModel.NoticeReminder);
@@ -177,7 +177,7 @@ public class AdjustmentsViewModelTests
         Assert.Equal([Today, Today], world.Worklist.Calls);
         var next = world.ViewModel.Worklist.Single(r => r.ContractId == Ready);
         Assert.Equal("01/01/2027", next.DueDateText);
-        Assert.Equal("115.000", next.CurrentCanonText);
+        Assert.Equal("$ 115.000", next.CurrentCanonText);
     }
 
     [Fact]
@@ -240,7 +240,7 @@ public class AdjustmentsViewModelTests
         var world = await OpenedAsync(WithDifference());
 
         Assert.True(world.ViewModel.HasDifference);
-        Assert.Equal("Diferencia de 40.000 por los meses 07/2026 a 10/2026, ya cobrados con el canon anterior.", world.ViewModel.DifferenceText);
+        Assert.Equal("Diferencia de $ 40.000 por los meses 07/2026 a 10/2026, ya cobrados con el canon anterior.", world.ViewModel.DifferenceText);
         Assert.False(world.ViewModel.ChargeDifference);
     }
 
@@ -252,7 +252,7 @@ public class AdjustmentsViewModelTests
             Ready, "Maria Prueba", July, 100_000m, [], CombinationRule.Single, 10m, 110_000m, 110_000m, August, new DifferenceOffer(10_000m, [July]));
         var world = await OpenedAsync(preview);
 
-        Assert.Equal("Diferencia de 10.000 por el mes 07/2026, ya cobrado con el canon anterior.", world.ViewModel.DifferenceText);
+        Assert.Equal("Diferencia de $ 10.000 por el mes 07/2026, ya cobrado con el canon anterior.", world.ViewModel.DifferenceText);
     }
 
     [Fact]
@@ -288,7 +288,7 @@ public class AdjustmentsViewModelTests
 
         Assert.Equal([true], world.Desk.ChargeChoices);
         Assert.Equal(
-            "Ajuste confirmado: el canon pasa a 110.000 desde 11/2026. Se cobra una diferencia de 40.000 con 11/2026.",
+            "Ajuste confirmado: el canon pasa a $ 110.000 desde 11/2026. Se cobra una diferencia de $ 40.000 con 11/2026.",
             world.ViewModel.ConfirmedMessage);
     }
 
@@ -321,7 +321,7 @@ public class AdjustmentsViewModelTests
 
         await world.ViewModel.OpenCommand.ExecuteAsync(null);
 
-        Assert.Equal(["Diferencia de 40.000 cobrada", "Diferencia de 40.000 no cobrada", ""], world.ViewModel.History.Select(h => h.DifferenceText));
+        Assert.Equal(["Diferencia de $ 40.000 cobrada", "Diferencia de $ 40.000 no cobrada", ""], world.ViewModel.History.Select(h => h.DifferenceText));
     }
 
     // ---- Task 12.3d: the history here is read-only; correcting is the contract detail's ----------------------------------------
@@ -362,8 +362,8 @@ public class AdjustmentsViewModelTests
         var row = Assert.Single(world.ViewModel.History);
         Assert.Equal("01/01/2026", row.DueDateText);
         Assert.Equal("01/2026", row.AppliesFromText);
-        Assert.Equal("90.000", row.PreviousCanonText);
-        Assert.Equal("100.000", row.NewCanonText);
+        Assert.Equal("$ 90.000", row.PreviousCanonText);
+        Assert.Equal("$ 100.000", row.NewCanonText);
         Assert.Equal("Sin registro", row.ConfirmedByText);
     }
 }

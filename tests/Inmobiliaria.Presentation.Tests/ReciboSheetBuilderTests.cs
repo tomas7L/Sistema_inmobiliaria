@@ -47,8 +47,8 @@ public class ReciboSheetBuilderTests
         var locatario = Sheet(ReciboCopy.Locatario).Original.Content;
         var propietario = Sheet(ReciboCopy.Propietario).Original.Content;
 
-        Assert.Equal(("598.260", AmountInWords.Line(598_260m)), (locatario.ImporteNetoText, locatario.AmountInWordsText));
-        Assert.Equal(("452.140", AmountInWords.Line(452_140m)), (propietario.ImporteNetoText, propietario.AmountInWordsText));
+        Assert.Equal(("$ 598.260", AmountInWords.Line(598_260m)), (locatario.ImporteNetoText, locatario.AmountInWordsText));
+        Assert.Equal(("$ 452.140", AmountInWords.Line(452_140m)), (propietario.ImporteNetoText, propietario.AmountInWordsText));
         Assert.Equal("que RECIBO de Perez, Maria - C.U.I.T: -", locatario.PayerLine);
         Assert.Equal("que RECIBO de Gomez, Juan; Ibáñez, Rosa - C.U.I.T: -", propietario.PayerLine);
     }
@@ -61,9 +61,9 @@ public class ReciboSheetBuilderTests
 
         Assert.Equal(["N° 31001", "N° 31002"], both.Select(s => s.Original.Content.NumberText));
         var honorarios = both.Select(s => s.Original.Content.Rows.Single(r => r.Label == "Honorarios").AmountText).ToList();
-        Assert.Equal(["0", "-47.860"], honorarios);
+        Assert.Equal(["$ 0", "-$ 47.860"], honorarios);
         var recargo = both.Select(s => s.Original.Content.Rows.Single(r => r.Label == "Recargo").AmountText).ToList();
-        Assert.Equal(["98.260", "0"], recargo);
+        Assert.Equal(["$ 98.260", "$ 0"], recargo);
     }
 
     /// <summary>Spec test 24 and Decision 17: two builds of a live recibo are equal and carry no reprint mark or annulment.</summary>

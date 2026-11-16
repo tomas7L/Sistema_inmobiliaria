@@ -14,6 +14,9 @@ public static class LoginTexts
     public const string NoVerdict =
         "No se pudo conectar con el sistema. Revise la conexión a internet e intente de nuevo. Si sigue igual, avise al administrador.";
 
+    /// <summary>The window's footer (12.3d).</summary>
+    public const string HelpFooter = "¿Problemas para entrar? Consulte al administrador.";
+
     public const string WaitTitle = "Demasiados intentos fallidos";
 
     public static readonly string TooManyFailures =

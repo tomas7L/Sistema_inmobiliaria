@@ -34,4 +34,18 @@ public class FormatsTests
         Assert.True(Formats.TryParseMoney("  ", out var amount));
         Assert.Null(amount);
     }
+
+    // 12.3d: every amount on a screen and on the printed recibo carries the peso sign; a debt keeps its minus first.
+    [Theory]
+    [InlineData(598_260, "$ 598.260")]
+    [InlineData(1_250.80, "$ 1.250,8")]
+    [InlineData(0, "$ 0")]
+    [InlineData(-500, "-$ 500")]
+    public void AnAmount_IsWrittenWithThePesoSign(double amount, string expected) =>
+        Assert.Equal(expected, Formats.Money((decimal)amount));
+
+    // A figure written back into a field the operator edits carries no sign, so the field still reads as typed.
+    [Fact]
+    public void AFigureForAField_HasNoPesoSign() =>
+        Assert.Equal("1.250,8", Formats.Number(1_250.80m));
 }

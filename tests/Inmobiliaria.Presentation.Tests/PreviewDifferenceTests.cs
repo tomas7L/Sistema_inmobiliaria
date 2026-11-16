@@ -37,11 +37,11 @@ public class PreviewDifferenceTests
             [
                 new DifferenceLine("Período", "01/2026", "02/2026"),
                 new DifferenceLine("Fecha de cobro", "15/01/2026", "16/01/2026"),
-                new DifferenceLine("Saldo anterior", "598.260", "605.000"),
-                new DifferenceLine("Saldo del período", "598.260", "605.000"),
-                new DifferenceLine("Recibo locatario · Recargo por mora", "98.260", "105.000"),
-                new DifferenceLine("Recibo locatario · Seguro", "—", "4.000"),
-                new DifferenceLine("Recibo propietario · Honorarios de administración", "-47.860", "—"),
+                new DifferenceLine("Saldo anterior", "$ 598.260", "$ 605.000"),
+                new DifferenceLine("Saldo del período", "$ 598.260", "$ 605.000"),
+                new DifferenceLine("Recibo locatario · Recargo por mora", "$ 98.260", "$ 105.000"),
+                new DifferenceLine("Recibo locatario · Seguro", "—", "$ 4.000"),
+                new DifferenceLine("Recibo propietario · Honorarios de administración", "-$ 47.860", "—"),
             ],
             PreviewDifference.Between(before, after));
     }
@@ -57,7 +57,7 @@ public class PreviewDifferenceTests
         Assert.Equal(
             [
                 new DifferenceLine("Período", "—", "01/2026"),
-                new DifferenceLine("Recibo locatario · Alquiler", "—", "100"),
+                new DifferenceLine("Recibo locatario · Alquiler", "—", "$ 100"),
             ],
             PreviewDifference.Between(before, after));
     }

@@ -29,10 +29,10 @@ public class PaperRowsTests
     {
         var rows = Rows(new ReciboLine(ReciboLineKind.Rent, 1, 500_000m)).ToDictionary(r => r.Label, r => r.AmountText);
 
-        Assert.Equal("500.000", rows["Alquiler 01/2026"]);
+        Assert.Equal("$ 500.000", rows["Alquiler 01/2026"]);
         foreach (var modelled in new[] { "Tasa Municipal", "Recargo", "Saldo Deudor", "Honorarios", "Otros Conceptos" })
         {
-            Assert.Equal("0", rows[modelled]);
+            Assert.Equal("$ 0", rows[modelled]);
         }
 
         foreach (var unmodelled in new[] { "Sellado Provincial", "Imp. Inmobiliario", "Aguas Prov. Sta. Fe", "Litoral Gas", "Luz EPE", "CUOTA 1", "CUOTA 2", "Dep. en Garantía", "Reserva", "Expensas", "Saldo a Favor" })
@@ -50,7 +50,7 @@ public class PaperRowsTests
             new ReciboLine(ReciboLineKind.Seguro, 3, -4_000m));
 
         Assert.Equal(
-            [("Otros Conceptos", "0"), ("Cuota de honorarios contractuales", "20.000"), ("Seguro", "-4.000")],
+            [("Otros Conceptos", "$ 0"), ("Cuota de honorarios contractuales", "$ 20.000"), ("Seguro", "-$ 4.000")],
             rows.Skip(16).Select(r => (r.Label, r.AmountText)));
     }
 
@@ -59,7 +59,7 @@ public class PaperRowsTests
     {
         var rows = Rows(new ReciboLine(ReciboLineKind.Rent, 1, 500_000m), new ReciboLine(ReciboLineKind.HonorariosAdministracion, 2, -47_860m));
 
-        Assert.Equal("-47.860", rows.Single(r => r.Label == "Honorarios").AmountText);
+        Assert.Equal("-$ 47.860", rows.Single(r => r.Label == "Honorarios").AmountText);
     }
 
     [Fact]

@@ -100,7 +100,7 @@ public sealed record ContractCancellationSummary(
         null => null,
         ContractRefusal.PaymentMustBeVoidedFirst =>
             $"Primero hay que anular los recibos {string.Join(", ", RecibosToVoid)}."
-            + (OnlyAnAdminCanVoid ? $" Los de más de {Collection.CollectionRules.VoidingFreeWindowDays} días solo los puede anular un Admin." : string.Empty),
+            + (OnlyAnAdminCanVoid ? $" Los de más de {Collection.CollectionRules.VoidingFreeWindowDays} días solo los puede anular un Administrador." : string.Empty),
         { } refusal => refusal.OperatorText(),
     };
 }
@@ -354,10 +354,10 @@ public static class ContractRefusalText
         ContractRefusal.TenantIsCodebtor => "El inquilino no puede ser también codeudor del mismo contrato.",
         ContractRefusal.FeePlanNotWholePesos => "El monto del plan de honorarios va en pesos enteros, sin centavos.",
         ContractRefusal.NoticeBeforeStart => "La fecha del aviso no puede ser anterior al inicio del contrato.",
-        ContractRefusal.StartBeforeCurrentMonth => "Un contrato anterior al mes actual lleva fecha de corte, y tiene que cargarlo un Admin.",
+        ContractRefusal.StartBeforeCurrentMonth => "Un contrato anterior al mes actual lleva fecha de corte, y tiene que cargarlo un Administrador.",
         ContractRefusal.CutoverAfterToday => "La fecha de corte no puede ser posterior a hoy.",
         ContractRefusal.CutoverBeforeStart => "La fecha de corte no puede ser anterior al inicio del contrato.",
-        ContractRefusal.CutoverAdminOnly => "Solo un Admin puede cargar un contrato con fecha de corte.",
+        ContractRefusal.CutoverAdminOnly => "Solo un Administrador puede cargar un contrato con fecha de corte.",
         ContractRefusal.RentNotWholePositive => "El alquiler tiene que ser un monto en pesos enteros, mayor que cero.",
         ContractRefusal.DueDayOutOfRange => "El día de vencimiento tiene que estar entre 1 y 31.",
         ContractRefusal.HonorariosOutOfRange => "Los honorarios tienen que estar entre 0 y 100, con hasta dos decimales.",
