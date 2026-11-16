@@ -5,6 +5,7 @@ using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Inmobiliaria.Domain.Accounts;
+using Inmobiliaria.Domain.Indices;
 using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Domain.Parties;
 using Inmobiliaria.Domain.Units;
@@ -25,18 +26,22 @@ public sealed partial class ContractFormViewModel : ObservableObject
 
     private readonly IContractRegistry _contracts;
     private readonly IAgencyClock _clock;
+    private readonly IIndexRegistry _indices;
 
     /// <summary>Counts edits, so a reply can tell whether it still describes what the form holds.</summary>
     private int _edits;
 
-    public ContractFormViewModel(IContractRegistry contracts, bool canSetCutover, IAgencyClock clock)
+    public ContractFormViewModel(IContractRegistry contracts, bool canSetCutover, IAgencyClock clock, IIndexRegistry indices)
     {
         ArgumentNullException.ThrowIfNull(contracts);
         ArgumentNullException.ThrowIfNull(clock);
+        ArgumentNullException.ThrowIfNull(indices);
 
         _contracts = contracts;
         _clock = clock;
+        _indices = indices;
         IsCutoverOffered = canSetCutover;
+        LoadCommand = new AsyncRelayCommand(LoadAsync, CanAct);
         SaveCommand = new AsyncRelayCommand(SaveAsync, CanAct);
         AcceptWarningsCommand = new AsyncRelayCommand(AcceptWarningsAsync, () => CanAct() && HasWarnings);
         CancelCommand = new RelayCommand(WithdrawWarnings);
@@ -66,8 +71,14 @@ public sealed partial class ContractFormViewModel : ObservableObject
 
     public ObservableCollection<Guid> ClauseIndexIds { get; } = [];
 
-    /// <summary>The catalog's names, for the suggestion. Filled by whoever shows the list of indices.</summary>
-    public IReadOnlyDictionary<Guid, string> ClauseIndexNames { get; set; } = new Dictionary<Guid, string>();
+    /// <summary>The indices a new clause can choose: the catalog's, less the discontinued ones (task 12.3c).</summary>
+    public ObservableCollection<IndexOption> ClauseIndexOptions { get; } = [];
+
+    /// <summary>The catalog's names, for the suggestion. Read by <see cref="LoadCommand"/>.</summary>
+    public IReadOnlyDictionary<Guid, string> ClauseIndexNames { get; private set; } = new Dictionary<Guid, string>();
+
+    /// <summary>Reads the index catalog, so the indices chosen are named and the offset suggestion follows them.</summary>
+    public IAsyncRelayCommand LoadCommand { get; }
 
     /// <summary>The offset the indices chosen suggest, or null. Spec Decision 15 only suggests it.</summary>
     public int? SuggestedClauseOffset =>
@@ -456,9 +467,29 @@ public sealed partial class ContractFormViewModel : ObservableObject
     {
         if (e.PropertyName == nameof(OperationRunner.IsBusy))
         {
+            LoadCommand.NotifyCanExecuteChanged();
             SaveCommand.NotifyCanExecuteChanged();
             AcceptWarningsCommand.NotifyCanExecuteChanged();
         }
+    }
+
+    private async Task LoadAsync()
+    {
+        var outcome = await Runner.RunAsync(() => _indices.ListAsync());
+        if (!outcome.Completed)
+        {
+            return;
+        }
+
+        ClauseIndexNames = IndexOption.Names(outcome.Value!);
+        ClauseIndexOptions.Clear();
+        foreach (var option in IndexOption.Offered(outcome.Value!, []))
+        {
+            ClauseIndexOptions.Add(option);
+        }
+
+        OnPropertyChanged(nameof(SuggestedClauseOffset));
+        OnPropertyChanged(nameof(ClauseWindowText));
     }
 }
 

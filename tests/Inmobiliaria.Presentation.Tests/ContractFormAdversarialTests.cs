@@ -1,4 +1,5 @@
 using System.Globalization;
+using Inmobiliaria.Domain.Indices;
 using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Domain.Parties;
 using Inmobiliaria.Domain.Shared;
@@ -19,7 +20,7 @@ public class ContractFormAdversarialTests
 
     private static async Task<ContractFormViewModel> FilledAsync(FakeContractRegistry port, bool admin = false)
     {
-        var viewModel = new ContractFormViewModel(port, admin, new FakeClock(new DateOnly(2026, 11, 15))) { Tenant = Juan };
+        var viewModel = new ContractFormViewModel(port, admin, new FakeClock(new DateOnly(2026, 11, 15)), new FakeIndexRegistry()) { Tenant = Juan };
         await viewModel.AddLessorCommand.ExecuteAsync(Ana);
         viewModel.Units.Add(new ContractFormUnit(Unit()));
         viewModel.StartDate = new DateOnly(2026, 12, 1);

@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Inmobiliaria.Domain.Indices;
 using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Presentation.Common;
 
@@ -14,13 +15,16 @@ namespace Inmobiliaria.Presentation.Contracts;
 public sealed partial class ContractClauseViewModel : ObservableObject
 {
     private readonly IContractRegistry _contracts;
+    private readonly IIndexRegistry _indices;
     private readonly Guid _contractId;
 
-    public ContractClauseViewModel(IContractRegistry contracts, Guid contractId)
+    public ContractClauseViewModel(IContractRegistry contracts, IIndexRegistry indices, Guid contractId)
     {
         ArgumentNullException.ThrowIfNull(contracts);
+        ArgumentNullException.ThrowIfNull(indices);
 
         _contracts = contracts;
+        _indices = indices;
         _contractId = contractId;
         LoadCommand = new AsyncRelayCommand(LoadAsync, () => !Runner.IsBusy);
         SaveCommand = new AsyncRelayCommand(SaveAsync, () => !Runner.IsBusy && CanChange);
@@ -40,8 +44,11 @@ public sealed partial class ContractClauseViewModel : ObservableObject
 
     public ObservableCollection<Guid> IndexIds { get; } = [];
 
-    /// <summary>The catalog's names, for the suggestion. Filled by whoever shows the list of indices.</summary>
-    public IReadOnlyDictionary<Guid, string> IndexNames { get; set; } = new Dictionary<Guid, string>();
+    /// <summary>The indices the clause can choose: the catalog's still published, and the ones it already has (task 12.3c).</summary>
+    public ObservableCollection<IndexOption> IndexOptions { get; } = [];
+
+    /// <summary>The catalog's names, for the suggestion. Read with the contract.</summary>
+    public IReadOnlyDictionary<Guid, string> IndexNames { get; private set; } = new Dictionary<Guid, string>();
 
     /// <summary>The offset the indices chosen suggest, or null. Decision 15 only suggests it.</summary>
     public int? SuggestedOffset => ClauseOffsetSuggestion.For(IndexIds.Where(IndexNames.ContainsKey).Select(id => IndexNames[id]));
@@ -71,13 +78,21 @@ public sealed partial class ContractClauseViewModel : ObservableObject
     private async Task LoadAsync()
     {
         RefusalMessage = null;
-        var outcome = await Runner.RunAsync(() => _contracts.DetailAsync(_contractId));
+        var outcome = await Runner.RunAsync(async () => (Detail: await _contracts.DetailAsync(_contractId), Catalog: await _indices.ListAsync()));
         if (!outcome.Completed)
         {
             return;
         }
 
-        if (outcome.Value is not { } detail)
+        var catalog = outcome.Value.Catalog;
+        IndexNames = IndexOption.Names(catalog);
+        IndexOptions.Clear();
+        foreach (var option in IndexOption.Offered(catalog, outcome.Value.Detail?.Clause?.IndexIds ?? []))
+        {
+            IndexOptions.Add(option);
+        }
+
+        if (outcome.Value.Detail is not { } detail)
         {
             CanChange = false;
             RefusalMessage = ContractRefusal.ContractNotFound.OperatorText();
