@@ -168,6 +168,110 @@ public sealed class AdjustmentDeskTests
             second.Missing.Select(m => (m.EconomicIndexId, m.Period)));
     }
 
+    // ---- Test 71: a figure that cannot be stored is refused in the operator's words, never the generic error --------------
+
+    private static readonly DateOnly DecemberLevel = new(2025, 12, 1);
+    private static readonly DateOnly JuneLevel = new(2026, 6, 1);
+
+    /// <summary>A level typed far off, as if accepted past the far-level warning in Índices.</summary>
+    private static async Task SetLevelAsync(DeskWorld world, Guid index, DateOnly period, decimal level)
+    {
+        await using var change = world.NewContext();
+        await change.Database.ExecuteSqlAsync(
+            $"UPDATE index_values SET level = {level} WHERE economic_index_id = {index} AND period = {period}");
+    }
+
+    [SkippableFact]
+    public async Task Test71_ALevelThatOverflowsThePercent_IsRefused_InTheSummaryAndOnConfirming_AndNothingIsWritten()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+        await using var world = await WorldAsync();
+        var seeded = await SeedAsync(world);
+        var today = new DateOnly(2026, 7, 12);
+        var opened = await PreviewAsync(Desk(world, today, seeded.User), seeded.Contract);
+
+        // 100 to 1,100,000 is a rise of 1,099,900 %, past the variation's twelve digits.
+        await SetLevelAsync(world, seeded.FirstIndex, JuneLevel, 1_100_000m);
+        var summary = await Desk(world, today, seeded.User).PreviewAsync(seeded.Contract);
+        var confirmed = await Desk(world, today, seeded.User).ConfirmAsync(opened);
+
+        Assert.Equal(AdjustmentRefusal.ResultOutOfRange, summary.Refusal);
+        Assert.Null(summary.Preview);
+        Assert.Equal(AdjustmentRefusal.ResultOutOfRange, confirmed.Refusal);
+        var (rent, rows) = await StoredAsync(world, seeded.Contract);
+        Assert.Equal(100_000m, rent);
+        Assert.Empty(rows);
+    }
+
+    [SkippableFact]
+    public async Task Test71_AFallThatLeavesNoCanon_IsRefused()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+        await using var world = await WorldAsync();
+        var seeded = await SeedAsync(world);
+
+        // 100 to 0.000001 leaves 0.001 of the 100,000, truncated to no canon at all.
+        await SetLevelAsync(world, seeded.FirstIndex, JuneLevel, 0.000001m);
+        var summary = await Desk(world, new DateOnly(2026, 7, 12), seeded.User).PreviewAsync(seeded.Contract);
+
+        Assert.Equal(AdjustmentRefusal.ResultOutOfRange, summary.Refusal);
+        Assert.Equal(100_000m, (await StoredAsync(world, seeded.Contract)).MonthlyRent);
+    }
+
+    [SkippableFact]
+    public async Task Test71_ACorrectionThatOverflows_IsRefused()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+        await using var world = await WorldAsync();
+        var seeded = await SeedAsync(world);
+        var original = await ConfirmedLateAsync(world, seeded, charge: false);
+
+        await SetLevelAsync(world, seeded.FirstIndex, JuneLevel, 1_100_000m);
+        var summary = await Desk(world, new DateOnly(2026, 12, 5), seeded.User).PreviewCorrectionAsync(seeded.Contract, original.Id);
+
+        Assert.Equal(AdjustmentRefusal.ResultOutOfRange, summary.Refusal);
+        Assert.Single((await StoredAsync(world, seeded.Contract)).Rows);
+    }
+
+    [SkippableFact]
+    public async Task Test71_ACorrectionThatLeavesNoCanon_IsRefused()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+        await using var world = await WorldAsync();
+        var seeded = await SeedAsync(world);
+        var original = await ConfirmedLateAsync(world, seeded, charge: false);
+
+        await SetLevelAsync(world, seeded.FirstIndex, JuneLevel, 0.000001m);
+        var summary = await Desk(world, new DateOnly(2026, 12, 5), seeded.User).PreviewCorrectionAsync(seeded.Contract, original.Id);
+
+        Assert.Equal(AdjustmentRefusal.ResultOutOfRange, summary.Refusal);
+        Assert.Single((await StoredAsync(world, seeded.Contract)).Rows);
+    }
+
+    [SkippableFact]
+    public async Task Test71_AHugeCanonAndAnAbsurdRatio_DoNotBreakTheListOfDueAdjustments()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+        await using var world = await WorldAsync();
+        var seeded = await SeedAsync(world);
+        await using (var change = world.NewContext())
+        {
+            await change.Database.ExecuteSqlAsync($"UPDATE contracts SET monthly_rent = 900000000000 WHERE id = {seeded.Contract}");
+        }
+
+        // A ratio of about 10^18 on a canon of 9 x 10^11 is past what a decimal holds, before any column is reached.
+        await SetLevelAsync(world, seeded.FirstIndex, DecemberLevel, 0.000001m);
+        await SetLevelAsync(world, seeded.FirstIndex, JuneLevel, 999_999_999_999m);
+        var today = new DateOnly(2026, 7, 12);
+        await using var read = world.NewContext();
+        var due = (await new DueAdjustmentQuery(read).GetDueAsync(today)).Single(d => d.ContractId == seeded.Contract);
+        var summary = await Desk(world, today, seeded.User).PreviewAsync(seeded.Contract);
+
+        Assert.NotNull(due.Coefficient);
+        Assert.Null(due.ProposedCanon);
+        Assert.Equal(AdjustmentRefusal.ResultOutOfRange, summary.Refusal);
+    }
+
     [SkippableFact]
     public async Task BeforeItsDueDate_OrForAnUnknownContract_ThereIsNothingToConfirm()
     {
@@ -525,6 +629,49 @@ public sealed class AdjustmentDeskTests
         await using var read = world.NewContext();
         var stored = await read.ContractAccounts.AsNoTracking().Include(a => a.Movements).SingleAsync(a => a.Id == account);
         return stored.Movements.Where(m => m.CorrectsMovementId == corrected).ToList();
+    }
+
+    /// <summary>
+    /// Spec Test 71: a canon that fits can still owe a difference past what a movement holds, over several late months. A
+    /// canon of 600,000,000,000 rising 66 % fits; four months of 396,000,000,000 do not.
+    /// </summary>
+    [SkippableFact]
+    public async Task Test71_ADifferenceThatOverflows_IsRefused_ForAnAdjustment()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+        await using var world = await WorldAsync();
+        var seeded = await SeedAsync(world);
+        await using (var change = world.NewContext())
+        {
+            await change.Database.ExecuteSqlAsync($"UPDATE contracts SET monthly_rent = 600000000000 WHERE id = {seeded.Contract}");
+        }
+
+        await SetLevelAsync(world, seeded.FirstIndex, JuneLevel, 166m);
+        var summary = await Desk(world, LateDay, seeded.User).PreviewAsync(seeded.Contract);
+
+        Assert.Equal(AdjustmentRefusal.ResultOutOfRange, summary.Refusal);
+        Assert.Empty((await StoredAsync(world, seeded.Contract)).Rows);
+    }
+
+    [SkippableFact]
+    public async Task Test71_ADifferenceThatOverflows_IsRefused_ForACorrection()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+        await using var world = await WorldAsync();
+        var seeded = await SeedAsync(world);
+        await using (var change = world.NewContext())
+        {
+            await change.Database.ExecuteSqlAsync($"UPDATE contracts SET monthly_rent = 600000000000 WHERE id = {seeded.Contract}");
+        }
+
+        // Rising 10 %, the original's four late months fit; its charge is unpaid, so the correction reverses it and offers
+        // its own difference again (Requirement 18), now 396,000,000,000 over five months.
+        var original = await ConfirmedLateAsync(world, seeded, charge: true);
+        await SetLevelAsync(world, seeded.FirstIndex, JuneLevel, 166m);
+        var summary = await Desk(world, new DateOnly(2026, 12, 5), seeded.User).PreviewCorrectionAsync(seeded.Contract, original.Id);
+
+        Assert.Equal(AdjustmentRefusal.ResultOutOfRange, summary.Refusal);
+        Assert.Single((await StoredAsync(world, seeded.Contract)).Rows);
     }
 
     [SkippableFact]

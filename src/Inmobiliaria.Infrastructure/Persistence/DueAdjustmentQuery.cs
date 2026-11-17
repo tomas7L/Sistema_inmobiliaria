@@ -87,9 +87,15 @@ public sealed class DueAdjustmentQuery : IDueAdjustmentQuery
                 {
                     coefficient = computedCoefficient;
                     indexValues = mathResult.IndexValues;
-                    var proposal = new AdjustmentProposal(
-                        row.MonthlyRent, mathResult.IndexValues, row.Clause.Combination, computedCoefficient, dueDate);
-                    proposedCanon = proposal.TruncatedNewCanon;
+
+                    // A coefficient past what can be stored (a level typed far off) proposes no canon: computing one could
+                    // overflow, and the desk refuses it in the operator's words (spec Test 71).
+                    if (AdjustmentLimits.PercentsFit(computedCoefficient, mathResult.IndexValues))
+                    {
+                        var proposal = new AdjustmentProposal(
+                            row.MonthlyRent, mathResult.IndexValues, row.Clause.Combination, computedCoefficient, dueDate);
+                        proposedCanon = proposal.TruncatedNewCanon;
+                    }
                 }
                 else
                 {
