@@ -42,8 +42,14 @@ public static class ClauseFormRules
             return null;
         }
 
-        var due = AdjustmentSchedule.NextDueDate(start, interval, lastEffectiveDate, cutoverDate);
-        var window = AdjustmentWindow.For(due, interval, offset);
+        return NextAdjustmentText(start, interval, offset, lastEffectiveDate, cutoverDate);
+    }
+
+    /// <summary>The next due date of a clause and the months it will read, as one sentence.</summary>
+    public static string NextAdjustmentText(DateOnly startDate, int intervalMonths, int windowOffsetMonths, DateOnly? lastEffectiveDate, DateOnly? cutoverDate)
+    {
+        var due = AdjustmentSchedule.NextDueDate(startDate, intervalMonths, lastEffectiveDate, cutoverDate);
+        var window = AdjustmentWindow.For(due, intervalMonths, windowOffsetMonths);
 
         return $"El próximo ajuste vence el {Formats.Date(due)} y lee de {Formats.Period(window.Base)} a {Formats.Period(window.End)}.";
     }

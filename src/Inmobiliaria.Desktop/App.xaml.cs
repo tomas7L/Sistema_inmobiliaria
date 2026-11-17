@@ -212,7 +212,10 @@ public partial class App : Application
                 : null;
 
             // Contratos is for both roles (gestion-de-alquileres spec Requirement 6).
-            var contractsViewModel = new ContractsViewModel(_sessionProvider.GetRequiredService<IContractRegistry>());
+            var contractRegistry = _sessionProvider.GetRequiredService<IContractRegistry>();
+            var adjustmentDesk = _sessionProvider.GetRequiredService<IAdjustmentDesk>();
+            var contractsViewModel = new ContractsViewModel(
+                contractRegistry, id => new ContractDetailViewModel(contractRegistry, adjustmentDesk, id));
 
             // Personas is for both roles (gestion-de-alquileres spec Requirement 22).
             var partiesViewModel = new PartiesViewModel(_sessionProvider.GetRequiredService<IPartyRegistry>());
