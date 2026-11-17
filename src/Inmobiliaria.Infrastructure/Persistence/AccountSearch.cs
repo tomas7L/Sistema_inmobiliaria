@@ -1,5 +1,4 @@
-using System.Globalization;
-using System.Text;
+using Inmobiliaria.Domain.Shared;
 
 namespace Inmobiliaria.Infrastructure.Persistence;
 
@@ -17,23 +16,8 @@ public static class AccountSearch
     /// <summary>The most results a search returns.</summary>
     public const int MaxResults = 50;
 
-    /// <summary>"Demaría" and "demaria" fold to the same text.</summary>
-    public static string Fold(string text)
-    {
-        ArgumentNullException.ThrowIfNull(text);
-
-        var decomposed = text.Trim().ToLowerInvariant().Normalize(NormalizationForm.FormD);
-        var builder = new StringBuilder(decomposed.Length);
-        foreach (var c in decomposed)
-        {
-            if (CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
-            {
-                builder.Append(c);
-            }
-        }
-
-        return builder.ToString().Normalize(NormalizationForm.FormC);
-    }
+    /// <summary>"Demaría" and "demaria" fold to the same text, as in every search (<see cref="TextFold"/>).</summary>
+    public static string Fold(string text) => TextFold.Fold(text);
 
     /// <summary>Whether <paramref name="text"/> is long enough to search for.</summary>
     public static bool IsSearchable(string? text) => text is not null && Fold(text).Length >= MinimumLength;

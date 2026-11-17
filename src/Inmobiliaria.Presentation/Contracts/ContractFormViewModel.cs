@@ -8,6 +8,7 @@ using Inmobiliaria.Domain.Accounts;
 using Inmobiliaria.Domain.Indices;
 using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Domain.Parties;
+using Inmobiliaria.Domain.Shared;
 using Inmobiliaria.Domain.Units;
 using Inmobiliaria.Presentation.Common;
 
@@ -27,11 +28,17 @@ public sealed partial class ContractFormViewModel : ObservableObject
     private readonly IContractRegistry _contracts;
     private readonly IAgencyClock _clock;
     private readonly IIndexRegistry _indices;
+    private readonly IPartyRegistry? _parties;
+    private readonly IUnitRegistry? _units;
 
     /// <summary>Counts edits, so a reply can tell whether it still describes what the form holds.</summary>
     private int _edits;
 
-    public ContractFormViewModel(IContractRegistry contracts, bool canSetCutover, IAgencyClock clock, IIndexRegistry indices)
+    /// <param name="parties">The people the pickers offer; without it they offer none.</param>
+    /// <param name="units">The units the unit picker offers; without it, none.</param>
+    public ContractFormViewModel(
+        IContractRegistry contracts, bool canSetCutover, IAgencyClock clock, IIndexRegistry indices, IPartyRegistry? parties = null,
+        IUnitRegistry? units = null)
     {
         ArgumentNullException.ThrowIfNull(contracts);
         ArgumentNullException.ThrowIfNull(clock);
@@ -40,12 +47,34 @@ public sealed partial class ContractFormViewModel : ObservableObject
         _contracts = contracts;
         _clock = clock;
         _indices = indices;
+        _parties = parties;
+        _units = units;
         IsCutoverOffered = canSetCutover;
         LoadCommand = new AsyncRelayCommand(LoadAsync, CanAct);
         SaveCommand = new AsyncRelayCommand(SaveAsync, CanAct);
         AcceptWarningsCommand = new AsyncRelayCommand(AcceptWarningsAsync, () => CanAct() && HasWarnings);
         CancelCommand = new RelayCommand(WithdrawWarnings);
         AddLessorCommand = new AsyncRelayCommand<PartyListing>(AddLessorAsync);
+        TenantPicker = new FormPicker<PartyListing>(DescribeParty, person =>
+        {
+            Tenant = person;
+            return Task.CompletedTask;
+        });
+        LessorPicker = new FormPicker<PartyListing>(DescribeParty, AddLessorAsync);
+        CodebtorPicker = new FormPicker<PartyListing>(DescribeParty, person =>
+        {
+            Codebtors.Add(person);
+            return Task.CompletedTask;
+        });
+        UnitPicker = new FormPicker<UnitListing>(DescribeUnit, unit =>
+        {
+            Units.Add(new ContractFormUnit(unit));
+            return Task.CompletedTask;
+        });
+        ClearTenantCommand = new RelayCommand(() => Tenant = null);
+        RemoveLessorCommand = new RelayCommand<PartyListing>(person => RemoveRow(Lessors, person));
+        RemoveCodebtorCommand = new RelayCommand<PartyListing>(person => RemoveRow(Codebtors, person));
+        RemoveUnitCommand = new RelayCommand<ContractFormUnit>(unit => RemoveRow(Units, unit));
         Lessors.CollectionChanged += OnFormCollectionChanged;
         Codebtors.CollectionChanged += OnFormCollectionChanged;
         Units.CollectionChanged += OnUnitsChanged;
@@ -100,6 +129,26 @@ public sealed partial class ContractFormViewModel : ObservableObject
 
     /// <summary>Adds a lessor and, while the rate is empty, suggests the one of that person's most recent contract carrying one.</summary>
     public IAsyncRelayCommand<PartyListing> AddLessorCommand { get; }
+
+    /// <summary>The tenant, typed and picked (canvas "Nuevo contrato").</summary>
+    public FormPicker<PartyListing> TenantPicker { get; }
+
+    /// <summary>A lessor, typed and picked; each one picked is a row.</summary>
+    public FormPicker<PartyListing> LessorPicker { get; }
+
+    public FormPicker<PartyListing> CodebtorPicker { get; }
+
+    /// <summary>A unit, typed by its address and picked, saying whether a contract in force already covers it.</summary>
+    public FormPicker<UnitListing> UnitPicker { get; }
+
+    public IRelayCommand ClearTenantCommand { get; }
+
+    /// <summary>"Quitar": takes one row away.</summary>
+    public IRelayCommand<PartyListing> RemoveLessorCommand { get; }
+
+    public IRelayCommand<PartyListing> RemoveCodebtorCommand { get; }
+
+    public IRelayCommand<ContractFormUnit> RemoveUnitCommand { get; }
 
     [ObservableProperty]
     private PartyListing? _tenant;
@@ -467,6 +516,36 @@ public sealed partial class ContractFormViewModel : ObservableObject
 
     private void OnFormCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e) => WithdrawWarnings();
 
+    /// <summary>A row's error names its position, so taking a row away withdraws the errors rather than leave them on others.</summary>
+    private void RemoveRow<TRow>(ObservableCollection<TRow> rows, TRow? row)
+    {
+        if (row is not null && rows.Remove(row))
+        {
+            Errors = ContractFieldErrors.None;
+        }
+    }
+
+    private static PickerOption<PartyListing> DescribeParty(PartyListing person)
+    {
+        var name = $"{person.LastName}, {person.FirstName}";
+        var roles = person.ActiveRoles.Count == 0 ? null : string.Join(", ", person.ActiveRoles.Select(Formats.Role));
+
+        return new PickerOption<PartyListing>(
+            person, name, roles, TextFold.Fold($"{name} {person.FirstName} {person.LastName} {person.Dni} {person.Cuil}"));
+    }
+
+    private static PickerOption<UnitListing> DescribeUnit(UnitListing unit)
+    {
+        var tag = unit.Covering switch
+        {
+            null => "Disponible",
+            { Status: ContractStatus.PendingTermination } covering => $"En rescisión, de {covering.TenantName}",
+            var covering => $"Alquilada a {covering.TenantName}",
+        };
+
+        return new PickerOption<UnitListing>(unit, unit.AddressText, tag, TextFold.Fold(unit.AddressText));
+    }
+
     /// <summary>The row of the unit a refusal names, or null when it names none or that unit is no longer on the form.</summary>
     private int? UnitRow(Guid? unitId)
     {
@@ -525,10 +604,31 @@ public sealed partial class ContractFormViewModel : ObservableObject
 
         OnPropertyChanged(nameof(SuggestedClauseOffset));
         OnPropertyChanged(nameof(ClauseWindowText));
+
+        if (_parties is not null && await Runner.RunAsync(() => _parties.SearchAsync(null)) is { Completed: true, Value: { } people })
+        {
+            TenantPicker.SetOptions(people);
+            LessorPicker.SetOptions(people);
+            CodebtorPicker.SetOptions(people);
+        }
+
+        if (_units is not null && await Runner.RunAsync(() => _units.ListAsync()) is { Completed: true, Value: { } units })
+        {
+            UnitPicker.SetOptions(units);
+        }
     }
 }
 
 /// <summary>Each field's error text, or null for a field without one; the screen shows each beside its field.</summary>
+/// <summary>The form's tabs, as on the canvas.</summary>
+public enum ContractFormSection
+{
+    Parties,
+    Units,
+    DatesAndAmounts,
+    Clause,
+}
+
 public sealed class ContractFieldErrors
 {
     public const string SummaryText = "No se pudo guardar: revise los datos marcados.";
@@ -570,6 +670,18 @@ public sealed class ContractFieldErrors
     public string? ForRow(ContractField field, int row) => _rows.GetValueOrDefault((field, row));
 
     public int Count => _texts.Count + _rows.Count;
+
+    /// <summary>How many errors one tab of the form holds, its rows' included, for the mark on the tab (canvas "Nuevo contrato").</summary>
+    public int CountIn(ContractFormSection section) =>
+        _texts.Keys.Count(field => SectionOf(field) == section) + _rows.Keys.Count(key => SectionOf(key.Field) == section);
+
+    private static ContractFormSection SectionOf(ContractField field) => field switch
+    {
+        ContractField.Tenant or ContractField.Lessors or ContractField.Codebtors => ContractFormSection.Parties,
+        ContractField.Units or ContractField.Shares => ContractFormSection.Units,
+        ContractField.Clause => ContractFormSection.Clause,
+        _ => ContractFormSection.DatesAndAmounts,
+    };
 
     /// <summary>The line over the form while any field has an error.</summary>
     public string? Summary => Count > 0 ? SummaryText : null;
