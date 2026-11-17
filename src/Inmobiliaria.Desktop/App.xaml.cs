@@ -24,6 +24,7 @@ using Inmobiliaria.Presentation.Printing;
 using Inmobiliaria.Presentation.Recibos;
 using Inmobiliaria.Presentation.Voiding;
 using Inmobiliaria.Presentation.Shell;
+using Inmobiliaria.Presentation.Contracts;
 using Inmobiliaria.Presentation.Units;
 using Inmobiliaria.Presentation.Users;
 using Microsoft.Extensions.DependencyInjection;
@@ -210,6 +211,9 @@ public partial class App : Application
                 ? new NoticesViewModel(noticeDesk, new CredentialManagerMailboxStore(), session.Role, LoadAgencyName())
                 : null;
 
+            // Contratos is for both roles (gestion-de-alquileres spec Requirement 6).
+            var contractsViewModel = new ContractsViewModel(_sessionProvider.GetRequiredService<IContractRegistry>());
+
             // Personas is for both roles (gestion-de-alquileres spec Requirement 22).
             var partiesViewModel = new PartiesViewModel(_sessionProvider.GetRequiredService<IPartyRegistry>());
 
@@ -232,6 +236,7 @@ public partial class App : Application
                 goLiveViewModel is null ? null : new RunningWork(goLiveViewModel.Runner),
                 usersViewModel is null ? null : new RunningWork(usersViewModel.Runner),
                 noticesViewModel is null ? null : new RunningWork(noticesViewModel.Runner),
+                new RunningWork(contractsViewModel.Runner),
                 new RunningWork(partiesViewModel.Runner),
                 new RunningWork(unitsViewModel.Runner),
                 new RunningWork(indicesViewModel.Runner),
@@ -240,7 +245,7 @@ public partial class App : Application
 
             mainWindow = new MainWindow(
                 shellViewModel, cashDeskViewModel, recentViewModel, voidingViewModel, goLiveViewModel, usersViewModel,
-                noticesViewModel, partiesViewModel, unitsViewModel, indicesViewModel);
+                noticesViewModel, contractsViewModel, partiesViewModel, unitsViewModel, indicesViewModel);
             MainWindow = mainWindow;
             // ShutdownMode is OnExplicitShutdown (App.xaml) precisely so that closing
             // LoginWindow or ChangePasswordWindow mid-bootstrap never ends the process before

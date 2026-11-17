@@ -1,5 +1,6 @@
 ﻿using System.Windows;
 using Inmobiliaria.Presentation.CashDesk;
+using Inmobiliaria.Presentation.Contracts;
 using Inmobiliaria.Presentation.GoLive;
 using Inmobiliaria.Presentation.Indices;
 using Inmobiliaria.Presentation.Notices;
@@ -27,12 +28,14 @@ public partial class MainWindow : Window
         GoLiveViewModel? goLive,
         UsersViewModel? users,
         NoticesViewModel? notices,
+        ContractsViewModel contracts,
         PartiesViewModel parties,
         UnitsViewModel units,
         IndicesViewModel indices)
     {
         ArgumentNullException.ThrowIfNull(viewModel);
         ArgumentNullException.ThrowIfNull(recentCollections);
+        ArgumentNullException.ThrowIfNull(contracts);
         ArgumentNullException.ThrowIfNull(parties);
         ArgumentNullException.ThrowIfNull(units);
         ArgumentNullException.ThrowIfNull(indices);
@@ -45,6 +48,7 @@ public partial class MainWindow : Window
         GoLiveScreen.DataContext = goLive;
         UsersScreen.DataContext = users;
         NoticesScreen.DataContext = notices;
+        ContractsScreen.DataContext = contracts;
         PartiesScreen.DataContext = parties;
         UnitsScreen.DataContext = units;
         IndicesScreen.DataContext = indices;
