@@ -450,6 +450,7 @@ public sealed class ContractChangesTests
 
         Assert.Equal(ContractRefusal.UnitUnderActiveContract, result.Refusal);
         Assert.Contains("Perez", result.CurrentTenant, StringComparison.Ordinal);
+        Assert.Equal(other.Unit, result.UnitId);
         Assert.Equal(before, await HashAsync(world));
     }
 

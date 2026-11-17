@@ -68,12 +68,15 @@ public class ContractDraftProblemsTests
             Problems(Valid() with { StartDate = null, NominalEndDate = null }));
     }
 
-    /// <summary>Spec Test 113: the tenant cannot be a codeudor of the same contract; a lessor who is also the tenant can.</summary>
+    /// <summary>
+    /// Spec Test 113: the tenant cannot be a codeudor of the same contract, said under that codeudor's row (Mateo's canvas,
+    /// Tomás 2026-11-16); a lessor who is also the tenant can.
+    /// </summary>
     [Fact]
-    public void TheTenantAsCodebtor_IsRefused_ButTheTenantAsLessorIsNot()
+    public void TheTenantAsCodebtor_IsRefusedOnItsRow_ButTheTenantAsLessorIsNot()
     {
         Assert.Equal(
-            [new ContractProblem(ContractField.Codebtors, ContractRefusal.TenantIsCodebtor)],
+            [new ContractProblem(ContractField.Codebtors, ContractRefusal.TenantIsCodebtor, Row: 1)],
             Problems(Valid() with { CodebtorIds = [Guid.NewGuid(), Juan] }));
         Assert.Empty(Problems(Valid() with { LessorIds = [Juan] }));
     }

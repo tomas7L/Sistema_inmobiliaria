@@ -214,10 +214,11 @@ public sealed partial class ContractFormViewModel : ObservableObject
             return;
         }
 
-        // Chosen again: said under the lessors instead of ignored (Mateo's redraw, accepted by Tomás 2026-11-16).
+        // Chosen again: it takes its row and is refused under it at once, as on Mateo's canvas (Tomás 2026-11-16).
         if (Lessors.Any(l => l.Id == lessor.Id))
         {
-            Errors = new ContractFieldErrors([new ContractProblem(ContractField.Lessors, ContractRefusal.LessorRepeated)]);
+            Lessors.Add(lessor);
+            Errors = new ContractFieldErrors([new ContractProblem(ContractField.Lessors, ContractRefusal.LessorRepeated, Lessors.Count - 1)]);
             return;
         }
 
@@ -280,9 +281,13 @@ public sealed partial class ContractFormViewModel : ObservableObject
 
             Created = result.Contract;
         }
-        else if (result.Refusal is { } refusal)
+        else if (result.Refusal is { } refusal && UnitRow(result.UnitId) is { } row)
         {
-            RefusalMessage = refusal.OperatorText(result.CurrentTenant);
+            Errors = ContractFieldErrors.OnRow(ContractField.Units, row, refusal.OperatorText(result.CurrentTenant));
+        }
+        else if (result.Refusal is { } other)
+        {
+            RefusalMessage = other.OperatorText(result.CurrentTenant);
         }
         else if (editedSince)
         {
@@ -462,6 +467,20 @@ public sealed partial class ContractFormViewModel : ObservableObject
 
     private void OnFormCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e) => WithdrawWarnings();
 
+    /// <summary>The row of the unit a refusal names, or null when it names none or that unit is no longer on the form.</summary>
+    private int? UnitRow(Guid? unitId)
+    {
+        for (var row = 0; unitId is not null && row < Units.Count; row++)
+        {
+            if (Units[row].Unit.Id == unitId)
+            {
+                return row;
+            }
+        }
+
+        return null;
+    }
+
     private void OnUnitsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         foreach (var added in e.NewItems?.OfType<ContractFormUnit>() ?? [])
@@ -518,21 +537,42 @@ public sealed class ContractFieldErrors
 
     private readonly Dictionary<ContractField, string> _texts;
 
-    /// <param name="problems">In the form's order; a field with two problems shows the first.</param>
+    private readonly Dictionary<(ContractField Field, int Row), string> _rows;
+
+    /// <param name="problems">In the form's order; a field, or a row of one, with two problems shows the first.</param>
     public ContractFieldErrors(IEnumerable<ContractProblem> problems)
     {
         ArgumentNullException.ThrowIfNull(problems);
-        _texts = problems
+        var all = problems.ToList();
+        _texts = all
+            .Where(p => p.Row is null)
             .GroupBy(p => p.Field)
+            .ToDictionary(g => g.Key, g => g.First().Refusal.OperatorText());
+        _rows = all
+            .Where(p => p.Row is not null)
+            .GroupBy(p => (p.Field, p.Row!.Value))
             .ToDictionary(g => g.Key, g => g.First().Refusal.OperatorText());
     }
 
+    private ContractFieldErrors(ContractField field, int row, string text)
+    {
+        _texts = [];
+        _rows = new() { [(field, row)] = text };
+    }
+
+    /// <summary>One error under one row, with a text the port wrote, such as who rents a unit.</summary>
+    public static ContractFieldErrors OnRow(ContractField field, int row, string text) => new(field, row, text);
+
+    /// <summary>The error of the field as a whole; a row's own is in <see cref="ForRow"/>.</summary>
     public string? this[ContractField field] => _texts.GetValueOrDefault(field);
 
-    public int Count => _texts.Count;
+    /// <summary>The error under one row of a list field (lessors, codeudores, units), by its position.</summary>
+    public string? ForRow(ContractField field, int row) => _rows.GetValueOrDefault((field, row));
+
+    public int Count => _texts.Count + _rows.Count;
 
     /// <summary>The line over the form while any field has an error.</summary>
-    public string? Summary => _texts.Count > 0 ? SummaryText : null;
+    public string? Summary => Count > 0 ? SummaryText : null;
 }
 
 /// <summary>A unit on the form, with what was typed for its share. Everything blank splits equally.</summary>

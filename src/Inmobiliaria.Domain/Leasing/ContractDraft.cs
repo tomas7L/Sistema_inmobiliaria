@@ -57,7 +57,11 @@ public enum ContractField
 }
 
 /// <summary>One thing wrong with a draft, and the field it belongs to.</summary>
-public sealed record ContractProblem(ContractField Field, ContractRefusal Refusal);
+/// <param name="Row">
+/// For a field that is a list (lessors, codeudores, units), the position of the entry it belongs to, so the screen shows it
+/// under that row (Mateo's canvas, Tomás 2026-11-16); null when it belongs to the field as a whole.
+/// </param>
+public sealed record ContractProblem(ContractField Field, ContractRefusal Refusal, int? Row = null);
 
 /// <summary>
 /// The form's rules, pure and without a database (design D19). They are separate from <see cref="Contract"/>'s
@@ -152,23 +156,39 @@ public static class ContractDraftRules
         {
             problems.Add(new ContractProblem(ContractField.Lessors, ContractRefusal.LessorMissing));
         }
-        else if (draft.LessorIds.Distinct().Count() != draft.LessorIds.Count)
+        else
         {
-            problems.Add(new ContractProblem(ContractField.Lessors, ContractRefusal.LessorRepeated));
+            Repeats(draft.LessorIds, ContractField.Lessors, ContractRefusal.LessorRepeated, problems);
         }
 
-        if (TenantIsCodebtor(draft.TenantId, draft.CodebtorIds))
+        for (var row = 0; row < draft.CodebtorIds.Count; row++)
         {
-            problems.Add(new ContractProblem(ContractField.Codebtors, ContractRefusal.TenantIsCodebtor));
+            if (draft.CodebtorIds[row] == draft.TenantId)
+            {
+                problems.Add(new ContractProblem(ContractField.Codebtors, ContractRefusal.TenantIsCodebtor, row));
+            }
         }
 
         if (draft.Shares.Count == 0)
         {
             problems.Add(new ContractProblem(ContractField.Units, ContractRefusal.UnitMissing));
         }
-        else if (draft.Shares.Select(s => s.UnitId).Distinct().Count() != draft.Shares.Count)
+        else
         {
-            problems.Add(new ContractProblem(ContractField.Units, ContractRefusal.UnitRepeated));
+            Repeats(draft.Shares.Select(s => s.UnitId).ToList(), ContractField.Units, ContractRefusal.UnitRepeated, problems);
+        }
+    }
+
+    /// <summary>Each entry already listed above it, on its own row; the first of them stays clean (Mateo's canvas).</summary>
+    private static void Repeats(IReadOnlyList<Guid> entries, ContractField field, ContractRefusal refusal, List<ContractProblem> problems)
+    {
+        var seen = new HashSet<Guid>();
+        for (var row = 0; row < entries.Count; row++)
+        {
+            if (!seen.Add(entries[row]))
+            {
+                problems.Add(new ContractProblem(field, refusal, row));
+            }
         }
     }
 

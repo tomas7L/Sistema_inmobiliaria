@@ -250,25 +250,30 @@ public class ContractDraftRulesTests
         Assert.DoesNotContain(texts, text => text.Contains("garante", StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary>Mateo's redraw, accepted by Tomás 2026-11-16: the same lessor twice is refused under the lessors.</summary>
+    /// <summary>
+    /// Mateo's redraw, accepted by Tomás 2026-11-16: the same lessor twice is refused under the row that repeats it, each
+    /// repetition on its own row, and the first one stays clean.
+    /// </summary>
     [Fact]
-    public void TheSameLessorTwice_IsRefused_UnderTheLessors()
+    public void TheSameLessorTwice_IsRefused_OnTheRowThatRepeatsIt()
     {
         var lessor = Guid.NewGuid();
-        var draft = Valid() with { LessorIds = [lessor, Guid.NewGuid(), lessor] };
+        var draft = Valid() with { LessorIds = [lessor, Guid.NewGuid(), lessor, lessor] };
 
         Assert.Equal(ContractRefusal.LessorRepeated, Check(draft));
-        Assert.Contains(new ContractProblem(ContractField.Lessors, ContractRefusal.LessorRepeated), ContractDraftRules.Problems(draft, Today));
+        Assert.Equal(
+            [new ContractProblem(ContractField.Lessors, ContractRefusal.LessorRepeated, Row: 2), new ContractProblem(ContractField.Lessors, ContractRefusal.LessorRepeated, Row: 3)],
+            ContractDraftRules.Problems(draft, Today));
         Assert.Equal("Esa persona ya está como propietaria.", ContractRefusal.LessorRepeated.OperatorText());
     }
 
-    /// <summary>The same unit twice is refused under the units, in its own words, not as shares that do not total 100%.</summary>
+    /// <summary>The same unit twice is refused on the row that repeats it, in its own words, not as shares that do not total 100%.</summary>
     [Fact]
-    public void TheSameUnitTwice_IsRefused_UnderTheUnits_NotAsShares()
+    public void TheSameUnitTwice_IsRefused_OnTheRowThatRepeatsIt_NotAsShares()
     {
         var problems = ContractDraftRules.Problems(Valid() with { Shares = [new UnitShare(UnitA, 50m), new UnitShare(UnitA, 50m)] }, Today);
 
-        Assert.Equal([new ContractProblem(ContractField.Units, ContractRefusal.UnitRepeated)], problems);
+        Assert.Equal([new ContractProblem(ContractField.Units, ContractRefusal.UnitRepeated, Row: 1)], problems);
         Assert.Equal("Esa unidad ya está elegida.", ContractRefusal.UnitRepeated.OperatorText());
     }
 }

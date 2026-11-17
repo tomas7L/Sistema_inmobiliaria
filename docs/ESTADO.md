@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-16 (cierre), con la cláusula leyendo el catálogo de índices mergeada (#142)_
+_Última actualización: 2026-11-16 (segundo cierre), con Cerrar sesión, el "$" y los puntos en los importes mergeados (#143 a #146)_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -9,18 +9,20 @@ _Última actualización: 2026-11-16 (cierre), con la cláusula leyendo el catál
 ## En qué estamos
 
 **Change activo: `gestion-de-alquileres`, Phase 12 (Pantallas).** Con vista: Personas, Propiedades e Índices. **Contratos y
-Ajustes tienen toda la lógica hecha pero no su vista**, que espera las pantallas finales de Mateo (está enfermo, puede tardar).
+Ajustes tienen toda la lógica hecha pero no su vista.** El lienzo de Mateo está en **V77**: todas las pantallas entran en
+1920 × 950 y ya aplicó las correcciones de la revisión (Engram `reference/mateo-canvas-950-review`). Los errores de las filas del
+formulario de contrato van bajo su fila (Engram `decisions/contract-errors-per-row`). **Las vistas ya no esperan a Mateo.**
 El detalle de lo hecho y lo que falta: `gestion-de-alquileres/tasks.md`, 12.3d y 12.3e.
 
 ## Próximos pasos
 
-1. **Cuando lleguen las pantallas de Mateo:** las vistas de Contratos (listado, detalle, formulario, cláusula) y Ajustes,
-   copiando su lienzo. La lógica ya está: `src/Inmobiliaria.Presentation/Contracts/` y `Adjustments/`. Antes de mostrar cada
-   una, revisar `memory/wpf-screen-lessons.md` y Engram `conventions/s12-screen-lessons`. Si cambia tamaños de las ya hechas,
-   se toca `Themes/Controls.xaml` y cada `Views/*View.xaml`; la lógica no.
-2. **Mientras tanto, sin Mateo:** de 12.3d quedan los textos fuera de pantalla ("Actualice", "un Administrador", el pie del
-   login, "$" antes de los importes y en el recibo impreso) y **Cerrar sesión**. De 12.3e, alinear el email del buzón de avisos
-   con la Decisión 54.
+1. **Las vistas, ya desbloqueadas:** Contratos (listado, detalle con pestañas, formulario con pestañas,
+   cláusula) y Ajustes, copiando su lienzo. La lógica ya está: `src/Inmobiliaria.Presentation/Contracts/` y `Adjustments/`.
+   Los campos de importe del formulario de contrato se enlazan con `UpdateSourceTrigger=LostFocus` (`tasks.md`, 12.3d). Antes
+   de mostrar cada una, revisar `memory/wpf-screen-lessons.md` y Engram `conventions/s12-screen-lessons`. Si cambia tamaños de
+   las ya hechas, se toca `Themes/Controls.xaml` y cada `Views/*View.xaml`; la lógica no.
+2. **Mientras tanto, sin Mateo:** de 12.3e, alinear el email del buzón de avisos con la Decisión 54. **Tomás:** imprimir un
+   recibo en papel en PRUEBA para ver que el "$" entra en el formulario (`tasks.md`, 12.3d, "Texts done").
 3. **Reunión con Nicolás:** `lectura-reunion-nicolas.md` (raíz, local), preguntas N1 a N22 que siguen abiertas.
 4. **Panorama de lo que falta:** Engram `plan/remaining-work-panorama`. `carga-inicial` espera el Excel de la reunión.
 
@@ -94,7 +96,7 @@ dotnet test Inmobiliaria.Core.slnf --configuration Release
 dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure
 ```
 
-Esperado en `develop` (#142): **2439 pasados (Domain 842, Presentation 650, Infrastructure 947), 0 fallas, 0 omitidos**, build
+Esperado en `develop` (tras el PR de los errores por fila): **2471 pasados (Domain 844, Presentation 679, Infrastructure 948), 0 fallas, 0 omitidos**, build
 sin advertencias y el modelo en sintonía con `20261113165451_RevokeSupabaseApiRoles`. Si el build de Desktop falla con MSB3027,
 la aplicación está abierta y tiene tomadas sus DLL: cerrarla. La app la abre siempre el asistente (Tomás, 2026-11-13).
 
