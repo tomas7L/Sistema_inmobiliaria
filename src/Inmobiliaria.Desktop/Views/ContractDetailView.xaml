@@ -11,30 +11,42 @@
     <!--
         One contract as the designer drew it (canvas "Detalle del contrato"): its state, and three tabs, the Resumen's cards,
         the adjustment history and the event log. Bound to ContractDetailViewModel; no logic lives here. The title and
-        "Volver a contratos" are the list's, which hosts this in its place.
+        "Volver a contratos" are the list's, which hosts this in its place. The canvas's 1920 x 950 fit: the tables scroll
+        inside their card, the page does not.
     -->
     <UserControl.Resources>
         <views:EqualsConverter x:Key="Equals" />
         <BooleanToVisibilityConverter x:Key="Shown" />
 
-        <!-- One line of a card: what it is, muted, and its value, bold, on the same row. -->
+        <!-- One line of a card, the canvas's "kv": what it is, muted, and its value, bold, on the same row. -->
         <DataTemplate x:Key="DetailLineRow" DataType="{x:Type contracts:DetailLine}">
-            <Grid Margin="0,5">
+            <Grid Margin="0,6">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <TextBlock Text="{Binding Label}" Foreground="{DynamicResource Theme.Muted}" TextWrapping="Wrap" Margin="0,0,16,0" />
+                <TextBlock Text="{Binding Label}" Foreground="{DynamicResource Theme.Muted}" TextWrapping="Wrap" Margin="0,0,12,0" />
                 <TextBlock Grid.Column="1" Text="{Binding Value}" FontWeight="Bold" TextWrapping="Wrap" TextAlignment="Right" MaxWidth="260" />
             </Grid>
         </DataTemplate>
+
+        <!-- The card's 12 gap before each line; the card's title then carries no margin of its own, so the gap is not doubled. -->
+        <Style x:Key="DetailLineGap" TargetType="ContentPresenter">
+            <Setter Property="Margin" Value="0,12,0,0" />
+        </Style>
     </UserControl.Resources>
 
-    <StackPanel>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
         <TextBlock Text="{Binding Runner.ErrorMessage}" Style="{StaticResource Theme.ErrorText}" Margin="0,12,0,0" />
 
         <!-- The state, and what it means for the operator. -->
-        <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,12,0,0">
             <!-- Coloured as on the list: green in force, amber with notice, neutral ended, red cancelled. -->
             <Border Margin="0">
                 <Border.Style>
@@ -54,11 +66,11 @@
                 </Border.Style>
                 <TextBlock Text="{Binding StatusText}" />
             </Border>
-            <TextBlock Text="{Binding StateNote}" Style="{StaticResource Theme.Hint}" VerticalAlignment="Center" Margin="12,0,0,0" />
+            <TextBlock Text="{Binding StateNote}" Style="{StaticResource Theme.Hint}" VerticalAlignment="Center" Margin="10,0,0,0" />
         </StackPanel>
 
         <!-- The tabs. -->
-        <Border Style="{StaticResource Theme.SegmentGroup}" HorizontalAlignment="Left" Margin="0,18,0,0">
+        <Border Grid.Row="2" Style="{StaticResource Theme.SegmentGroup}" HorizontalAlignment="Left" Margin="0,12,0,0">
             <StackPanel Orientation="Horizontal">
                 <RadioButton Content="Resumen" GroupName="DetailTab" Style="{StaticResource Theme.Segment}"
                              IsChecked="{Binding Tab, Converter={StaticResource Equals}, ConverterParameter={x:Static contracts:ContractDetailTab.Summary}}" />
@@ -69,10 +81,10 @@
             </StackPanel>
         </Border>
 
-        <!-- Resumen: three columns of cards. -->
-        <Grid Margin="0,18,0,0">
-            <Grid.Style>
-                <Style TargetType="Grid">
+        <!-- Resumen: the canvas's "dgrid", three columns of cards. It scrolls only on a screen smaller than the canvas's. -->
+        <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" Margin="0,12,0,0">
+            <ScrollViewer.Style>
+                <Style TargetType="ScrollViewer">
                     <Setter Property="Visibility" Value="Collapsed" />
                     <Style.Triggers>
                         <DataTrigger Binding="{Binding Tab}" Value="{x:Static contracts:ContractDetailTab.Summary}">
@@ -80,38 +92,46 @@
                         </DataTrigger>
                     </Style.Triggers>
                 </Style>
-            </Grid.Style>
+            </ScrollViewer.Style>
+        <Grid VerticalAlignment="Top">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="18" />
+                <ColumnDefinition Width="16" />
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="18" />
+                <ColumnDefinition Width="16" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
+            <!-- The canvas's "dcol": its cards 16 apart. -->
             <StackPanel>
                 <Border Style="{StaticResource Theme.Card}">
                     <StackPanel>
-                        <TextBlock Text="Partes" Style="{StaticResource Theme.CardTitle}" />
-                        <ItemsControl ItemsSource="{Binding PartyLines}" ItemTemplate="{StaticResource DetailLineRow}" />
-                        <TextBlock Style="{StaticResource Theme.Hint}" TextWrapping="Wrap" Margin="0,8,0,0"
+                        <TextBlock Text="Partes" Style="{StaticResource Theme.CardTitle}" Margin="0" />
+                        <ItemsControl ItemsSource="{Binding PartyLines}" ItemTemplate="{StaticResource DetailLineRow}"
+                                      ItemContainerStyle="{StaticResource DetailLineGap}" />
+                        <TextBlock Style="{StaticResource Theme.Hint}" TextWrapping="Wrap" Margin="0,12,0,0"
                                    Text="El codeudor se puede agregar, cambiar o quitar en cualquier momento. El inquilino y los propietarios, solo hasta el primer movimiento de la cuenta." />
                     </StackPanel>
                 </Border>
-                <Border Style="{StaticResource Theme.Card}" Margin="0,18,0,0">
+                <Border Style="{StaticResource Theme.Card}" Margin="0,16,0,0">
                     <StackPanel>
-                        <TextBlock Text="Propiedad" Style="{StaticResource Theme.CardTitle}" />
-                        <ItemsControl ItemsSource="{Binding UnitLines}" ItemTemplate="{StaticResource DetailLineRow}" />
+                        <TextBlock Text="Propiedad" Style="{StaticResource Theme.CardTitle}" Margin="0" />
+                        <ItemsControl ItemsSource="{Binding UnitLines}" ItemTemplate="{StaticResource DetailLineRow}"
+                                      ItemContainerStyle="{StaticResource DetailLineGap}" />
                     </StackPanel>
                 </Border>
             </StackPanel>
 
             <Border Grid.Column="2" Style="{StaticResource Theme.Card}" VerticalAlignment="Top">
                 <StackPanel>
-                    <TextBlock Text="Cláusula de ajuste" Style="{StaticResource Theme.CardTitle}" />
-                    <ItemsControl ItemsSource="{Binding ClauseLines}" ItemTemplate="{StaticResource DetailLineRow}" />
-                    <!-- Only under the clause's lines: without a clause there is nothing above it to separate. -->
-                    <Separator Margin="0,10" Background="{DynamicResource Theme.Line}">
+                    <TextBlock Text="Cláusula de ajuste" Style="{StaticResource Theme.CardTitle}" Margin="0" />
+                    <ItemsControl ItemsSource="{Binding ClauseLines}" ItemTemplate="{StaticResource DetailLineRow}"
+                                  ItemContainerStyle="{StaticResource DetailLineGap}" />
+                    <!--
+                        Only under the clause's lines: without a clause there is nothing above it to separate. The canvas's "sep":
+                        2 above and below it, plus the card's 12 gap.
+                    -->
+                    <Separator Margin="0,14,0,2" Background="{DynamicResource Theme.Line}">
                         <Separator.Style>
                             <Style TargetType="Separator">
                                 <Style.Triggers>
@@ -122,22 +142,30 @@
                             </Style>
                         </Separator.Style>
                     </Separator>
-                    <TextBlock Text="{Binding NextAdjustmentText}" TextWrapping="Wrap" />
-                    <TextBlock Style="{StaticResource Theme.Hint}" TextWrapping="Wrap" Margin="0,8,0,0"
+                    <TextBlock Text="{Binding NextAdjustmentText}" TextWrapping="Wrap" Margin="0,12,0,0" />
+                    <TextBlock Style="{StaticResource Theme.Hint}" TextWrapping="Wrap" Margin="0,12,0,0"
                                Text="La cláusula se puede cambiar hasta el primer ajuste confirmado. El cambio vale desde el próximo ajuste." />
                 </StackPanel>
             </Border>
 
+            <!-- This card's gap is 4 on the canvas, not the card's 12. -->
             <Border Grid.Column="4" Style="{StaticResource Theme.Card}" VerticalAlignment="Top">
                 <StackPanel>
-                    <TextBlock Text="Importes y fechas" Style="{StaticResource Theme.CardTitle}" />
-                    <ItemsControl ItemsSource="{Binding AmountLines}" ItemTemplate="{StaticResource DetailLineRow}" />
+                    <TextBlock Text="Importes y fechas" Style="{StaticResource Theme.CardTitle}" Margin="0" />
+                    <ItemsControl ItemsSource="{Binding AmountLines}" ItemTemplate="{StaticResource DetailLineRow}">
+                        <ItemsControl.ItemContainerStyle>
+                            <Style TargetType="ContentPresenter">
+                                <Setter Property="Margin" Value="0,4,0,0" />
+                            </Style>
+                        </ItemsControl.ItemContainerStyle>
+                    </ItemsControl>
                 </StackPanel>
             </Border>
         </Grid>
+        </ScrollViewer>
 
-        <!-- Historial de ajustes. -->
-        <Border Padding="8,8,8,4" Margin="0,18,0,0">
+        <!-- Historial de ajustes: the canvas's "tcard", whose table scrolls inside it. -->
+        <Border Grid.Row="3" Padding="8,8,8,4" Margin="0,12,0,0" VerticalAlignment="Top">
             <Border.Style>
                 <Style TargetType="Border" BasedOn="{StaticResource Theme.Card}">
                     <Setter Property="Visibility" Value="Collapsed" />
@@ -148,9 +176,15 @@
                     </Style.Triggers>
                 </Style>
             </Border.Style>
-            <StackPanel>
-                <TextBlock Text="Historial de ajustes" Style="{StaticResource Theme.CardTitle}" Margin="14,10,14,0" />
-                <DataGrid Style="{StaticResource Theme.Table}" ItemsSource="{Binding Adjustments.History}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock Text="Historial de ajustes" Style="{StaticResource Theme.CardTitle}" Margin="14,10,14,12" />
+                <DataGrid Grid.Row="1" Style="{StaticResource Theme.Table}" ItemsSource="{Binding Adjustments.History}"
+                          VerticalScrollBarVisibility="Auto">
                     <DataGrid.Columns>
                         <DataGridTemplateColumn Header="VENCE · RIGE DESDE" Width="1.2*" MinWidth="140">
                             <DataGridTemplateColumn.CellTemplate>
@@ -193,14 +227,14 @@
                         </DataGridTemplateColumn>
                     </DataGrid.Columns>
                 </DataGrid>
-                <TextBlock Text="Este contrato todavía no tiene ajustes confirmados." Style="{StaticResource Theme.Hint}"
+                <TextBlock Grid.Row="2" Text="Este contrato todavía no tiene ajustes confirmados." Style="{StaticResource Theme.Hint}"
                            FontSize="15" Margin="14,18"
                            Visibility="{Binding Adjustments.HasNoAdjustments, Converter={StaticResource Shown}}" />
-            </StackPanel>
+            </Grid>
         </Border>
 
-        <!-- Registro de eventos. -->
-        <Border Padding="8,8,8,4" Margin="0,18,0,0">
+        <!-- Registro de eventos: the canvas's "tcard", whose table scrolls inside it. -->
+        <Border Grid.Row="3" Padding="8,8,8,4" Margin="0,12,0,0" VerticalAlignment="Top">
             <Border.Style>
                 <Style TargetType="Border" BasedOn="{StaticResource Theme.Card}">
                     <Setter Property="Visibility" Value="Collapsed" />
@@ -211,9 +245,15 @@
                     </Style.Triggers>
                 </Style>
             </Border.Style>
-            <StackPanel>
-                <TextBlock Text="Registro de eventos" Style="{StaticResource Theme.CardTitle}" Margin="14,10,14,0" />
-                <DataGrid Style="{StaticResource Theme.Table}" ItemsSource="{Binding Events}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock Text="Registro de eventos" Style="{StaticResource Theme.CardTitle}" Margin="14,10,14,12" />
+                <DataGrid Grid.Row="1" Style="{StaticResource Theme.Table}" ItemsSource="{Binding Events}"
+                          VerticalScrollBarVisibility="Auto">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="CUÁNDO" Binding="{Binding WhenText}" Width="0.8*" MinWidth="110" />
                         <DataGridTemplateColumn Header="EVENTO" Width="1.2*" MinWidth="150">
@@ -239,10 +279,10 @@
                         </DataGridTemplateColumn>
                     </DataGrid.Columns>
                 </DataGrid>
-                <TextBlock Text="Todavía no hay avisos, fines ni cancelaciones en este contrato." Style="{StaticResource Theme.Hint}"
-                           FontSize="15" Margin="14,18"
+                <TextBlock Grid.Row="2" Text="Todavía no hay avisos, fines ni cancelaciones en este contrato." Style="{StaticResource Theme.Hint}"
+                           FontSize="15" Margin="14,6,14,14"
                            Visibility="{Binding HasNoEvents, Converter={StaticResource Shown}}" />
-            </StackPanel>
+            </Grid>
         </Border>
-    </StackPanel>
+    </Grid>
 </UserControl>
