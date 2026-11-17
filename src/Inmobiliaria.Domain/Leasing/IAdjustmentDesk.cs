@@ -209,6 +209,12 @@ public enum AdjustmentRefusal
 
     /// <summary>The contract has ended: its canon is no longer adjusted or corrected.</summary>
     ContractEnded,
+
+    /// <summary>
+    /// A figure of the adjustment cannot be stored (<see cref="AdjustmentLimits"/>): an index level typed far off and accepted
+    /// past the far-level warning, or a fall that leaves no canon (spec Test 71).
+    /// </summary>
+    ResultOutOfRange,
 }
 
 public static class AdjustmentRefusalText
@@ -224,6 +230,8 @@ public static class AdjustmentRefusalText
         AdjustmentRefusal.NotLatest => "Solo se puede corregir el último ajuste del contrato. Este ajuste tiene otro posterior.",
         AdjustmentRefusal.AdjustmentNotFound => "El ajuste ya no existe. Actualice la lista.",
         AdjustmentRefusal.ContractEnded => "El contrato terminó: su canon ya no se ajusta ni se corrige.",
+        AdjustmentRefusal.ResultOutOfRange =>
+            "El ajuste da un resultado imposible: revise los valores del índice que usa en Índices, alguno puede estar mal cargado.",
         _ => throw new ArgumentOutOfRangeException(nameof(refusal), refusal, "A refusal without operator text."),
     };
 }

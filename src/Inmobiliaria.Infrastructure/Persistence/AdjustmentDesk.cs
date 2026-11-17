@@ -298,7 +298,17 @@ public sealed class AdjustmentDesk : IAdjustmentDesk
             return new(AdjustmentPreviewResult.Refused(AdjustmentRefusal.IndexValuesMissing, missing));
         }
 
+        if (!AdjustmentLimits.PercentsFit(coefficient, math.IndexValues))
+        {
+            return new(AdjustmentPreviewResult.Refused(AdjustmentRefusal.ResultOutOfRange));
+        }
+
         var proposal = new AdjustmentProposal(target.PreviousCanon, math.IndexValues, combination, coefficient, target.EffectiveDate);
+        if (!AdjustmentLimits.CanonFits(proposal.TruncatedNewCanon))
+        {
+            return new(AdjustmentPreviewResult.Refused(AdjustmentRefusal.ResultOutOfRange));
+        }
+
         var appliesFrom = AdjustmentTiming.AppliesFrom(contract, account, _clock.Today);
 
         // The difference the chain charged and that is still live: the charge net of any correction naming it.
@@ -331,6 +341,11 @@ public sealed class AdjustmentDesk : IAdjustmentDesk
             ReversedDifference = charged.Charge is not null && !paid ? charged.Live : null,
             PaidDifferenceStays = paid ? charged.Live : null,
         };
+
+        if (preview.Difference is { } offered && !AdjustmentLimits.AmountFits(offered.Amount))
+        {
+            return new(AdjustmentPreviewResult.Refused(AdjustmentRefusal.ResultOutOfRange));
+        }
 
         return new(AdjustmentPreviewResult.Ready(preview), proposal, paid ? null : charged.Charge, paid ? 0m : charged.Live);
     }
@@ -371,7 +386,17 @@ public sealed class AdjustmentDesk : IAdjustmentDesk
             return (AdjustmentPreviewResult.Refused(AdjustmentRefusal.IndexValuesMissing, due.Missing), null);
         }
 
+        if (!AdjustmentLimits.PercentsFit(coefficient, due.IndexValues))
+        {
+            return (AdjustmentPreviewResult.Refused(AdjustmentRefusal.ResultOutOfRange), null);
+        }
+
         var proposal = new AdjustmentProposal(due.CurrentCanon, due.IndexValues, due.Combination, coefficient, due.DueDate);
+        if (!AdjustmentLimits.CanonFits(proposal.TruncatedNewCanon))
+        {
+            return (AdjustmentPreviewResult.Refused(AdjustmentRefusal.ResultOutOfRange), null);
+        }
+
         var names = await NamesAsync(due.IndexValues.Select(v => v.ResolvedIndexId), ct);
         var appliesFrom = AdjustmentTiming.AppliesFrom(contract, account, today);
 
@@ -387,6 +412,11 @@ public sealed class AdjustmentDesk : IAdjustmentDesk
             proposal.TruncatedNewCanon,
             appliesFrom,
             AdjustmentDifference.Regular(contract, account, due.DueDate, appliesFrom, due.CurrentCanon, proposal.TruncatedNewCanon));
+
+        if (preview.Difference is { } offered && !AdjustmentLimits.AmountFits(offered.Amount))
+        {
+            return (AdjustmentPreviewResult.Refused(AdjustmentRefusal.ResultOutOfRange), null);
+        }
 
         return (AdjustmentPreviewResult.Ready(preview), proposal);
     }
