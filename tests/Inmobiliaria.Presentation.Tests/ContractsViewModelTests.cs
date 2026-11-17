@@ -1,4 +1,5 @@
 using Inmobiliaria.Domain.Leasing;
+using Inmobiliaria.Domain.Parties;
 using Inmobiliaria.Presentation.Contracts;
 using Inmobiliaria.Presentation.Tests.Fakes;
 
@@ -163,4 +164,85 @@ public class ContractsViewModelTests
     private static ContractDetail DetailOf(ContractListing listing) => new(
         listing.Id, listing.Status, new DateOnly(2025, 3, 1), new DateOnly(2027, 2, 28), false, null, null, null, null, null, 428_025m, 10, 8m,
         null, [], [], null, []);
+
+    /// <summary>"Nuevo contrato" puts the form in place of the list, already read, so its pickers offer the people at once.</summary>
+    [Fact]
+    public async Task New_OpensTheFormInPlaceOfTheList_ReadAtOnce()
+    {
+        var port = new FakeContractRegistry();
+        var people = new FakePartyRegistry { Persons = [new PartyListing(Guid.NewGuid(), "Martín", "Ocampo", null, null, null, null, null)] };
+        var viewModel = new ContractsViewModel(port, newForm: () => new ContractFormViewModel(
+            port, false, new FakeClock(new DateOnly(2026, 11, 15)), new FakeIndexRegistry(), people));
+
+        await viewModel.NewCommand.ExecuteAsync(null);
+        viewModel.OpenForm!.TenantPicker.Query = "ocampo";
+
+        Assert.True(viewModel.IsFormOpen);
+        Assert.False(viewModel.IsListShown);
+        Assert.Single(viewModel.OpenForm.TenantPicker.Suggestions);
+    }
+
+    /// <summary>"Volver a contratos" from the form closes it and reads the list again, so a contract just saved shows.</summary>
+    [Fact]
+    public async Task GoingBackFromTheForm_ClosesIt_AndReadsTheListAgain()
+    {
+        var port = new FakeContractRegistry();
+        var viewModel = new ContractsViewModel(port, newForm: () => new ContractFormViewModel(
+            port, false, new FakeClock(new DateOnly(2026, 11, 15)), new FakeIndexRegistry()));
+        await viewModel.NewCommand.ExecuteAsync(null);
+        port.Contracts.Add(Vigente);
+
+        await viewModel.BackCommand.ExecuteAsync(null);
+
+        Assert.False(viewModel.IsFormOpen);
+        Assert.Null(viewModel.OpenForm);
+        Assert.True(viewModel.IsListShown);
+        Assert.Single(viewModel.Contracts);
+    }
+
+    /// <summary>Without a way to build the form, "Nuevo contrato" is not offered.</summary>
+    [Fact]
+    public async Task WithoutAForm_NewIsNotOffered()
+    {
+        var viewModel = await LoadedAsync();
+
+        Assert.False(viewModel.NewCommand.CanExecute(null));
+    }
+
+    /// <summary>
+    /// Saving goes back to the list by itself, read again with the new contract, and says so there (Tomás, 2026-11-17: the
+    /// notice at the top of the form went unseen from its buttons, at the foot).
+    /// </summary>
+    [Fact]
+    public async Task SavingANewContract_GoesBackToTheList_AndSaysSo()
+    {
+        var port = new FakeContractRegistry();
+        var viewModel = new ContractsViewModel(port, newForm: () => new ContractFormViewModel(
+            port, false, new FakeClock(new DateOnly(2026, 11, 15)), new FakeIndexRegistry()));
+        await viewModel.NewCommand.ExecuteAsync(null);
+        port.Contracts.Add(Vigente);
+
+        viewModel.OpenForm!.Created = Vigente;
+        await viewModel.BackCommand.ExecutionTask!;
+
+        Assert.True(viewModel.IsListShown);
+        Assert.Single(viewModel.Contracts);
+        Assert.Equal("Contrato guardado: Ocampo, Martín, en Pellegrini 722.", viewModel.SavedMessage);
+    }
+
+    /// <summary>The saved notice stays until the next contract is opened or a new one started.</summary>
+    [Fact]
+    public async Task TheSavedNotice_GoesWithTheNextStep()
+    {
+        var port = new FakeContractRegistry();
+        var viewModel = new ContractsViewModel(port, newForm: () => new ContractFormViewModel(
+            port, false, new FakeClock(new DateOnly(2026, 11, 15)), new FakeIndexRegistry()));
+        await viewModel.NewCommand.ExecuteAsync(null);
+        viewModel.OpenForm!.Created = Vigente;
+        await viewModel.BackCommand.ExecutionTask!;
+
+        await viewModel.NewCommand.ExecuteAsync(null);
+
+        Assert.Null(viewModel.SavedMessage);
+    }
 }

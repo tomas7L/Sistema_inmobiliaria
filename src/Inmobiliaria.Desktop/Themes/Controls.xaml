@@ -281,8 +281,8 @@
         </Setter>
     </Style>
 
-    <!-- One option of a segmented choice, as the role filter. -->
-    <Style x:Key="Theme.Segment" TargetType="RadioButton">
+    <!-- One option of a segmented choice, as the role filter; on a ToggleButton, one switch of several, as a clause's indices. -->
+    <Style x:Key="Theme.Segment" TargetType="ToggleButton">
         <Setter Property="FontFamily" Value="{StaticResource Theme.Font}" />
         <Setter Property="FontSize" Value="14" />
         <Setter Property="FontWeight" Value="SemiBold" />
@@ -291,7 +291,7 @@
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Template">
             <Setter.Value>
-                <ControlTemplate TargetType="RadioButton">
+                <ControlTemplate TargetType="ToggleButton">
                     <Border x:Name="Pill" CornerRadius="16" Padding="16,7" Background="{TemplateBinding Background}">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>

@@ -293,6 +293,9 @@ public enum ContractRefusal
     /// <summary>The same person twice among the lessors (Mateo's redraw, accepted by Tomás 2026-11-16).</summary>
     LessorRepeated,
 
+    /// <summary>A date typed that the form cannot read as one (Tomás, 2026-11-17).</summary>
+    DateNotUnderstood,
+
     /// <summary>The same unit twice on one contract, refused in its own words rather than as shares (same origin).</summary>
     UnitRepeated,
 }
@@ -400,6 +403,7 @@ public static class ContractRefusalText
         ContractRefusal.NoNoticeToUndo => "Este contrato no tiene un aviso de rescisión para deshacer.",
         ContractRefusal.NoEndToUndo => "Este contrato no está terminado.",
         ContractRefusal.LessorRepeated => "Esa persona ya está como propietaria.",
+        ContractRefusal.DateNotUnderstood => "No se entiende la fecha: escríbala con día, mes y año, por ejemplo 1/12/26.",
         ContractRefusal.UnitRepeated => "Esa unidad ya está elegida.",
         ContractRefusal.UnitCoveredByAnotherContract => $"Una de sus unidades ya está en otro contrato, de {currentTenant ?? "otra persona"}.",
         _ => throw new ArgumentOutOfRangeException(nameof(refusal), refusal, "A refusal without operator text."),

@@ -16,13 +16,14 @@
     -->
     <UserControl.Resources>
         <views:EqualsConverter x:Key="Equals" />
+        <views:SetToVisibleConverter x:Key="SetShown" />
         <BooleanToVisibilityConverter x:Key="Shown" />
 
-        <!-- Shown only while no contract is open. -->
+        <!-- Shown only while neither a contract nor the form is open. -->
         <Style x:Key="ListPart" TargetType="StackPanel">
             <Setter Property="Visibility" Value="Visible" />
             <Style.Triggers>
-                <DataTrigger Binding="{Binding IsDetailOpen}" Value="True">
+                <DataTrigger Binding="{Binding IsListShown}" Value="False">
                     <Setter Property="Visibility" Value="Collapsed" />
                 </DataTrigger>
             </Style.Triggers>
@@ -38,9 +39,20 @@
             <TextBlock Text="Alquileres cargados, con su estado. Abra uno para ver todos sus datos." Style="{StaticResource Theme.Subtitle}" />
             <TextBlock Text="{Binding Runner.ErrorMessage}" Style="{StaticResource Theme.ErrorText}" Margin="0,12,0,0" />
 
+            <!-- A contract just saved, said here, where the form returns (Tomás, 2026-11-17). -->
+            <Border CornerRadius="16" Padding="16,12" Margin="0,18,0,0" Background="{DynamicResource Theme.OkBack}"
+                    Visibility="{Binding SavedMessage, Converter={StaticResource SetShown}}">
+                <StackPanel>
+                    <TextBlock Text="{Binding SavedMessage}" FontWeight="Bold" Foreground="{DynamicResource Theme.Ok}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding SavedDetail}" Foreground="{DynamicResource Theme.Ok}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                </StackPanel>
+            </Border>
+
             <Border Style="{StaticResource Theme.Card}" CornerRadius="22" Padding="16,12" Margin="0,18,0,0">
                 <!-- The search box takes what the filters leave, to the card's right edge, as on the canvas. -->
                 <DockPanel LastChildFill="True">
+                    <Button Content="Nuevo contrato" Style="{StaticResource Theme.PrimaryButton}" DockPanel.Dock="Left"
+                            Command="{Binding NewCommand}" Margin="0,4,12,4" />
                     <Border Style="{StaticResource Theme.SegmentGroup}" Margin="0,4,0,4" DockPanel.Dock="Left">
                         <StackPanel Orientation="Horizontal">
                             <RadioButton Content="Todos" GroupName="StateFilter" Style="{StaticResource Theme.Segment}"
@@ -155,6 +167,20 @@
                 </StackPanel>
             </DockPanel>
             <views:ContractDetailView DataContext="{Binding OpenDetail}" />
+        </StackPanel>
+
+        <!-- The form of a new contract, in place of the list. -->
+        <StackPanel Visibility="{Binding IsFormOpen, Converter={StaticResource Shown}}">
+            <DockPanel>
+                <Button Content="Volver a contratos" Style="{StaticResource Theme.GhostButton}" DockPanel.Dock="Right"
+                        VerticalAlignment="Top" Command="{Binding BackCommand}" />
+                <StackPanel>
+                    <TextBlock Text="Nuevo contrato" Style="{StaticResource Theme.Title}" />
+                    <TextBlock Text="Complete las partes, la propiedad, las fechas y los importes. Al guardar se crea también su cuenta, vacía."
+                               Style="{StaticResource Theme.Subtitle}" />
+                </StackPanel>
+            </DockPanel>
+            <views:ContractFormView DataContext="{Binding OpenForm}" />
         </StackPanel>
         </StackPanel>
     </ScrollViewer>
