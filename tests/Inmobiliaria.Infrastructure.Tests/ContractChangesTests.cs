@@ -714,6 +714,26 @@ public sealed class ContractChangesTests
         Assert.Equal(seeded.Tenant, detail.Parties.Single(p => p.Role == PartyRole.Tenant).PartyId);
     }
 
+    /// <summary>
+    /// A correction cannot make a current codeudor the tenant, as creating the contract cannot (TenantIsCodebtor): its check
+    /// takes the codeudores the contract already has. Found by the Test 71 audit, task 12.4.
+    /// </summary>
+    [SkippableFact]
+    public async Task ACorrection_MakingACodeudorTheTenant_IsRefused_AndNothingIsWritten()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+        await using var world = await WorldAsync();
+        var seeded = await SeedAsync(world);
+        var codeudor = await PersonAsync(world);
+        AssertDone(await Registry(world).SetCodebtorsAsync(seeded.Contract, [codeudor]));
+        var before = await HashAsync(world);
+
+        var result = await Registry(world).CorrectAsync(seeded.Contract, Standing(seeded) with { TenantId = codeudor }, true);
+
+        Assert.Equal(ContractRefusal.TenantIsCodebtor, result.Refusal);
+        Assert.Equal(before, await HashAsync(world));
+    }
+
     [SkippableTheory]
     [InlineData(Admin)]
     [InlineData(Empleado)]

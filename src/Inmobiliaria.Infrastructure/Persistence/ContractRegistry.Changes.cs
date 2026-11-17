@@ -253,11 +253,13 @@ public sealed partial class ContractRegistry
             return ContractResult.Refused(locks);
         }
 
-        // A correction is judged as a form is. The rate is its own operation, so it stays out of what is checked here.
+        // A correction is judged as a form is. The rate and the codeudores are their own operations, so they stay out of what
+        // is corrected; the codeudores the contract has are still checked against the tenant, as on creation (TenantIsCodebtor).
         var draft = new ContractDraft
         {
             TenantId = correction.TenantId,
             LessorIds = correction.LessorIds,
+            CodebtorIds = contract.Parties.Where(p => p.Role == PartyRole.Codebtor).Select(p => p.PartyId).ToList(),
             Shares = correction.Shares,
             StartDate = correction.StartDate,
             NominalEndDate = correction.NominalEndDate,
