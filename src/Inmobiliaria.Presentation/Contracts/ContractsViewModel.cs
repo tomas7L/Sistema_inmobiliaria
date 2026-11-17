@@ -25,16 +25,21 @@ public sealed partial class ContractsViewModel : ObservableObject
 {
     private readonly IContractRegistry _contracts;
     private readonly Func<Guid, ContractDetailViewModel>? _buildDetail;
+    private readonly Func<ContractFormViewModel>? _buildForm;
     private IReadOnlyList<ContractListing> _loaded = [];
 
     /// <param name="contracts">The port.</param>
     /// <param name="openDetail">Builds one contract's detail; without it, no contract is offered to open.</param>
-    public ContractsViewModel(IContractRegistry contracts, Func<Guid, ContractDetailViewModel>? openDetail = null)
+    /// <param name="newForm">Builds the form of a new contract; without it, "Nuevo contrato" is not offered.</param>
+    public ContractsViewModel(
+        IContractRegistry contracts, Func<Guid, ContractDetailViewModel>? openDetail = null, Func<ContractFormViewModel>? newForm = null)
     {
         ArgumentNullException.ThrowIfNull(contracts);
 
         _contracts = contracts;
         _buildDetail = openDetail;
+        _buildForm = newForm;
+        NewCommand = new AsyncRelayCommand(NewAsync, () => _buildForm is not null && !Runner.IsBusy);
         LoadCommand = new AsyncRelayCommand(LoadAsync, () => !Runner.IsBusy);
         OpenCommand = new AsyncRelayCommand<ContractRow>(OpenAsync, row => _buildDetail is not null && row is not null && !Runner.IsBusy);
         BackCommand = new AsyncRelayCommand(BackAsync, () => !Runner.IsBusy);
@@ -51,12 +56,33 @@ public sealed partial class ContractsViewModel : ObservableObject
     /// <summary>"Abrir": the row's detail in place of the list.</summary>
     public IAsyncRelayCommand<ContractRow> OpenCommand { get; }
 
-    /// <summary>"Volver a contratos": the list again, read anew so a change made in the detail shows.</summary>
+    /// <summary>"Volver a contratos": the list again, read anew so a change made in the detail or the form shows.</summary>
     public IAsyncRelayCommand BackCommand { get; }
+
+    /// <summary>"Nuevo contrato": the form in place of the list.</summary>
+    public IAsyncRelayCommand NewCommand { get; }
+
+    /// <summary>The form of a new contract, open in place of the list, or null.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsFormOpen), nameof(IsListShown))]
+    private ContractFormViewModel? _openForm;
+
+    public bool IsFormOpen => OpenForm is not null;
+
+    /// <summary>"Contrato guardado: …", on the list after a save, until the next contract is opened or started.</summary>
+    [ObservableProperty]
+    private string? _savedMessage;
+
+    /// <summary>What the save means for the cash desk, under <see cref="SavedMessage"/>.</summary>
+    [ObservableProperty]
+    private string? _savedDetail;
+
+    /// <summary>The list shows while neither a contract nor the form is open.</summary>
+    public bool IsListShown => !IsDetailOpen && !IsFormOpen;
 
     /// <summary>The contract open in place of the list, or null while the list shows.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsDetailOpen))]
+    [NotifyPropertyChangedFor(nameof(IsDetailOpen), nameof(IsListShown))]
     private ContractDetailViewModel? _openDetail;
 
     public bool IsDetailOpen => OpenDetail is not null;
@@ -95,6 +121,8 @@ public sealed partial class ContractsViewModel : ObservableObject
             return;
         }
 
+        ForgetSaved();
+
         var detail = _buildDetail(row.Id);
         OpenDetail = detail;
         await detail.LoadCommand.ExecuteAsync(null);
@@ -103,7 +131,43 @@ public sealed partial class ContractsViewModel : ObservableObject
     private async Task BackAsync()
     {
         OpenDetail = null;
+        OpenForm = null;
         await LoadAsync();
+    }
+
+    private async Task NewAsync()
+    {
+        if (_buildForm is null)
+        {
+            return;
+        }
+
+        ForgetSaved();
+        var form = _buildForm();
+        form.PropertyChanged += OnFormChanged;
+        OpenForm = form;
+        await form.LoadCommand.ExecuteAsync(null);
+    }
+
+    /// <summary>A contract saved: back to the list, read again, with the notice there (Tomás, 2026-11-17).</summary>
+    private void OnFormChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(ContractFormViewModel.Created) || sender is not ContractFormViewModel { Created: { } saved } form
+            || !ReferenceEquals(form, OpenForm))
+        {
+            return;
+        }
+
+        form.PropertyChanged -= OnFormChanged;
+        SavedMessage = $"Contrato guardado: {saved.Tenants}, en {saved.Units}.";
+        SavedDetail = form.SavedText;
+        BackCommand.Execute(null);
+    }
+
+    private void ForgetSaved()
+    {
+        SavedMessage = null;
+        SavedDetail = null;
     }
 
     private void Show()
@@ -134,6 +198,7 @@ public sealed partial class ContractsViewModel : ObservableObject
             LoadCommand.NotifyCanExecuteChanged();
             OpenCommand.NotifyCanExecuteChanged();
             BackCommand.NotifyCanExecuteChanged();
+            NewCommand.NotifyCanExecuteChanged();
         }
     }
 }

@@ -34,6 +34,9 @@ public sealed partial class ContractFormViewModel : ObservableObject
     /// <summary>Counts edits, so a reply can tell whether it still describes what the form holds.</summary>
     private int _edits;
 
+    /// <summary>Set while a date and its text follow each other, so neither answers the other.</summary>
+    private bool _readingDate;
+
     /// <param name="parties">The people the pickers offer; without it they offer none.</param>
     /// <param name="units">The units the unit picker offers; without it, none.</param>
     public ContractFormViewModel(
@@ -72,6 +75,8 @@ public sealed partial class ContractFormViewModel : ObservableObject
             return Task.CompletedTask;
         });
         ClearTenantCommand = new RelayCommand(() => Tenant = null);
+        AddFeePlanCommand = new RelayCommand(() => HasFeePlan = true);
+        RemoveFeePlanCommand = new RelayCommand(() => HasFeePlan = false);
         RemoveLessorCommand = new RelayCommand<PartyListing>(person => RemoveRow(Lessors, person));
         RemoveCodebtorCommand = new RelayCommand<PartyListing>(person => RemoveRow(Codebtors, person));
         RemoveUnitCommand = new RelayCommand<ContractFormUnit>(unit => RemoveRow(Units, unit));
@@ -83,6 +88,11 @@ public sealed partial class ContractFormViewModel : ObservableObject
         {
             OnPropertyChanged(nameof(SuggestedClauseOffset));
             OnPropertyChanged(nameof(ClauseWindowText));
+            OnPropertyChanged(nameof(ClauseOffsetHint));
+            foreach (var choice in ClauseIndexChoices)
+            {
+                choice.Reflect(ClauseIndexIds.Contains(choice.Option.Id));
+            }
         };
         Runner.PropertyChanged += OnRunnerChanged;
     }
@@ -91,6 +101,12 @@ public sealed partial class ContractFormViewModel : ObservableObject
 
     /// <summary>Only an Admin sees the cutover section; anyone else's date is never sent.</summary>
     public bool IsCutoverOffered { get; }
+
+    /// <summary>
+    /// The cutover shows only where it serves, as on the canvas: an Administrador's contract that started before this month.
+    /// </summary>
+    public bool IsCutoverShown =>
+        IsCutoverOffered && StartDate is { } start && start < new DateOnly(_clock.Today.Year, _clock.Today.Month, 1);
 
     public ObservableCollection<PartyListing> Lessors { get; } = [];
 
@@ -102,6 +118,41 @@ public sealed partial class ContractFormViewModel : ObservableObject
 
     /// <summary>The indices a new clause can choose: the catalog's, less the discontinued ones (task 12.3c).</summary>
     public ObservableCollection<IndexOption> ClauseIndexOptions { get; } = [];
+
+    /// <summary>The same indices as switches, for the screen: turning one on or off adds it to or takes it from the clause.</summary>
+    public ObservableCollection<ClauseIndexChoice> ClauseIndexChoices { get; } = [];
+
+    /// <summary>What the indices chosen suggest for the window's end, beside its choices (canvas "Nuevo contrato").</summary>
+    public string ClauseOffsetHint
+    {
+        get
+        {
+            var chosen = ClauseIndexIds.Where(ClauseIndexNames.ContainsKey).Select(id => ClauseIndexNames[id]).ToList();
+            return chosen.Count == 0 || SuggestedClauseOffset is not { } suggested
+                ? "Se sugiere según los índices elegidos: ICL 0, IPC 2, y 3 si lleva RIPTE."
+                : $"Sugerido para {string.Join(" y ", chosen)}: {suggested}. Son los últimos valores que normalmente ya están publicados al vencer.";
+        }
+    }
+
+    /// <summary>How many months the contract runs, counting both ends' months, once both dates are there.</summary>
+    public string DurationText
+    {
+        get
+        {
+            if (StartDate is not { } start || NominalEndDate is not { } end)
+            {
+                return "Escriba las dos fechas para ver la duración.";
+            }
+
+            var months = ((end.Year * 12) + end.Month) - ((start.Year * 12) + start.Month) + 1;
+            return months switch
+            {
+                < 1 => "Escriba las dos fechas para ver la duración.",
+                1 => "Duración: 1 mes",
+                _ => $"Duración: {months} meses",
+            };
+        }
+    }
 
     /// <summary>The catalog's names, for the suggestion. Read by <see cref="LoadCommand"/>.</summary>
     public IReadOnlyDictionary<Guid, string> ClauseIndexNames { get; private set; } = new Dictionary<Guid, string>();
@@ -143,6 +194,12 @@ public sealed partial class ContractFormViewModel : ObservableObject
 
     public IRelayCommand ClearTenantCommand { get; }
 
+    /// <summary>"+ Agregar honorarios contractuales".</summary>
+    public IRelayCommand AddFeePlanCommand { get; }
+
+    /// <summary>"Quitar los honorarios contractuales": forgets what was typed.</summary>
+    public IRelayCommand RemoveFeePlanCommand { get; }
+
     /// <summary>"Quitar": takes one row away.</summary>
     public IRelayCommand<PartyListing> RemoveLessorCommand { get; }
 
@@ -154,11 +211,67 @@ public sealed partial class ContractFormViewModel : ObservableObject
     private PartyListing? _tenant;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ClauseWindowText))]
+    [NotifyPropertyChangedFor(nameof(ClauseWindowText), nameof(DurationText))]
     private DateOnly? _startDate;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DurationText))]
     private DateOnly? _nominalEndDate;
+
+    /// <summary>The start as typed: dd/mm/aa, or the month and year alone (<see cref="DateEntry"/>).</summary>
+    [ObservableProperty]
+    private string _startDateText = string.Empty;
+
+    /// <summary>The end as typed: a month and year alone is its last day.</summary>
+    [ObservableProperty]
+    private string _nominalEndDateText = string.Empty;
+
+    [ObservableProperty]
+    private string _cutoverDateText = string.Empty;
+
+    /// <summary>
+    /// Whether the rent adjusts: the canvas starts on a fixed rent. Choosing a clause starts it every six months; choosing a
+    /// fixed rent again forgets the clause's indices, interval and offset.
+    /// </summary>
+    [ObservableProperty]
+    private bool _hasClause;
+
+    /// <summary>
+    /// Whether the fee plan's fields show: behind "+ Agregar honorarios contractuales", as on the canvas. Taking it away
+    /// forgets what was typed; a plan typed shows them.
+    /// </summary>
+    [ObservableProperty]
+    private bool _hasFeePlan;
+
+    partial void OnHasFeePlanChanged(bool value)
+    {
+        if (!value)
+        {
+            FeePlanAmountText = string.Empty;
+            FeePlanInstalmentsText = string.Empty;
+        }
+    }
+
+    /// <summary>What the saved notice says beside "Contrato guardado", or null before a save.</summary>
+    [ObservableProperty]
+    private string? _savedText;
+
+    partial void OnHasClauseChanged(bool value)
+    {
+        if (value)
+        {
+            if (string.IsNullOrWhiteSpace(ClauseIntervalText))
+            {
+                ClauseIntervalText = "6";
+            }
+
+            return;
+        }
+
+        ClauseIndexIds.Clear();
+        ClauseIntervalText = string.Empty;
+        ClauseOffsetText = string.Empty;
+    }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ClauseWindowText))]
@@ -205,11 +318,89 @@ public sealed partial class ContractFormViewModel : ObservableObject
 
     partial void OnTenantChanged(PartyListing? value) => WithdrawWarnings();
 
-    partial void OnStartDateChanged(DateOnly? value) => WithdrawWarnings();
+    partial void OnStartDateChanged(DateOnly? value)
+    {
+        ShowDate(value, StartDateText, DateEntryKind.Start, text => StartDateText = text);
+        ForgetHiddenCutover();
+        WithdrawWarnings();
+    }
 
-    partial void OnNominalEndDateChanged(DateOnly? value) => WithdrawWarnings();
+    partial void OnNominalEndDateChanged(DateOnly? value)
+    {
+        ShowDate(value, NominalEndDateText, DateEntryKind.End, text => NominalEndDateText = text);
+        WithdrawWarnings();
+    }
 
-    partial void OnCutoverDateChanged(DateOnly? value) => WithdrawWarnings();
+    partial void OnCutoverDateChanged(DateOnly? value)
+    {
+        ShowDate(value, CutoverDateText, DateEntryKind.Day, text => CutoverDateText = text);
+        WithdrawWarnings();
+    }
+
+    // A date typed short is read on leaving its field and shown in full; text that is no date stays, to be refused beside it.
+    partial void OnStartDateTextChanged(string value) =>
+        ReadDate(value, ContractField.StartDate, DateEntryKind.Start, date => StartDate = date, text => StartDateText = text);
+
+    partial void OnNominalEndDateTextChanged(string value) =>
+        ReadDate(value, ContractField.EndDate, DateEntryKind.End, date => NominalEndDate = date, text => NominalEndDateText = text);
+
+    partial void OnCutoverDateTextChanged(string value) =>
+        ReadDate(value, ContractField.Cutover, DateEntryKind.Day, date => CutoverDate = date, text => CutoverDateText = text);
+
+    /// <summary>
+    /// Reads a date on leaving its field. Text that is no date is said beside it at once, and the word goes once it is right
+    /// (Tomás, 2026-11-17); every other problem still waits for "Guardar".
+    /// </summary>
+    private void ReadDate(string text, ContractField field, DateEntryKind kind, Action<DateOnly?> setDate, Action<string> setText)
+    {
+        if (_readingDate)
+        {
+            return;
+        }
+
+        _readingDate = true;
+        var date = DateEntry.Parse(text, kind);
+        setDate(date);
+        if (date is { } read)
+        {
+            setText(Formats.Date(read));
+        }
+
+        _readingDate = false;
+        Errors = !string.IsNullOrWhiteSpace(text) && date is null
+            ? Errors.With(new ContractProblem(field, ContractRefusal.DateNotUnderstood))
+            : Errors.Without(field);
+    }
+
+    /// <summary>A cutover the screen no longer shows is forgotten, so nothing unseen is sent.</summary>
+    private void ForgetHiddenCutover()
+    {
+        OnPropertyChanged(nameof(IsCutoverShown));
+        if (IsCutoverShown || (CutoverDate is null && CutoverDateText.Length == 0))
+        {
+            return;
+        }
+
+        var reading = _readingDate;
+        _readingDate = true;
+        CutoverDate = null;
+        CutoverDateText = string.Empty;
+        _readingDate = reading;
+        Errors = Errors.Without(ContractField.Cutover);
+    }
+
+    /// <summary>A date set by the form itself, not typed, shows in its field; one just read from the field leaves it alone.</summary>
+    private void ShowDate(DateOnly? date, string text, DateEntryKind kind, Action<string> setText)
+    {
+        if (_readingDate || DateEntry.Parse(text, kind) == date)
+        {
+            return;
+        }
+
+        _readingDate = true;
+        setText(date is { } shown ? Formats.Date(shown) : string.Empty);
+        _readingDate = false;
+    }
 
     // An amount typed without its dots is shown with them (Tomás, 2026-11-16); the view binds these fields on leaving them.
     partial void OnMonthlyRentTextChanged(string value)
@@ -225,10 +416,15 @@ public sealed partial class ContractFormViewModel : ObservableObject
     partial void OnFeePlanAmountTextChanged(string value)
     {
         FeePlanAmountText = Formats.TidyMoney(value);
+        HasFeePlan |= !string.IsNullOrWhiteSpace(value);
         WithdrawWarnings();
     }
 
-    partial void OnFeePlanInstalmentsTextChanged(string value) => WithdrawWarnings();
+    partial void OnFeePlanInstalmentsTextChanged(string value)
+    {
+        HasFeePlan |= !string.IsNullOrWhiteSpace(value);
+        WithdrawWarnings();
+    }
 
     partial void OnClauseIntervalTextChanged(string value) => WithdrawWarnings();
 
@@ -302,6 +498,7 @@ public sealed partial class ContractFormViewModel : ObservableObject
     {
         RefusalMessage = null;
         Created = null;
+        SavedText = null;
         Errors = ContractFieldErrors.None;
 
         var draft = BuildDraft(out var problems);
@@ -322,6 +519,10 @@ public sealed partial class ContractFormViewModel : ObservableObject
         var editedSince = _edits != editsWhenSent;
         if (result.Succeeded)
         {
+            SavedText = draft.HonorariosPercentage is null
+                ? "Se creó el contrato junto con su cuenta, vacía. Ya se puede cobrar desde la caja, apenas se carguen los honorarios de administración."
+                : "Se creó el contrato junto con su cuenta, vacía. Ya se puede cobrar desde la caja.";
+
             // What was typed while this was out is not the contract just written, so it is not thrown away with it.
             if (!editedSince)
             {
@@ -356,6 +557,20 @@ public sealed partial class ContractFormViewModel : ObservableObject
     private ContractDraft BuildDraft(out IReadOnlyList<ContractProblem> problems)
     {
         var unread = new List<ContractProblem>();
+
+        // Text typed that is no date: refused as such, not as a date missing.
+        foreach (var (field, text, date) in new[]
+        {
+            (ContractField.StartDate, StartDateText, StartDate),
+            (ContractField.EndDate, NominalEndDateText, NominalEndDate),
+            (ContractField.Cutover, IsCutoverOffered ? CutoverDateText : string.Empty, CutoverDate),
+        })
+        {
+            if (!string.IsNullOrWhiteSpace(text) && date is null)
+            {
+                unread.Add(new ContractProblem(field, ContractRefusal.DateNotUnderstood));
+            }
+        }
 
         var rentRead = Formats.TryParseMoney(MonthlyRentText, out var rent);
         if (!rentRead || (SharesAsAmounts && rent is not > 0m))
@@ -516,6 +731,18 @@ public sealed partial class ContractFormViewModel : ObservableObject
 
     private void OnFormCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e) => WithdrawWarnings();
 
+    private void ChooseIndex(Guid indexId, bool chosen)
+    {
+        if (chosen && !ClauseIndexIds.Contains(indexId))
+        {
+            ClauseIndexIds.Add(indexId);
+        }
+        else if (!chosen)
+        {
+            ClauseIndexIds.Remove(indexId);
+        }
+    }
+
     /// <summary>A row's error names its position, so taking a row away withdraws the errors rather than leave them on others.</summary>
     private void RemoveRow<TRow>(ObservableCollection<TRow> rows, TRow? row)
     {
@@ -597,9 +824,11 @@ public sealed partial class ContractFormViewModel : ObservableObject
 
         ClauseIndexNames = IndexOption.Names(outcome.Value!);
         ClauseIndexOptions.Clear();
+        ClauseIndexChoices.Clear();
         foreach (var option in IndexOption.Offered(outcome.Value!, []))
         {
             ClauseIndexOptions.Add(option);
+            ClauseIndexChoices.Add(new ClauseIndexChoice(option, ClauseIndexIds.Contains(option.Id), ChooseIndex));
         }
 
         OnPropertyChanged(nameof(SuggestedClauseOffset));
@@ -660,6 +889,34 @@ public sealed class ContractFieldErrors
         _rows = new() { [(field, row)] = text };
     }
 
+    private ContractFieldErrors(Dictionary<ContractField, string> texts, Dictionary<(ContractField Field, int Row), string> rows)
+    {
+        _texts = texts;
+        _rows = rows;
+    }
+
+    /// <summary>These errors with one field's own replaced by <paramref name="problem"/>, its rows' kept.</summary>
+    public ContractFieldErrors With(ContractProblem problem)
+    {
+        ArgumentNullException.ThrowIfNull(problem);
+
+        var texts = new Dictionary<ContractField, string>(_texts) { [problem.Field] = problem.Refusal.OperatorText() };
+        return new ContractFieldErrors(texts, new Dictionary<(ContractField Field, int Row), string>(_rows));
+    }
+
+    /// <summary>These errors without one field's own; the summary goes with the last.</summary>
+    public ContractFieldErrors Without(ContractField field)
+    {
+        if (!_texts.ContainsKey(field))
+        {
+            return this;
+        }
+
+        var texts = new Dictionary<ContractField, string>(_texts);
+        texts.Remove(field);
+        return new ContractFieldErrors(texts, new Dictionary<(ContractField Field, int Row), string>(_rows));
+    }
+
     /// <summary>One error under one row, with a text the port wrote, such as who rents a unit.</summary>
     public static ContractFieldErrors OnRow(ContractField field, int row, string text) => new(field, row, text);
 
@@ -674,6 +931,18 @@ public sealed class ContractFieldErrors
     /// <summary>How many errors one tab of the form holds, its rows' included, for the mark on the tab (canvas "Nuevo contrato").</summary>
     public int CountIn(ContractFormSection section) =>
         _texts.Keys.Count(field => SectionOf(field) == section) + _rows.Keys.Count(key => SectionOf(key.Field) == section);
+
+    /// <summary>Each tab's count, for binding: Partes.</summary>
+    public int PartiesCount => CountIn(ContractFormSection.Parties);
+
+    /// <summary>Propiedad.</summary>
+    public int UnitsCount => CountIn(ContractFormSection.Units);
+
+    /// <summary>Fechas e importes.</summary>
+    public int DatesAndAmountsCount => CountIn(ContractFormSection.DatesAndAmounts);
+
+    /// <summary>Cláusula de ajuste.</summary>
+    public int ClauseCount => CountIn(ContractFormSection.Clause);
 
     private static ContractFormSection SectionOf(ContractField field) => field switch
     {
@@ -704,4 +973,42 @@ public sealed partial class ContractFormUnit : ObservableObject
 
     // An amount typed without its dots is shown with them (Tomás, 2026-11-16).
     partial void OnShareTextChanged(string value) => ShareText = Formats.TidyMoney(value);
+}
+
+/// <summary>One index of the clause as a switch on the screen.</summary>
+public sealed partial class ClauseIndexChoice : ObservableObject
+{
+    private readonly Action<Guid, bool> _choose;
+    private bool _reflecting;
+
+    public ClauseIndexChoice(IndexOption option, bool isChosen, Action<Guid, bool> choose)
+    {
+        ArgumentNullException.ThrowIfNull(option);
+        ArgumentNullException.ThrowIfNull(choose);
+
+        Option = option;
+        _isChosen = isChosen;
+        _choose = choose;
+    }
+
+    public IndexOption Option { get; }
+
+    [ObservableProperty]
+    private bool _isChosen;
+
+    /// <summary>Follows the clause when it changed elsewhere, without changing it again.</summary>
+    public void Reflect(bool chosen)
+    {
+        _reflecting = true;
+        IsChosen = chosen;
+        _reflecting = false;
+    }
+
+    partial void OnIsChosenChanged(bool value)
+    {
+        if (!_reflecting)
+        {
+            _choose(Option.Id, value);
+        }
+    }
 }

@@ -33,12 +33,16 @@ public sealed partial class FormPicker<T> : ObservableObject
         _describe = describe;
         _pick = pick;
         PickCommand = new AsyncRelayCommand<PickerOption<T>>(PickAsync);
+        PickFirstCommand = new AsyncRelayCommand(() => PickAsync(Suggestions.FirstOrDefault()));
     }
 
     public ObservableCollection<PickerOption<T>> Suggestions { get; } = [];
 
     /// <summary>Takes the suggestion, and empties the field for the next.</summary>
     public IAsyncRelayCommand<PickerOption<T>> PickCommand { get; }
+
+    /// <summary>Enter: takes the first suggestion, if any (Tomás, 2026-11-17).</summary>
+    public IAsyncRelayCommand PickFirstCommand { get; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasNoMatch))]

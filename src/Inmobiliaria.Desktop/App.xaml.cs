@@ -214,8 +214,17 @@ public partial class App : Application
             // Contratos is for both roles (gestion-de-alquileres spec Requirement 6).
             var contractRegistry = _sessionProvider.GetRequiredService<IContractRegistry>();
             var adjustmentDesk = _sessionProvider.GetRequiredService<IAdjustmentDesk>();
+            // Only an Administrador's form offers the cutover (spec Decision 32).
             var contractsViewModel = new ContractsViewModel(
-                contractRegistry, id => new ContractDetailViewModel(contractRegistry, adjustmentDesk, id));
+                contractRegistry,
+                id => new ContractDetailViewModel(contractRegistry, adjustmentDesk, id),
+                () => new ContractFormViewModel(
+                    contractRegistry,
+                    session.Role == UserRole.Admin,
+                    _sessionProvider.GetRequiredService<IAgencyClock>(),
+                    _sessionProvider.GetRequiredService<IIndexRegistry>(),
+                    _sessionProvider.GetRequiredService<IPartyRegistry>(),
+                    _sessionProvider.GetRequiredService<IUnitRegistry>()));
 
             // Personas is for both roles (gestion-de-alquileres spec Requirement 22).
             var partiesViewModel = new PartiesViewModel(_sessionProvider.GetRequiredService<IPartyRegistry>());

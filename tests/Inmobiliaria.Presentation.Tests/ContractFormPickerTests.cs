@@ -183,4 +183,21 @@ public class ContractFormPickerTests
 
         Assert.Empty(viewModel.TenantPicker.Suggestions);
     }
+
+    /// <summary>Enter takes the first suggestion, so a name typed far enough is picked without the mouse (Tomás, 2026-11-17).</summary>
+    [Fact]
+    public async Task Enter_PicksTheFirstSuggestion_AndWithNoneDoesNothing()
+    {
+        var viewModel = await LoadedAsync();
+
+        viewModel.LessorPicker.Query = "zz";
+        await viewModel.LessorPicker.PickFirstCommand.ExecuteAsync(null);
+        Assert.Empty(viewModel.Lessors);
+
+        viewModel.LessorPicker.Query = "ruiz";
+        viewModel.LessorPicker.Query = "demar";
+        await viewModel.LessorPicker.PickFirstCommand.ExecuteAsync(null);
+        Assert.Equal([Demaria], viewModel.Lessors);
+        Assert.Equal(string.Empty, viewModel.LessorPicker.Query);
+    }
 }
