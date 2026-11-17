@@ -19,7 +19,7 @@
         <!-- A notice: a coloured band with its text. Tag picks the colour, "ok" or "warn". -->
         <Style x:Key="Notice" TargetType="Border">
             <Setter Property="CornerRadius" Value="14" />
-            <Setter Property="Padding" Value="18,14" />
+            <Setter Property="Padding" Value="14,10" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Background" Value="{DynamicResource Theme.WarnBack}" />
             <Setter Property="BorderBrush" Value="{DynamicResource Theme.Warn}" />
@@ -57,7 +57,7 @@
         <!-- An index of the list on the left: name and source, the chosen one in the selection colour. -->
         <Style x:Key="IndexItem" TargetType="ListBoxItem">
             <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Margin" Value="0,0,0,6" />
+            <Setter Property="Margin" Value="0,0,0,8" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
@@ -78,23 +78,32 @@
         </Style>
     </UserControl.Resources>
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="32,28">
+    <!-- The canvas's 1920 x 950 fit: the page never scrolls; the middle column and the table scroll inside. -->
+    <Grid Margin="32,20,32,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
             <TextBlock Text="Índices" Style="{StaticResource Theme.Title}" />
-            <TextBlock Text="Los valores publicados que usan los contratos para ajustar el alquiler." Style="{StaticResource Theme.Subtitle}" />
-            <TextBlock Text="{Binding Runner.ErrorMessage}" Style="{StaticResource Theme.ErrorText}" Margin="0,12,0,0" />
+            <TextBlock Grid.Row="1" Text="Los valores publicados que usan los contratos para ajustar el alquiler." Style="{StaticResource Theme.Subtitle}" />
+            <TextBlock Grid.Row="2" Text="{Binding Runner.ErrorMessage}" Style="{StaticResource Theme.ErrorText}" Margin="0,12,0,0" />
 
-            <Grid Margin="0,18,0,0">
+            <!-- The canvas's .ixgrid: the indices 240 wide, then the middle (1.05) and the table (0.95), 16 apart. -->
+            <Grid Grid.Row="3" Margin="0,12,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="240" />
-                    <ColumnDefinition Width="18" />
-                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="1.05*" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="0.95*" />
                 </Grid.ColumnDefinitions>
 
                 <!-- The indices. -->
                 <Border Grid.Column="0" Style="{StaticResource Theme.Card}" Padding="14" VerticalAlignment="Top">
                     <StackPanel>
-                        <TextBlock Text="Índices" Style="{StaticResource Theme.CardTitle}" Margin="6,2,0,10" />
+                        <TextBlock Text="Índices" Style="{StaticResource Theme.CardTitle}" Margin="6,2,0,8" />
                         <ListBox ItemsSource="{Binding Indices}" SelectedItem="{Binding SelectedIndex}"
                                  ItemContainerStyle="{StaticResource IndexItem}" Background="Transparent" BorderThickness="0"
                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
@@ -110,7 +119,8 @@
                     </StackPanel>
                 </Border>
 
-                <StackPanel Grid.Column="2">
+                <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" VerticalAlignment="Top">
+                <StackPanel>
 
                     <!-- The selected index and the way to its source. -->
                     <Border Style="{StaticResource Theme.Card}">
@@ -132,7 +142,7 @@
                     </Border>
 
                     <!-- The panel that asks the source (spec Requirement 25). Nothing is stored until confirmed. -->
-                    <Border Style="{StaticResource Theme.Card}" Margin="0,18,0,0"
+                    <Border Style="{StaticResource Theme.Card}" Margin="0,12,0,0"
                             Visibility="{Binding IsBringOpen, Converter={StaticResource Shown}}">
                         <StackPanel>
                             <DockPanel>
@@ -145,7 +155,7 @@
                             <DockPanel Margin="0,12,0,0">
                                 <Button Content="Traer" Style="{StaticResource Theme.PrimaryButton}" DockPanel.Dock="Right"
                                         VerticalAlignment="Top" Margin="16,25,0,0" Command="{Binding BringFromSourceCommand}" />
-                                <StackPanel MaxWidth="360" HorizontalAlignment="Left">
+                                <StackPanel>
                                     <TextBlock Text="Mes a traer (opcional)" Style="{StaticResource Theme.Label}" />
                                     <TextBox Style="{StaticResource Theme.Input}" Tag="Por ejemplo: 10/2026"
                                              Text="{Binding BringPeriodText, UpdateSourceTrigger=PropertyChanged}" />
@@ -155,18 +165,18 @@
                             </DockPanel>
 
                             <!-- What the source said, one month at a time. -->
-                            <ItemsControl ItemsSource="{Binding Fetched}" Margin="0,8,0,0">
+                            <ItemsControl ItemsSource="{Binding Fetched}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border CornerRadius="14" Padding="18,14" Margin="0,10,0,0" BorderThickness="1"
+                                        <Border CornerRadius="14" Padding="20,16" Margin="0,12,0,0" BorderThickness="1"
                                                 BorderBrush="{DynamicResource Theme.Line}" Background="{DynamicResource Theme.Background}">
                                             <DockPanel>
                                                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <Button Content="Guardar este valor" Style="{StaticResource Theme.PrimaryButton}" Margin="12,0,0,0"
+                                                    <Button Content="Guardar este valor" Style="{StaticResource Theme.PrimaryButton}" Margin="16,0,0,0"
                                                             Command="{Binding DataContext.ConfirmFetchedCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                             CommandParameter="{Binding}"
                                                             Visibility="{Binding CanStore, Converter={StaticResource Shown}}" />
-                                                    <Button Content="Corregir ese valor" Style="{StaticResource Theme.GhostButton}" Margin="12,0,0,0"
+                                                    <Button Content="Corregir ese valor" Style="{StaticResource Theme.GhostButton}" Margin="16,0,0,0"
                                                             Command="{Binding DataContext.CorrectFromFetchedCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                             CommandParameter="{Binding}"
                                                             Visibility="{Binding CanCorrect, Converter={StaticResource Shown}}" />
@@ -192,7 +202,7 @@
                     </Border>
 
                     <!-- A refusal, with the way to correct the value it names; or what was saved. -->
-                    <Border Style="{StaticResource Notice}" Margin="0,18,0,0"
+                    <Border Style="{StaticResource Notice}" Margin="0,12,0,0"
                             Visibility="{Binding RefusalMessage, Converter={StaticResource Set}}">
                         <DockPanel>
                             <Button Content="Corregir ese valor" Style="{StaticResource Theme.GhostButton}" DockPanel.Dock="Right"
@@ -201,19 +211,19 @@
                             <TextBlock Text="{Binding RefusalMessage}" TextWrapping="Wrap" VerticalAlignment="Center" />
                         </DockPanel>
                     </Border>
-                    <Border Style="{StaticResource Notice}" Tag="ok" Margin="0,18,0,0"
+                    <Border Style="{StaticResource Notice}" Tag="ok" Margin="0,12,0,0"
                             Visibility="{Binding SavedMessage, Converter={StaticResource Set}}">
                         <TextBlock Text="{Binding SavedMessage}" TextWrapping="Wrap" />
                     </Border>
 
                     <!-- A level far from the earlier one, to confirm again. -->
-                    <Border Style="{StaticResource AskCard}" Margin="0,18,0,0"
+                    <Border Style="{StaticResource AskCard}" Margin="0,12,0,0"
                             Visibility="{Binding FarLevelWarning, Converter={StaticResource Set}}">
                         <StackPanel>
                             <Border Style="{StaticResource Notice}">
                                 <TextBlock Text="{Binding FarLevelWarning}" TextWrapping="Wrap" />
                             </Border>
-                            <UniformGrid Columns="2" Margin="0,14,0,0">
+                            <UniformGrid Columns="2" Margin="0,12,0,0">
                                 <Border Style="{StaticResource KeyValue}" Margin="0,0,8,0">
                                     <StackPanel>
                                         <TextBlock Text="{Binding FarPreviousLabel}" Foreground="{DynamicResource Theme.Muted}" />
@@ -227,7 +237,7 @@
                                     </StackPanel>
                                 </Border>
                             </UniformGrid>
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
                                 <Button Content="Revisar" Style="{StaticResource Theme.GhostButton}" Command="{Binding BackToEditingCommand}" />
                                 <Button Content="Confirmar de nuevo" Style="{StaticResource Theme.PrimaryButton}" Margin="12,0,0,0"
                                         Command="{Binding AcceptFarLevelCommand}" />
@@ -236,7 +246,7 @@
                     </Border>
 
                     <!-- A correction to confirm: both levels, the adjustments that used the value, and its record. -->
-                    <Border Style="{StaticResource AskCard}" Margin="0,18,0,0"
+                    <Border Style="{StaticResource AskCard}" Margin="0,12,0,0"
                             Visibility="{Binding CorrectionSummary, Converter={StaticResource Set}}">
                         <StackPanel>
                             <TextBlock Text="{Binding CorrectionTitle}" Style="{StaticResource Theme.CardTitle}" />
@@ -254,12 +264,12 @@
                                     </StackPanel>
                                 </Border>
                             </UniformGrid>
-                            <Border Style="{StaticResource Notice}" Tag="info" Margin="0,14,0,0">
+                            <Border Style="{StaticResource Notice}" Tag="info" Margin="0,12,0,0">
                                 <TextBlock TextWrapping="Wrap"
                                            Text="Corregir el valor no cambia ningún ajuste ni ningún alquiler por sí solo. Abajo están los ajustes confirmados que usaron el valor actual." />
                             </Border>
 
-                            <TextBlock Text="Ajustes confirmados que usaron este valor" Style="{StaticResource Theme.Label}" Margin="0,16,0,6" />
+                            <TextBlock Text="Ajustes confirmados que usaron este valor" Style="{StaticResource Theme.Label}" Margin="0,12,0,6" />
                             <TextBlock Text="Ningún ajuste confirmado usó este valor." Style="{StaticResource Theme.Hint}"
                                        Visibility="{Binding AffectedAdjustments.Count, Converter={StaticResource Set}, ConverterParameter=invert}" />
                             <ItemsControl ItemsSource="{Binding AffectedAdjustments}">
@@ -272,7 +282,7 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
 
-                            <TextBlock Text="Correcciones anteriores de este valor" Style="{StaticResource Theme.Label}" Margin="0,16,0,6" />
+                            <TextBlock Text="Correcciones anteriores de este valor" Style="{StaticResource Theme.Label}" Margin="0,12,0,6" />
                             <TextBlock Text="Este valor nunca se corrigió." Style="{StaticResource Theme.Hint}"
                                        Visibility="{Binding Corrections.Count, Converter={StaticResource Set}, ConverterParameter=invert}" />
                             <ItemsControl ItemsSource="{Binding Corrections}">
@@ -285,22 +295,22 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
 
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
-                                <Button Content="Volver a editar" Style="{StaticResource Theme.GhostButton}" Command="{Binding BackToEditingCommand}" />
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+                                <Button Content="Volver a editar" Style="{StaticResource Theme.GhostButton}" Command="{Binding BackToEditingCommand}" Height="42" Padding="26,0" FontSize="15" />
                                 <Button Content="Confirmar corrección" Style="{StaticResource Theme.PrimaryButton}" Margin="12,0,0,0"
-                                        Height="46" Padding="26,0" FontSize="15" Command="{Binding ConfirmCorrectionCommand}" />
+                                        Height="42" Padding="26,0" FontSize="15" Command="{Binding ConfirmCorrectionCommand}" />
                             </StackPanel>
                         </StackPanel>
                     </Border>
 
                     <!-- A correction saved, with the adjustments it may leave to correct. -->
-                    <Border Style="{StaticResource Theme.Card}" Margin="0,18,0,0"
+                    <Border Style="{StaticResource Theme.Card}" Margin="0,12,0,0"
                             Visibility="{Binding CorrectionDone, Converter={StaticResource Set}}">
                         <StackPanel>
                             <Border Style="{StaticResource Notice}" Tag="ok">
                                 <TextBlock Text="{Binding CorrectionDone}" TextWrapping="Wrap" />
                             </Border>
-                            <StackPanel Margin="0,14,0,0" Visibility="{Binding DoneAdjustments.Count, Converter={StaticResource Set}}">
+                            <StackPanel Margin="0,12,0,0" Visibility="{Binding DoneAdjustments.Count, Converter={StaticResource Set}}">
                                 <TextBlock Text="Ningún alquiler cambió. Si corresponde, corrija el último ajuste de cada contrato desde Ajustes de alquiler:"
                                            Style="{StaticResource Theme.Label}" TextWrapping="Wrap" />
                                 <ItemsControl ItemsSource="{Binding DoneAdjustments}">
@@ -313,64 +323,67 @@
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
                             </StackPanel>
-                            <Button Content="Listo" Style="{StaticResource Theme.GhostButton}" HorizontalAlignment="Right" Margin="0,14,0,0"
+                            <Button Content="Listo" Style="{StaticResource Theme.GhostButton}" HorizontalAlignment="Right" Margin="0,12,0,0"
                                     Command="{Binding DismissDoneCommand}" />
                         </StackPanel>
                     </Border>
 
                     <!-- The form: a new value, or a correction of the one chosen below. -->
-                    <Border Style="{StaticResource Theme.Card}" Margin="0,18,0,0">
+                    <Border Style="{StaticResource Theme.Card}" Margin="0,12,0,0">
                         <StackPanel>
                             <TextBlock Text="{Binding FormTitle}" Style="{StaticResource Theme.CardTitle}" />
-                            <DockPanel>
-                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top" Margin="16,25,0,0">
-                                    <Button Content="Cancelar" Style="{StaticResource Theme.GhostButton}" Command="{Binding ClearFormCommand}"
-                                            Visibility="{Binding IsEditing, Converter={StaticResource Shown}}" />
-                                    <Button Content="{Binding SaveText}" Style="{StaticResource Theme.PrimaryButton}" Margin="12,0,0,0"
-                                            Command="{Binding SaveCommand}" />
-                                </StackPanel>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="220" />
-                                        <ColumnDefinition Width="16" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0">
+                            <!-- The canvas's wrapping ".row": two fields of 220 and the buttons, which drop to the next line
+                                 when the card is too narrow for all three, instead of squeezing the level field. -->
+                            <WrapPanel>
+                                    <StackPanel Width="220" Margin="0,0,16,0" VerticalAlignment="Top">
                                         <TextBlock Text="Período (mes y año)" Style="{StaticResource Theme.Label}" />
                                         <TextBox Style="{StaticResource Theme.Input}" Tag="Por ejemplo: 08/2026" IsEnabled="{Binding CanChoosePeriod}"
                                                  Text="{Binding PeriodText, UpdateSourceTrigger=PropertyChanged}" />
                                         <TextBlock Text="{Binding PeriodError}" Style="{StaticResource Theme.ErrorText}" Margin="0,6,0,0" />
                                     </StackPanel>
-                                    <StackPanel Grid.Column="2">
+                                    <StackPanel Width="220" Margin="0,0,16,0" VerticalAlignment="Top">
                                         <TextBlock Text="{Binding LevelLabel}" Style="{StaticResource Theme.Label}" />
                                         <TextBox Style="{StaticResource Theme.Input}" Tag="Por ejemplo: 1.915.878,76"
                                                  Text="{Binding LevelText, UpdateSourceTrigger=PropertyChanged}" />
                                         <TextBlock Text="{Binding LevelError}" Style="{StaticResource Theme.ErrorText}" Margin="0,6,0,0" />
                                     </StackPanel>
-                                </Grid>
-                            </DockPanel>
-                            <TextBlock Text="{Binding FormHint}" Style="{StaticResource Theme.Hint}" Margin="0,14,0,0" />
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Top" Margin="0,25,0,0">
+                                    <Button Content="Cancelar" Style="{StaticResource Theme.GhostButton}" Command="{Binding ClearFormCommand}"
+                                            Visibility="{Binding IsEditing, Converter={StaticResource Shown}}" Margin="0,0,10,0" />
+                                    <Button Content="{Binding SaveText}" Style="{StaticResource Theme.PrimaryButton}"
+                                            Command="{Binding SaveCommand}" />
+                                </StackPanel>
+                            </WrapPanel>
+                            <TextBlock Text="{Binding FormHint}" Style="{StaticResource Theme.Hint}" Margin="0,12,0,0" />
                         </StackPanel>
                     </Border>
 
-                    <!-- The stored values, the latest first. Values are never deleted: a wrong one is corrected. -->
-                    <Border Style="{StaticResource Theme.Card}" Padding="8,8,8,4" Margin="0,18,0,0">
-                        <StackPanel>
-                            <TextBlock Style="{StaticResource Theme.CardTitle}" Margin="14,10,14,6">
+                </StackPanel>
+                </ScrollViewer>
+
+                <!-- The stored values, the latest first. Values are never deleted: a wrong one is corrected. -->
+                <Border Grid.Column="4" Style="{StaticResource Theme.Card}" Padding="8,8,8,4" VerticalAlignment="Top">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                            <TextBlock Style="{StaticResource Theme.CardTitle}" Margin="14,10,14,12">
                                 <Run Text="Valores guardados de " /><Run Text="{Binding SelectedIndex.Name, Mode=OneWay}" />
                             </TextBlock>
-                            <DataGrid Style="{StaticResource Theme.Table}" ItemsSource="{Binding Values}"
-                                      SelectedItem="{Binding Editing, Mode=OneWay}">
+                            <DataGrid Grid.Row="1" Style="{StaticResource Theme.Table}" ItemsSource="{Binding Values}"
+                                      SelectedItem="{Binding Editing, Mode=OneWay}" VerticalScrollBarVisibility="Auto">
                                 <DataGrid.Columns>
-                                    <DataGridTemplateColumn Header="PERÍODO" Width="1*" MinWidth="100">
+                                    <DataGridTemplateColumn Header="PERÍODO" Width="1*" MinWidth="80">
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate>
                                                 <TextBlock Text="{Binding PeriodText}" FontWeight="Bold" TextAlignment="Center" />
                                             </DataTemplate>
                                         </DataGridTemplateColumn.CellTemplate>
                                     </DataGridTemplateColumn>
-                                    <DataGridTextColumn Header="NIVEL" Binding="{Binding ShownLevelText}" Width="1.4*" MinWidth="140" />
-                                    <DataGridTemplateColumn Header="CORRECCIONES" Width="1.2*" MinWidth="140">
+                                    <DataGridTextColumn Header="NIVEL" Binding="{Binding ShownLevelText}" Width="1.4*" MinWidth="100" />
+                                    <DataGridTemplateColumn Header="CORRECCIONES" Width="1.2*" MinWidth="110">
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate>
                                                 <Grid>
@@ -385,7 +398,7 @@
                                             </DataTemplate>
                                         </DataGridTemplateColumn.CellTemplate>
                                     </DataGridTemplateColumn>
-                                    <DataGridTemplateColumn Header="" Width="1*" MinWidth="120">
+                                    <DataGridTemplateColumn Header="" Width="1*" MinWidth="100">
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate>
                                                 <Button Content="Corregir" Style="{StaticResource Theme.GhostButton}" HorizontalAlignment="Center"
@@ -396,13 +409,11 @@
                                     </DataGridTemplateColumn>
                                 </DataGrid.Columns>
                             </DataGrid>
-                            <TextBlock Style="{StaticResource Theme.Hint}" Margin="14,10,14,14">
+                            <TextBlock Grid.Row="2" Style="{StaticResource Theme.Hint}" Margin="14,22,14,14">
                                 <Run Text="{Binding CountText, Mode=OneWay}" /><Run Text=". Los valores no se borran: uno mal cargado se corrige, y cada corrección queda registrada." />
                             </TextBlock>
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
+                    </Grid>
+                </Border>
             </Grid>
-        </StackPanel>
-    </ScrollViewer>
+    </Grid>
 </UserControl>

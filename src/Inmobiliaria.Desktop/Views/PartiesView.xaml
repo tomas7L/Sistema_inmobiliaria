@@ -18,7 +18,7 @@
         <BooleanToVisibilityConverter x:Key="Shown" />
 
         <!-- Shown only while the form is closed. -->
-        <Style x:Key="ListPart" TargetType="StackPanel">
+        <Style x:Key="ListPart" TargetType="Grid">
             <Setter Property="Visibility" Value="Visible" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsFormOpen}" Value="True">
@@ -78,16 +78,23 @@
         </Style>
     </UserControl.Resources>
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="32,28">
+    <!-- The canvas's 1920 x 950 fit: the page never scrolls, the table scrolls inside its card. -->
+    <Grid Margin="32,20,32,16">
 
             <!-- The list. -->
-            <StackPanel Style="{StaticResource ListPart}">
+            <Grid Style="{StaticResource ListPart}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
                 <TextBlock Text="Personas" Style="{StaticResource Theme.Title}" />
-                <TextBlock Text="Datos de cada persona y el rol que tiene en sus contratos vigentes." Style="{StaticResource Theme.Subtitle}" />
-                <TextBlock Text="{Binding Runner.ErrorMessage}" Style="{StaticResource Theme.ErrorText}" Margin="0,12,0,0" />
+                <TextBlock Grid.Row="1" Text="Datos de cada persona y el rol que tiene en sus contratos vigentes." Style="{StaticResource Theme.Subtitle}" />
+                <TextBlock Grid.Row="2" Text="{Binding Runner.ErrorMessage}" Style="{StaticResource Theme.ErrorText}" Margin="0,12,0,0" />
 
-                <Border Style="{StaticResource Theme.Card}" CornerRadius="22" Padding="16,12" Margin="0,18,0,0">
+                <Border Grid.Row="3" Style="{StaticResource Theme.Card}" CornerRadius="22" Padding="16,10" Margin="0,12,0,0">
                     <!-- The search box takes what the buttons leave, to the card's right edge, as on the canvas. -->
                     <DockPanel LastChildFill="True">
                         <Button Content="Nueva persona" Style="{StaticResource Theme.PrimaryButton}" DockPanel.Dock="Left"
@@ -116,10 +123,22 @@
                     </DockPanel>
                 </Border>
 
-                <Border Style="{StaticResource Theme.Card}" Padding="8,8,8,4" Margin="0,18,0,0">
-                    <StackPanel>
+                <Border Grid.Row="4" Style="{StaticResource Theme.Card}" Padding="8,6,8,0" Margin="0,12,0,0"
+                        VerticalAlignment="Top">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <!-- The canvas's "ctr" table: rows 9 high above and below. -->
                         <DataGrid Style="{StaticResource Theme.Table}" ItemsSource="{Binding Persons}"
-                                  SelectedItem="{Binding SelectedPerson}">
+                                  SelectedItem="{Binding SelectedPerson}" VerticalScrollBarVisibility="Auto">
+                            <DataGrid.CellStyle>
+                                <Style TargetType="DataGridCell" BasedOn="{StaticResource Theme.TableCell}">
+                                    <Setter Property="Padding" Value="10,9" />
+                                </Style>
+                            </DataGrid.CellStyle>
                             <DataGrid.Columns>
                                 <DataGridTemplateColumn Header="APELLIDO Y NOMBRE" Width="2.2*" MinWidth="180">
                                     <DataGridTemplateColumn.CellTemplate>
@@ -168,18 +187,19 @@
                                 <DataGridTextColumn Header="EMAIL" Binding="{Binding Email}" Width="1.8*" MinWidth="140" />
                             </DataGrid.Columns>
                         </DataGrid>
-                        <TextBlock Text="No hay ninguna persona con ese nombre, DNI o CUIL." Style="{StaticResource Theme.Hint}"
+                        <TextBlock Grid.Row="1" Text="No hay ninguna persona con ese nombre, DNI o CUIL." Style="{StaticResource Theme.Hint}"
                                    FontSize="15" Margin="14,18"
                                    Visibility="{Binding IsEmpty, Converter={StaticResource Shown}}" />
-                        <TextBlock Style="{StaticResource Theme.Hint}" Margin="14,10,14,14">
+                        <TextBlock Grid.Row="2" Style="{StaticResource Theme.Hint}" Margin="14,8,14,10">
                             <Run Text="{Binding CountText, Mode=OneWay}" /><Run Text=". Los roles se calculan a partir de los contratos vigentes: no se guardan en la persona." />
                         </TextBlock>
-                    </StackPanel>
+                    </Grid>
                 </Border>
-            </StackPanel>
+            </Grid>
 
-            <!-- The form, in place of the list. -->
-            <StackPanel Visibility="{Binding IsFormOpen, Converter={StaticResource Shown}}">
+            <!-- The form, in place of the list. It scrolls only on a screen smaller than the canvas's. -->
+            <ScrollViewer VerticalScrollBarVisibility="Auto" Visibility="{Binding IsFormOpen, Converter={StaticResource Shown}}">
+            <StackPanel>
                 <DockPanel>
                     <Button Content="Volver a personas" Style="{StaticResource Theme.GhostButton}" DockPanel.Dock="Right"
                             VerticalAlignment="Top" Command="{Binding BackCommand}" />
@@ -192,8 +212,15 @@
 
                 <!-- The fields, each with its own error beside it, under one summary (spec Requirement 26). -->
                 <StackPanel Style="{StaticResource FieldsStep}">
-                    <TextBlock Text="{Binding Errors.Summary}" Style="{StaticResource Theme.ErrorText}" Margin="0,18,0,0" />
-                    <Border Style="{StaticResource Theme.Card}" Margin="0,18,0,0">
+                    <TextBlock Text="{Binding Errors.Summary}" Style="{StaticResource Theme.ErrorText}" Margin="0,12,0,0" />
+                    <!-- The two cards side by side, as the canvas's "pgrid". -->
+                    <Grid Margin="0,12,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="16" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource Theme.Card}" VerticalAlignment="Top">
                         <StackPanel>
                             <TextBlock Text="Identidad" Style="{StaticResource Theme.CardTitle}" />
                             <Grid>
@@ -204,7 +231,7 @@
                                 </Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="16" />
+                                    <RowDefinition Height="12" />
                                     <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
                                 <StackPanel Grid.Column="0" Grid.Row="0">
@@ -234,14 +261,14 @@
                                     <TextBlock Text="No puede repetirse." Style="{StaticResource Theme.Hint}" Margin="0,6,0,0" />
                                 </StackPanel>
                             </Grid>
-                            <TextBlock Text="{Binding RefusalMessage}" Style="{StaticResource Theme.ErrorText}" Margin="0,16,0,0" />
+                            <TextBlock Text="{Binding RefusalMessage}" Style="{StaticResource Theme.ErrorText}" Margin="0,12,0,0" />
                             <Button Content="Usar esa persona" Style="{StaticResource OfferPart}" HorizontalAlignment="Left"
                                     Margin="0,6,0,0" Command="{Binding UseHolderCommand}" />
-                            <TextBlock Text="{Binding IdentityHint}" Style="{StaticResource Theme.Hint}" Margin="0,16,0,0" />
+                            <TextBlock Text="{Binding IdentityHint}" Style="{StaticResource Theme.Hint}" Margin="0,12,0,0" />
                         </StackPanel>
                     </Border>
 
-                    <Border Style="{StaticResource Theme.Card}" Margin="0,18,0,0">
+                    <Border Grid.Column="2" Style="{StaticResource Theme.Card}" VerticalAlignment="Top">
                         <StackPanel>
                             <TextBlock Text="Contacto y domicilio" Style="{StaticResource Theme.CardTitle}" />
                             <Grid>
@@ -252,7 +279,7 @@
                                 </Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="16" />
+                                    <RowDefinition Height="12" />
                                     <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
                                 <StackPanel Grid.Column="0" Grid.Row="0">
@@ -274,21 +301,23 @@
                                     <TextBlock Text="{Binding Errors[Domicile]}" Style="{StaticResource Theme.ErrorText}" Margin="0,6,0,0" />
                                 </StackPanel>
                             </Grid>
-                            <TextBlock Text="{Binding Errors[Contact]}" Style="{StaticResource Theme.ErrorText}" Margin="0,16,0,0" />
+                            <TextBlock Text="{Binding Errors[Contact]}" Style="{StaticResource Theme.ErrorText}" Margin="0,12,0,0" />
                             <TextBlock Text="El rol (propietario, inquilino o codeudor), el alquiler y los honorarios se cargan en el contrato, no acá."
-                                       Style="{StaticResource Theme.Hint}" Margin="0,16,0,0" />
+                                       Style="{StaticResource Theme.Hint}" Margin="0,12,0,0" />
                         </StackPanel>
                     </Border>
+                    </Grid>
 
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
-                        <Button Content="Cancelar" Style="{StaticResource Theme.GhostButton}" Command="{Binding BackCommand}" />
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+                        <Button Content="Cancelar" Style="{StaticResource Theme.GhostButton}" Command="{Binding BackCommand}"
+                                Height="42" Padding="26,0" FontSize="15" />
                         <Button Content="{Binding SaveText}" Style="{StaticResource Theme.PrimaryButton}" Margin="12,0,0,0"
-                                Height="46" Padding="26,0" FontSize="15" Command="{Binding SaveCommand}" />
+                                Height="42" Padding="26,0" FontSize="15" Command="{Binding SaveCommand}" />
                     </StackPanel>
                 </StackPanel>
 
                 <!-- The summary to confirm a correction of identity data. -->
-                <Border Style="{StaticResource ConfirmStep}" Margin="0,18,0,0">
+                <Border Style="{StaticResource ConfirmStep}" Margin="0,12,0,0">
                     <StackPanel>
                         <TextBlock Text="Confirme la corrección" Style="{StaticResource Theme.CardTitle}" />
                         <TextBlock Text="{Binding Pending.Text}" TextWrapping="Wrap" FontSize="15" />
@@ -299,7 +328,7 @@
                                 <DataGridTextColumn Header="VALOR NUEVO" Binding="{Binding New}" Width="*" FontWeight="Bold" />
                             </DataGrid.Columns>
                         </DataGrid>
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
                             <Button Content="Volver a editar" Style="{StaticResource Theme.GhostButton}" Command="{Binding CancelCommand}" />
                             <Button Content="Confirmar corrección" Style="{StaticResource Theme.PrimaryButton}" Margin="12,0,0,0"
                                     Command="{Binding ConfirmCommand}" />
@@ -308,11 +337,11 @@
                 </Border>
 
                 <!-- A warning to accept: identifiers that look mistyped, or none at all. -->
-                <Border Style="{StaticResource WarningStep}" Margin="0,18,0,0">
+                <Border Style="{StaticResource WarningStep}" Margin="0,12,0,0">
                     <StackPanel>
                         <TextBlock Text="{Binding Warning}" TextWrapping="Wrap" FontSize="15" FontWeight="SemiBold"
                                    Foreground="{DynamicResource Theme.Warn}" />
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
                             <Button Content="Volver a completar" Style="{StaticResource Theme.GhostButton}" Command="{Binding CancelCommand}" />
                             <Button Content="Guardarla igual" Style="{StaticResource Theme.PrimaryButton}" Margin="12,0,0,0"
                                     Command="{Binding AcceptWarningCommand}" />
@@ -321,15 +350,15 @@
                 </Border>
 
                 <!-- What was saved, with the way back. -->
-                <Border Style="{StaticResource SavedStep}" Margin="0,18,0,0">
+                <Border Style="{StaticResource SavedStep}" Margin="0,12,0,0">
                     <StackPanel>
                         <TextBlock Text="{Binding Saved.Title}" Style="{StaticResource Theme.CardTitle}" Foreground="{DynamicResource Theme.Ok}" />
                         <TextBlock Text="{Binding Saved.Text}" TextWrapping="Wrap" FontSize="15" />
                         <Button Content="Volver a personas" Style="{StaticResource Theme.PrimaryButton}" HorizontalAlignment="Right"
-                                Margin="0,16,0,0" Command="{Binding BackCommand}" />
+                                Margin="0,12,0,0" Command="{Binding BackCommand}" />
                     </StackPanel>
                 </Border>
             </StackPanel>
-        </StackPanel>
-    </ScrollViewer>
+            </ScrollViewer>
+    </Grid>
 </UserControl>

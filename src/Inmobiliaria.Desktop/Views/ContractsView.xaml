@@ -20,7 +20,7 @@
         <BooleanToVisibilityConverter x:Key="Shown" />
 
         <!-- Shown only while neither a contract nor the form is open. -->
-        <Style x:Key="ListPart" TargetType="StackPanel">
+        <Style x:Key="ListPart" TargetType="Grid">
             <Setter Property="Visibility" Value="Visible" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsListShown}" Value="False">
@@ -30,17 +30,25 @@
         </Style>
     </UserControl.Resources>
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="32,28">
+    <!-- The canvas's 1920 x 950 fit: the page never scrolls, the tables scroll inside their card. -->
+    <Grid Margin="32,20,32,16">
 
         <!-- The list. -->
-        <StackPanel Style="{StaticResource ListPart}">
+        <Grid Style="{StaticResource ListPart}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
             <TextBlock Text="Contratos" Style="{StaticResource Theme.Title}" />
-            <TextBlock Text="Alquileres cargados, con su estado. Abra uno para ver todos sus datos." Style="{StaticResource Theme.Subtitle}" />
-            <TextBlock Text="{Binding Runner.ErrorMessage}" Style="{StaticResource Theme.ErrorText}" Margin="0,12,0,0" />
+            <TextBlock Grid.Row="1" Text="Alquileres cargados, con su estado. Abra uno para ver todos sus datos." Style="{StaticResource Theme.Subtitle}" />
+            <TextBlock Grid.Row="2" Text="{Binding Runner.ErrorMessage}" Style="{StaticResource Theme.ErrorText}" Margin="0,12,0,0" />
 
             <!-- A contract just saved, said here, where the form returns (Tomás, 2026-11-17). -->
-            <Border CornerRadius="16" Padding="16,12" Margin="0,18,0,0" Background="{DynamicResource Theme.OkBack}"
+            <Border Grid.Row="3" CornerRadius="16" Padding="16,12" Margin="0,12,0,0" Background="{DynamicResource Theme.OkBack}"
                     Visibility="{Binding SavedMessage, Converter={StaticResource SetShown}}">
                 <StackPanel>
                     <TextBlock Text="{Binding SavedMessage}" FontWeight="Bold" Foreground="{DynamicResource Theme.Ok}" TextWrapping="Wrap" />
@@ -48,7 +56,7 @@
                 </StackPanel>
             </Border>
 
-            <Border Style="{StaticResource Theme.Card}" CornerRadius="22" Padding="16,12" Margin="0,18,0,0">
+            <Border Grid.Row="4" Style="{StaticResource Theme.Card}" CornerRadius="22" Padding="16,12" Margin="0,12,0,0">
                 <!-- The search box takes what the filters leave, to the card's right edge, as on the canvas. -->
                 <DockPanel LastChildFill="True">
                     <Button Content="Nuevo contrato" Style="{StaticResource Theme.PrimaryButton}" DockPanel.Dock="Left"
@@ -77,9 +85,16 @@
                 </DockPanel>
             </Border>
 
-            <Border Style="{StaticResource Theme.Card}" Padding="8,8,8,4" Margin="0,18,0,0">
-                <StackPanel>
-                    <DataGrid Style="{StaticResource Theme.Table}" ItemsSource="{Binding Contracts}">
+            <Border Grid.Row="5" Style="{StaticResource Theme.Card}" Padding="8,8,8,4" Margin="0,12,0,0"
+                    VerticalAlignment="Top">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <!-- The canvas's "compact" table: Theme.TableCell's 10,14 is already its padding. -->
+                    <DataGrid Style="{StaticResource Theme.Table}" ItemsSource="{Binding Contracts}" VerticalScrollBarVisibility="Auto">
                         <DataGrid.Columns>
                             <DataGridTemplateColumn Header="INQUILINO" Width="1.4*" MinWidth="140">
                                 <DataGridTemplateColumn.CellTemplate>
@@ -102,19 +117,22 @@
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <!-- The state, and under it the past-end mark, which never ends the contract (spec Requirement 6). -->
+                            <!--
+                                The state, and beside it, as on the canvas, the past-end mark, which never ends the contract (spec
+                                Requirement 6). It wraps under the state when the column is too narrow for both.
+                            -->
                             <DataGridTemplateColumn Header="ESTADO" Width="1.8*" MinWidth="180">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
-                                        <StackPanel HorizontalAlignment="Center">
+                                        <WrapPanel HorizontalAlignment="Center">
                                             <Border x:Name="Chip" Style="{StaticResource Theme.Chip}" HorizontalAlignment="Center">
                                                 <TextBlock Text="{Binding StatusText}" TextWrapping="Wrap" TextAlignment="Center" />
                                             </Border>
                                             <Border x:Name="PastEnd" Style="{StaticResource Theme.Chip}" Tag="warn" HorizontalAlignment="Center"
-                                                    Margin="3,4,3,0">
+                                                    Margin="4,0,0,0">
                                                 <TextBlock Text="{Binding PastEndFlag}" />
                                             </Border>
-                                        </StackPanel>
+                                        </WrapPanel>
                                         <DataTemplate.Triggers>
                                             <DataTrigger Binding="{Binding Listing.Status}" Value="{x:Static leasing:ContractStatus.Active}">
                                                 <Setter TargetName="Chip" Property="Tag" Value="ok" />
@@ -146,18 +164,22 @@
                             </DataGridTemplateColumn>
                         </DataGrid.Columns>
                     </DataGrid>
-                    <TextBlock Text="No hay ningún contrato con ese filtro o esa búsqueda." Style="{StaticResource Theme.Hint}"
+                    <TextBlock Grid.Row="1" Text="No hay ningún contrato con ese filtro o esa búsqueda." Style="{StaticResource Theme.Hint}"
                                FontSize="15" Margin="14,18"
                                Visibility="{Binding IsEmpty, Converter={StaticResource Shown}}" />
-                    <TextBlock Style="{StaticResource Theme.Hint}" Margin="14,10,14,14" TextWrapping="Wrap">
+                    <TextBlock Grid.Row="2" Style="{StaticResource Theme.Hint}" Margin="14,10,14,14" TextWrapping="Wrap">
                         <Run Text="{Binding CountText, Mode=OneWay}" /><Run Text=". Un contrato que pasó su fecha de fin sigue vigente hasta que se lo termine: acá solo se marca. Los cancelados siguen visibles, con su motivo en el detalle." />
                     </TextBlock>
-                </StackPanel>
+                </Grid>
             </Border>
-        </StackPanel>
+        </Grid>
 
-        <!-- The contract opened, in place of the list. -->
-        <StackPanel Visibility="{Binding IsDetailOpen, Converter={StaticResource Shown}}">
+        <!-- The contract opened, in place of the list: its tables scroll inside their card, as the list's. -->
+        <Grid Visibility="{Binding IsDetailOpen, Converter={StaticResource Shown}}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
             <DockPanel>
                 <Button Content="Volver a contratos" Style="{StaticResource Theme.GhostButton}" DockPanel.Dock="Right"
                         VerticalAlignment="Top" Command="{Binding BackCommand}" />
@@ -166,22 +188,23 @@
                     <TextBlock Text="{Binding OpenDetail.Subtitle}" Style="{StaticResource Theme.Subtitle}" />
                 </StackPanel>
             </DockPanel>
-            <views:ContractDetailView DataContext="{Binding OpenDetail}" />
-        </StackPanel>
+            <views:ContractDetailView Grid.Row="1" DataContext="{Binding OpenDetail}" />
+        </Grid>
 
-        <!-- The form of a new contract, in place of the list. -->
-        <StackPanel Visibility="{Binding IsFormOpen, Converter={StaticResource Shown}}">
-            <DockPanel>
-                <Button Content="Volver a contratos" Style="{StaticResource Theme.GhostButton}" DockPanel.Dock="Right"
-                        VerticalAlignment="Top" Command="{Binding BackCommand}" />
-                <StackPanel>
-                    <TextBlock Text="Nuevo contrato" Style="{StaticResource Theme.Title}" />
-                    <TextBlock Text="Complete las partes, la propiedad, las fechas y los importes. Al guardar se crea también su cuenta, vacía."
-                               Style="{StaticResource Theme.Subtitle}" />
-                </StackPanel>
-            </DockPanel>
-            <views:ContractFormView DataContext="{Binding OpenForm}" />
-        </StackPanel>
-        </StackPanel>
-    </ScrollViewer>
+        <!-- The form of a new contract, in place of the list. It scrolls only on a screen smaller than the canvas's. -->
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Visibility="{Binding IsFormOpen, Converter={StaticResource Shown}}">
+            <StackPanel>
+                <DockPanel>
+                    <Button Content="Volver a contratos" Style="{StaticResource Theme.GhostButton}" DockPanel.Dock="Right"
+                            VerticalAlignment="Top" Command="{Binding BackCommand}" />
+                    <StackPanel>
+                        <TextBlock Text="Nuevo contrato" Style="{StaticResource Theme.Title}" />
+                        <TextBlock Text="Complete las partes, la propiedad, las fechas y los importes. Al guardar se crea también su cuenta, vacía."
+                                   Style="{StaticResource Theme.Subtitle}" />
+                    </StackPanel>
+                </DockPanel>
+                <views:ContractFormView DataContext="{Binding OpenForm}" />
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
 </UserControl>

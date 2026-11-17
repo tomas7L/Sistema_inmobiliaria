@@ -144,7 +144,7 @@
         <TextBlock Text="{Binding Errors.Summary}" Style="{StaticResource FieldError}" Margin="0,12,0,0" />
 
         <!-- The tabs, each with the count of its errors. -->
-        <Border Style="{StaticResource Theme.SegmentGroup}" HorizontalAlignment="Left" Margin="0,18,0,0">
+        <Border Style="{StaticResource Theme.SegmentGroup}" HorizontalAlignment="Left" Margin="0,12,0,0">
             <StackPanel Orientation="Horizontal">
                 <RadioButton x:Name="PartiesTab" GroupName="FormTab" Style="{StaticResource Theme.Segment}" IsChecked="True">
                     <StackPanel Orientation="Horizontal">
@@ -174,7 +174,7 @@
         </Border>
 
         <!-- Partes. -->
-        <Border Style="{StaticResource Theme.Card}" Margin="0,18,0,0"
+        <Border Style="{StaticResource Theme.Card}" Margin="0,12,0,0"
                 Visibility="{Binding IsChecked, ElementName=PartiesTab, Converter={StaticResource Shown}}">
             <StackPanel>
                 <TextBlock Text="Partes" Style="{StaticResource Theme.CardTitle}" />
@@ -232,13 +232,13 @@
                         <TextBlock Text="{Binding Errors[Codebtors]}" Style="{StaticResource FieldError}" />
                     </StackPanel>
                 </Grid>
-                <TextBlock Style="{StaticResource FieldHint}" Margin="0,14,0,0"
+                <TextBlock Style="{StaticResource FieldHint}" Margin="0,12,0,0"
                            Text="Hace falta al menos un inquilino y un propietario; puede haber varios, por ejemplo copropietarios. El codeudor es opcional. ¿La persona no está? Cárguela primero en Personas." />
             </StackPanel>
         </Border>
 
         <!-- Propiedad. -->
-        <Border Style="{StaticResource Theme.Card}" Margin="0,18,0,0"
+        <Border Style="{StaticResource Theme.Card}" Margin="0,12,0,0"
                 Visibility="{Binding IsChecked, ElementName=UnitsTab, Converter={StaticResource Shown}}">
             <StackPanel>
                 <TextBlock Text="Propiedad" Style="{StaticResource Theme.CardTitle}" />
@@ -287,7 +287,7 @@
                                 Tag="Escriba la dirección; puede sumar más de una, por ejemplo una cochera" />
                 <TextBlock Text="{Binding Errors[Units]}" Style="{StaticResource FieldError}" />
 
-                <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                     <Border Style="{StaticResource Theme.SegmentGroup}">
                         <StackPanel Orientation="Horizontal">
                             <RadioButton Content="Partes en porcentaje" GroupName="ShareMode" Style="{StaticResource Theme.Segment}"
@@ -304,35 +304,53 @@
         </Border>
 
         <!-- Fechas e importes. -->
-        <Grid Margin="0,18,0,0" Visibility="{Binding IsChecked, ElementName=DatesTab, Converter={StaticResource Shown}}">
+        <Grid Margin="0,12,0,0" Visibility="{Binding IsChecked, ElementName=DatesTab, Converter={StaticResource Shown}}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="18" />
+                <ColumnDefinition Width="16" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <Border Style="{StaticResource Theme.Card}" VerticalAlignment="Stretch">
+            <Border Style="{StaticResource Theme.Card}" VerticalAlignment="Top">
                 <StackPanel>
                     <TextBlock Text="Fechas" Style="{StaticResource Theme.CardTitle}" />
-                    <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Inicio " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
-                    <TextBox Style="{StaticResource Theme.Input}" Tag="Por ejemplo 1/12/26, o solo el mes y el año: 12/26 o 1226"
-                             Text="{Binding StartDateText, UpdateSourceTrigger=LostFocus}" />
-                    <TextBlock Text="{Binding Errors[StartDate]}" Style="{StaticResource FieldError}" />
-                    <TextBlock Text="Siempre el día 1 de un mes: con el mes y el año alcanza." Style="{StaticResource FieldHint}" />
+                    <!-- One row of three fields, as the canvas's ".fld" with "flex:0 1 200px": up to 200 wide, narrower when the card is,
+                         16 apart. The grid stretches so its star columns can shrink; a left-aligned grid would size them to content. -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" MaxWidth="200" />
+                            <ColumnDefinition Width="16" />
+                            <ColumnDefinition Width="*" MaxWidth="200" />
+                            <ColumnDefinition Width="16" />
+                            <ColumnDefinition Width="*" MaxWidth="200" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Inicio " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
+                            <TextBox Style="{StaticResource Theme.Input}" Tag="01/12/2026"
+                                     Text="{Binding StartDateText, UpdateSourceTrigger=LostFocus}" />
+                            <TextBlock Text="{Binding Errors[StartDate]}" Style="{StaticResource FieldError}" />
+                            <TextBlock Text="Siempre el día 1 de un mes: con el mes y el año alcanza." Style="{StaticResource FieldHint}" />
+                        </StackPanel>
 
-                    <TextBlock Style="{StaticResource Theme.Label}" Margin="0,16,0,6"><Run Text="Fin " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
-                    <TextBox Style="{StaticResource Theme.Input}" Tag="Por ejemplo 30/11/28, o solo el mes y el año: 11/28 o 1128"
-                             Text="{Binding NominalEndDateText, UpdateSourceTrigger=LostFocus}" />
-                    <TextBlock Text="{Binding Errors[EndDate]}" Style="{StaticResource FieldError}" />
-                    <TextBlock Text="{Binding DurationText}" Style="{StaticResource FieldHint}" />
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Fin " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
+                            <TextBox Style="{StaticResource Theme.Input}" Tag="30/11/2028"
+                                     Text="{Binding NominalEndDateText, UpdateSourceTrigger=LostFocus}" />
+                            <TextBlock Text="{Binding Errors[EndDate]}" Style="{StaticResource FieldError}" />
+                        </StackPanel>
 
-                    <TextBlock Text="Día de vencimiento" Style="{StaticResource Theme.Label}" Margin="0,16,0,6" />
-                    <TextBox Style="{StaticResource Theme.Input}" Tag="Del 1 al 31" Text="{Binding DueDayText, UpdateSourceTrigger=LostFocus}" />
-                    <TextBlock Text="{Binding Errors[DueDay]}" Style="{StaticResource FieldError}" />
-                    <TextBlock Text="Por defecto, el 10. Si el mes es más corto, vence el último día." Style="{StaticResource FieldHint}" />
+                        <StackPanel Grid.Column="4">
+                            <TextBlock Text="Día de vencimiento" Style="{StaticResource Theme.Label}" />
+                            <TextBox Style="{StaticResource Theme.Input}" Tag="Del 1 al 31" Text="{Binding DueDayText, UpdateSourceTrigger=LostFocus}" />
+                            <TextBlock Text="{Binding Errors[DueDay]}" Style="{StaticResource FieldError}" />
+                            <TextBlock Text="Por defecto, el 10. Si el mes es más corto, vence el último día." Style="{StaticResource FieldHint}" />
+                        </StackPanel>
+                    </Grid>
+                    <!-- The duration, under the row, as the canvas's "durText". -->
+                    <TextBlock Text="{Binding DurationText}" Style="{StaticResource FieldHint}" Margin="0,12,0,0" />
 
                     <!-- Only an Administrador loads a contract that started before this month, with its cutover. -->
-                    <StackPanel Margin="0,14,0,0" Visibility="{Binding IsCutoverShown, Converter={StaticResource Shown}}">
+                    <StackPanel Margin="0,12,0,0" Visibility="{Binding IsCutoverShown, Converter={StaticResource Shown}}">
                         <TextBlock Text="Fecha de corte" Style="{StaticResource Theme.Label}" />
                         <TextBox Style="{StaticResource Theme.Input}" Tag="Por ejemplo 9/11/26; solo si empezó antes de este mes"
                                  Text="{Binding CutoverDateText, UpdateSourceTrigger=LostFocus}" />
@@ -343,42 +361,61 @@
                 </StackPanel>
             </Border>
 
-            <Border Grid.Column="2" Style="{StaticResource Theme.Card}" VerticalAlignment="Stretch">
+            <Border Grid.Column="2" Style="{StaticResource Theme.Card}" VerticalAlignment="Top">
                 <StackPanel>
                     <TextBlock Text="Importes" Style="{StaticResource Theme.CardTitle}" />
-                    <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Alquiler mensual ($) " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
-                    <TextBox Style="{StaticResource Theme.Input}" Tag="En pesos enteros" Text="{Binding MonthlyRentText, UpdateSourceTrigger=LostFocus}" />
-                    <TextBlock Text="{Binding Errors[Rent]}" Style="{StaticResource FieldError}" />
+                    <!-- One row of two equal fields, as the canvas's ".row" of two plain ".fld", 16 apart. -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="16" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Alquiler mensual ($) " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
+                            <TextBox Style="{StaticResource Theme.Input}" Tag="En pesos enteros" Text="{Binding MonthlyRentText, UpdateSourceTrigger=LostFocus}" />
+                            <TextBlock Text="{Binding Errors[Rent]}" Style="{StaticResource FieldError}" />
+                        </StackPanel>
 
-                    <TextBlock Text="Honorarios de administración (%)" Style="{StaticResource Theme.Label}" Margin="0,16,0,6" />
-                    <TextBox Style="{StaticResource Theme.Input}" Tag="Vacío si todavía no se conocen"
-                             Text="{Binding HonorariosText, UpdateSourceTrigger=LostFocus}" />
-                    <TextBlock Text="{Binding Errors[Honorarios]}" Style="{StaticResource FieldError}" />
-                    <TextBlock Style="{StaticResource FieldHint}"
-                               Text="Porcentaje del alquiler, a cargo del propietario. De 0 a 100. Vacío y 0 % no es lo mismo: sin porcentaje, la caja no puede cobrar el contrato." />
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Honorarios de administración (%)" Style="{StaticResource Theme.Label}" />
+                            <TextBox Style="{StaticResource Theme.Input}" Tag="Vacío si todavía no se conocen"
+                                     Text="{Binding HonorariosText, UpdateSourceTrigger=LostFocus}" />
+                            <TextBlock Text="{Binding Errors[Honorarios]}" Style="{StaticResource FieldError}" />
+                            <TextBlock Style="{StaticResource FieldHint}"
+                                       Text="Porcentaje del alquiler, a cargo del propietario. De 0 a 100. Vacío y 0 % no es lo mismo: sin porcentaje, la caja no puede cobrar el contrato." />
+                        </StackPanel>
+                    </Grid>
 
                     <!-- The fee plan, behind its button as on the canvas; a plan typed shows its fields. -->
                     <Button Content="+ Agregar honorarios contractuales" Style="{StaticResource Theme.GhostButton}" HorizontalAlignment="Left"
-                            Margin="0,16,0,0" Command="{Binding AddFeePlanCommand}"
+                            Margin="0,12,0,0" Command="{Binding AddFeePlanCommand}"
                             Visibility="{Binding HasFeePlan, Converter={StaticResource SetShown}, ConverterParameter=invert}" />
-                    <StackPanel Visibility="{Binding HasFeePlan, Converter={StaticResource Shown}}">
-                    <TextBlock Text="Honorarios contractuales: monto de cada cuota ($)" Style="{StaticResource Theme.Label}" Margin="0,16,0,6" />
-                    <TextBox Style="{StaticResource Theme.Input}" Tag="Por ejemplo 20.000"
-                             Text="{Binding FeePlanAmountText, UpdateSourceTrigger=LostFocus}" />
-                    <TextBlock Text="Cantidad de cuotas" Style="{StaticResource Theme.Label}" Margin="0,16,0,6" />
-                    <TextBox Style="{StaticResource Theme.Input}" Tag="De 1 a 6" Text="{Binding FeePlanInstalmentsText, UpdateSourceTrigger=LostFocus}" />
-                    <TextBlock Text="{Binding Errors[FeePlan]}" Style="{StaticResource FieldError}" />
-                    <TextBlock Style="{StaticResource FieldHint}"
-                               Text="Los paga el inquilino, una cuota con cada alquiler, y se imprimen en su parte del recibo. Son cuotas fijas: no se ajustan." />
-                    <Button Content="Quitar los honorarios contractuales" Style="{StaticResource Theme.GhostButton}" HorizontalAlignment="Left"
-                            Margin="0,10,0,0" Command="{Binding RemoveFeePlanCommand}" />
+                    <StackPanel Margin="0,12,0,0" Visibility="{Binding HasFeePlan, Converter={StaticResource Shown}}">
+                        <!-- One wrapping row as the canvas's: a 300 field, a 200 field and "Quitar" at the bottom, 16 apart. -->
+                        <WrapPanel>
+                            <StackPanel Width="300" Margin="0,0,16,0" VerticalAlignment="Bottom">
+                                <TextBlock Text="Honorarios contractuales: monto de cada cuota ($)" Style="{StaticResource Theme.Label}" TextWrapping="Wrap" />
+                                <TextBox Style="{StaticResource Theme.Input}" Tag="Por ejemplo 20.000"
+                                         Text="{Binding FeePlanAmountText, UpdateSourceTrigger=LostFocus}" />
+                            </StackPanel>
+                            <StackPanel Width="200" Margin="0,0,16,0" VerticalAlignment="Bottom">
+                                <TextBlock Text="Cantidad de cuotas" Style="{StaticResource Theme.Label}" />
+                                <TextBox Style="{StaticResource Theme.Input}" Tag="De 1 a 6" Text="{Binding FeePlanInstalmentsText, UpdateSourceTrigger=LostFocus}" />
+                            </StackPanel>
+                            <Button Content="Quitar los honorarios contractuales" Style="{StaticResource Theme.GhostButton}"
+                                    VerticalAlignment="Bottom" Command="{Binding RemoveFeePlanCommand}" />
+                        </WrapPanel>
+                        <TextBlock Text="{Binding Errors[FeePlan]}" Style="{StaticResource FieldError}" />
+                        <TextBlock Style="{StaticResource FieldHint}"
+                                   Text="Los paga el inquilino, una cuota con cada alquiler, y se imprimen en su parte del recibo. Son cuotas fijas: no se ajustan." />
                     </StackPanel>
                 </StackPanel>
             </Border>
         </Grid>
 
         <!-- Cláusula de ajuste. -->
-        <Border Style="{StaticResource Theme.Card}" Margin="0,18,0,0"
+        <Border Style="{StaticResource Theme.Card}" Margin="0,12,0,0"
                 Visibility="{Binding IsChecked, ElementName=ClauseTab, Converter={StaticResource Shown}}">
             <StackPanel>
                 <TextBlock Text="Cláusula de ajuste" Style="{StaticResource Theme.CardTitle}" />
@@ -391,7 +428,7 @@
                     </StackPanel>
                 </Border>
 
-                <StackPanel Margin="0,16,0,0" Visibility="{Binding HasClause, Converter={StaticResource Shown}}">
+                <StackPanel Margin="0,12,0,0" Visibility="{Binding HasClause, Converter={StaticResource Shown}}">
                     <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Índices que usa " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
                     <Border Style="{StaticResource Theme.SegmentGroup}" HorizontalAlignment="Left">
                         <ItemsControl ItemsSource="{Binding ClauseIndexChoices}">
@@ -407,10 +444,10 @@
                     </Border>
                     <TextBlock Text="Con más de uno, el ajuste es el promedio de sus variaciones." Style="{StaticResource FieldHint}" />
 
-                    <Grid Margin="0,16,0,0">
+                    <Grid Margin="0,12,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="24" />
+                            <ColumnDefinition Width="16" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <StackPanel>
@@ -452,7 +489,7 @@
                         </StackPanel>
                     </Grid>
 
-                    <Border Background="{DynamicResource Theme.Select}" CornerRadius="12" Padding="14,10" Margin="0,16,0,0"
+                    <Border Background="{DynamicResource Theme.Select}" CornerRadius="12" Padding="14,10" Margin="0,12,0,0"
                             Visibility="{Binding ClauseWindowText, Converter={StaticResource SetShown}}">
                         <TextBlock Text="{Binding ClauseWindowText}" TextWrapping="Wrap" />
                     </Border>
@@ -462,7 +499,7 @@
         </Border>
 
         <!-- What to accept before the contract is written. -->
-        <Border Style="{StaticResource Theme.Card}" Margin="0,18,0,0" Visibility="{Binding HasWarnings, Converter={StaticResource Shown}}">
+        <Border Style="{StaticResource Theme.Card}" Margin="0,12,0,0" Visibility="{Binding HasWarnings, Converter={StaticResource Shown}}">
             <StackPanel>
                 <TextBlock Text="Antes de guardar" Style="{StaticResource Theme.CardTitle}" />
                 <ItemsControl ItemsSource="{Binding Warnings}">
@@ -481,10 +518,10 @@
 
         <TextBlock Text="{Binding RefusalMessage}" Style="{StaticResource FieldError}" Margin="0,12,0,0" />
 
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
-            <Button Content="Cancelar" Style="{StaticResource Theme.GhostButton}"
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button Content="Cancelar" Style="{StaticResource Theme.GhostButton}" Height="42" Padding="26,0" FontSize="15"
                     Command="{Binding DataContext.BackCommand, RelativeSource={RelativeSource AncestorType=views:ContractsView}}" />
-            <Button Content="Guardar contrato" Style="{StaticResource Theme.PrimaryButton}" Margin="12,0,0,0" Command="{Binding SaveCommand}" />
+            <Button Content="Guardar contrato" Style="{StaticResource Theme.PrimaryButton}" Margin="12,0,0,0" Height="42" Padding="26,0" FontSize="15" Command="{Binding SaveCommand}" />
         </StackPanel>
     </StackPanel>
 </UserControl>
