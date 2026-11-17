@@ -111,4 +111,56 @@ public class ContractsViewModelTests
 
         Assert.Equal(("ocampo", (ContractStatus?)null), Assert.Single(port.Lists));
     }
+
+    /// <summary>"Abrir" puts the contract's detail in place of the list, read at once (canvas "Contratos" and "Detalle del contrato").</summary>
+    [Fact]
+    public async Task Opening_ShowsTheDetailOfThatContract_ReadAtOnce()
+    {
+        var port = new FakeContractRegistry { Detail = DetailOf(Vigente) };
+        port.Contracts.Add(Vigente);
+        var opened = new List<Guid>();
+        var viewModel = new ContractsViewModel(port, id =>
+        {
+            opened.Add(id);
+            return new ContractDetailViewModel(port, new FakeAdjustmentDesk(), id);
+        });
+        await viewModel.LoadCommand.ExecuteAsync(null);
+
+        await viewModel.OpenCommand.ExecuteAsync(viewModel.Contracts[0]);
+
+        Assert.Equal([Vigente.Id], opened);
+        Assert.True(viewModel.IsDetailOpen);
+        Assert.Equal(Vigente.Id, viewModel.OpenDetail!.Detail!.Id);
+    }
+
+    /// <summary>"Volver a contratos" closes the detail and reads the list again, so a change made there shows.</summary>
+    [Fact]
+    public async Task GoingBack_ClosesTheDetail_AndReadsTheListAgain()
+    {
+        var port = new FakeContractRegistry { Detail = DetailOf(Vigente) };
+        port.Contracts.Add(Vigente);
+        var viewModel = new ContractsViewModel(port, id => new ContractDetailViewModel(port, new FakeAdjustmentDesk(), id));
+        await viewModel.LoadCommand.ExecuteAsync(null);
+        await viewModel.OpenCommand.ExecuteAsync(viewModel.Contracts[0]);
+        port.Contracts.Add(EnRescision);
+
+        await viewModel.BackCommand.ExecuteAsync(null);
+
+        Assert.False(viewModel.IsDetailOpen);
+        Assert.Null(viewModel.OpenDetail);
+        Assert.Equal(2, viewModel.Contracts.Count);
+    }
+
+    /// <summary>Without a way to build the detail, nothing is offered to open.</summary>
+    [Fact]
+    public async Task WithoutADetail_OpeningIsNotOffered()
+    {
+        var viewModel = await LoadedAsync();
+
+        Assert.False(viewModel.OpenCommand.CanExecute(viewModel.Contracts[0]));
+    }
+
+    private static ContractDetail DetailOf(ContractListing listing) => new(
+        listing.Id, listing.Status, new DateOnly(2025, 3, 1), new DateOnly(2027, 2, 28), false, null, null, null, null, null, 428_025m, 10, 8m,
+        null, [], [], null, []);
 }

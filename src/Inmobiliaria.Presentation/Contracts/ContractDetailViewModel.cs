@@ -3,6 +3,7 @@ using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Inmobiliaria.Domain.Leasing;
+using Inmobiliaria.Domain.Parties;
 using Inmobiliaria.Presentation.Common;
 
 namespace Inmobiliaria.Presentation.Contracts;
@@ -69,6 +70,8 @@ public sealed partial class ContractDetailViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(StatusText), nameof(EndReasonText), nameof(IsEditOffered), nameof(IsEditLimited))]
     [NotifyPropertyChangedFor(nameof(IsNoticeOffered), nameof(IsUndoNoticeOffered), nameof(IsEndOffered), nameof(IsUndoEndOffered))]
     [NotifyPropertyChangedFor(nameof(IsCancelOffered), nameof(IsAccountOffered), nameof(HasNoEvents))]
+    [NotifyPropertyChangedFor(nameof(Title), nameof(Subtitle), nameof(StateNote), nameof(PartyLines), nameof(UnitLines))]
+    [NotifyPropertyChangedFor(nameof(ClauseLines), nameof(AmountLines), nameof(NextAdjustmentText))]
     private ContractDetail? _detail;
 
     /// <summary>The reason, who and when of what was cancelled, undone or removed, oldest first.</summary>
@@ -102,6 +105,87 @@ public sealed partial class ContractDetailViewModel : ObservableObject
 
     /// <summary>Every contract read, a cancelled one included, has its account.</summary>
     public bool IsAccountOffered => Detail is not null;
+
+    /// <summary>The tab shown, the Resumen first (canvas "Detalle del contrato").</summary>
+    [ObservableProperty]
+    private ContractDetailTab _tab = ContractDetailTab.Summary;
+
+    public string? Title => Detail is { } d ? $"Contrato de {Names(d, PartyRole.Tenant)}" : null;
+
+    public string? Subtitle => Detail is { } d
+        ? $"{string.Join(", ", d.Units.Select(u => u.Address))} · desde {Formats.Date(d.StartDate)} hasta {Formats.Date(d.NominalEndDate)}"
+        : null;
+
+    /// <summary>What the state means for the operator, beside its chip; none for a contract simply in force.</summary>
+    public string? StateNote => Detail switch
+    {
+        null => null,
+        { IsCancelled: true } => "La cancelación no se deshace.",
+        { Status: ContractStatus.PendingTermination } => "Con aviso de rescisión: sigue vigente hasta que se lo termine.",
+        { Status: ContractStatus.Ended } => "Para editar un contrato finalizado: solo honorarios y codeudores.",
+        _ => null,
+    };
+
+    /// <summary>Each person by role, tenants first, then lessors and codeudores.</summary>
+    public IReadOnlyList<DetailLine> PartyLines => Detail is { } d
+        ? d.Parties
+            .OrderBy(p => p.Role switch { PartyRole.Tenant => 0, PartyRole.Lessor => 1, _ => 2 })
+            .Select(p => new DetailLine(Formats.Role(p.Role), p.Name))
+            .ToList()
+        : [];
+
+    public IReadOnlyList<DetailLine> UnitLines => Detail is { } d
+        ? d.Units.Select(u => new DetailLine(u.Address, $"{Formats.Number(u.Percentage)} % del alquiler")).ToList()
+        : [];
+
+    /// <summary>The clause's index, interval and window; empty when the contract has none.</summary>
+    public IReadOnlyList<DetailLine> ClauseLines => Detail?.Clause is { } c
+        ?
+        [
+            new DetailLine(c.IndexNames.Count == 1 ? "Índice" : "Índices", string.Join(", ", c.IndexNames)),
+            new DetailLine("Se ajusta cada", c.IntervalMonths == 1 ? "1 mes" : $"{c.IntervalMonths} meses"),
+            new DetailLine("Lectura termina", c.WindowOffsetMonths switch
+            {
+                0 => "en el mes del vencimiento",
+                1 => "1 mes antes del vencimiento",
+                var months => $"{months} meses antes del vencimiento",
+            }),
+        ]
+        : [];
+
+    public IReadOnlyList<DetailLine> AmountLines => Detail is { } d
+        ?
+        [
+            new DetailLine("Alquiler actual", Formats.Money(d.MonthlyRent)),
+            new DetailLine("Día de vencimiento", d.DueDay.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            new DetailLine("Honorarios de administración", d.HonorariosPercentage is { } rate ? $"{Formats.Number(rate)} %" : "Sin cargar"),
+            new DetailLine(
+                "Honorarios contractuales",
+                d.FeePlan is { } plan
+                    ? $"{plan.Instalments} {(plan.Instalments == 1 ? "cuota" : "cuotas")} de {Formats.Money(plan.Amount)}"
+                    : "Sin plan"),
+            new DetailLine("Inicio", Formats.Date(d.StartDate)),
+            new DetailLine("Fin", Formats.Date(d.ActualEndDate ?? d.NominalEndDate)),
+        ]
+        : [];
+
+    /// <summary>When the next adjustment falls due and what it reads; or why there is none.</summary>
+    public string? NextAdjustmentText => Detail switch
+    {
+        null => null,
+        { IsCancelled: true } => "Contrato cancelado: no tiene ajustes.",
+        { Status: ContractStatus.Ended } => "El contrato terminó: su canon ya no se ajusta ni se corrige.",
+        { Clause: null } => "Este contrato no tiene cláusula de ajuste.",
+        { Clause: { } c } d => ClauseFormRules.NextAdjustmentText(
+            d.StartDate,
+            c.IntervalMonths,
+            c.WindowOffsetMonths,
+            d.Adjustments.Count == 0 ? null : d.Adjustments.Max(a => a.EffectiveDate),
+            d.CutoverDate),
+    };
+
+    private static string Names(ContractDetail detail, PartyRole role) =>
+        string.Join(" y ", detail.Parties.Where(p => p.Role == role).Select(p => p.Name));
 
     partial void OnDetailChanged(ContractDetail? value)
     {
@@ -333,6 +417,17 @@ public sealed partial class ContractDetailViewModel : ObservableObject
 
 /// <summary>A reason offered for ending, with its name.</summary>
 public sealed record EndReasonOption(EndReason Reason, string Text);
+
+/// <summary>The detail's tabs, as on the canvas.</summary>
+public enum ContractDetailTab
+{
+    Summary,
+    Adjustments,
+    Events,
+}
+
+/// <summary>One line of a card on the detail's Resumen: what it is, and its value.</summary>
+public sealed record DetailLine(string Label, string Value);
 
 /// <summary>One line of the contract's event log, as the screen reads it.</summary>
 public sealed class ContractEventRow

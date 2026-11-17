@@ -24,14 +24,20 @@ public enum ContractListFilter
 public sealed partial class ContractsViewModel : ObservableObject
 {
     private readonly IContractRegistry _contracts;
+    private readonly Func<Guid, ContractDetailViewModel>? _buildDetail;
     private IReadOnlyList<ContractListing> _loaded = [];
 
-    public ContractsViewModel(IContractRegistry contracts)
+    /// <param name="contracts">The port.</param>
+    /// <param name="openDetail">Builds one contract's detail; without it, no contract is offered to open.</param>
+    public ContractsViewModel(IContractRegistry contracts, Func<Guid, ContractDetailViewModel>? openDetail = null)
     {
         ArgumentNullException.ThrowIfNull(contracts);
 
         _contracts = contracts;
+        _buildDetail = openDetail;
         LoadCommand = new AsyncRelayCommand(LoadAsync, () => !Runner.IsBusy);
+        OpenCommand = new AsyncRelayCommand<ContractRow>(OpenAsync, row => _buildDetail is not null && row is not null && !Runner.IsBusy);
+        BackCommand = new AsyncRelayCommand(BackAsync, () => !Runner.IsBusy);
         Runner.PropertyChanged += OnRunnerChanged;
     }
 
@@ -41,6 +47,19 @@ public sealed partial class ContractsViewModel : ObservableObject
     public ObservableCollection<ContractRow> Contracts { get; } = [];
 
     public IAsyncRelayCommand LoadCommand { get; }
+
+    /// <summary>"Abrir": the row's detail in place of the list.</summary>
+    public IAsyncRelayCommand<ContractRow> OpenCommand { get; }
+
+    /// <summary>"Volver a contratos": the list again, read anew so a change made in the detail shows.</summary>
+    public IAsyncRelayCommand BackCommand { get; }
+
+    /// <summary>The contract open in place of the list, or null while the list shows.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsDetailOpen))]
+    private ContractDetailViewModel? _openDetail;
+
+    public bool IsDetailOpen => OpenDetail is not null;
 
     [ObservableProperty]
     private string _searchText = string.Empty;
@@ -69,6 +88,24 @@ public sealed partial class ContractsViewModel : ObservableObject
         Show();
     }
 
+    private async Task OpenAsync(ContractRow? row)
+    {
+        if (_buildDetail is null || row is null)
+        {
+            return;
+        }
+
+        var detail = _buildDetail(row.Id);
+        OpenDetail = detail;
+        await detail.LoadCommand.ExecuteAsync(null);
+    }
+
+    private async Task BackAsync()
+    {
+        OpenDetail = null;
+        await LoadAsync();
+    }
+
     private void Show()
     {
         Contracts.Clear();
@@ -95,6 +132,8 @@ public sealed partial class ContractsViewModel : ObservableObject
         if (e.PropertyName == nameof(OperationRunner.IsBusy))
         {
             LoadCommand.NotifyCanExecuteChanged();
+            OpenCommand.NotifyCanExecuteChanged();
+            BackCommand.NotifyCanExecuteChanged();
         }
     }
 }

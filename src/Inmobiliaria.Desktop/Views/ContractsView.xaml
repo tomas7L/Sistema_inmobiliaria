@@ -10,16 +10,30 @@
              d:DesignHeight="900" d:DesignWidth="1100"
              Style="{StaticResource Theme.Page}">
     <!--
-        The Contratos screen as the designer drew it (canvas "Contratos"): the contracts with their state, filtered by state
-        on the screen and searched by tenant, lessor or unit. Bound to ContractsViewModel; no logic lives here.
+        The Contratos screen as the designer drew it (canvas "Contratos" and "Detalle del contrato"): the contracts with their
+        state, filtered by state on the screen and searched by tenant, lessor or unit, and in its place the one opened.
+        Bound to ContractsViewModel; no logic lives here.
     -->
     <UserControl.Resources>
         <views:EqualsConverter x:Key="Equals" />
         <BooleanToVisibilityConverter x:Key="Shown" />
+
+        <!-- Shown only while no contract is open. -->
+        <Style x:Key="ListPart" TargetType="StackPanel">
+            <Setter Property="Visibility" Value="Visible" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsDetailOpen}" Value="True">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </UserControl.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="32,28">
+
+        <!-- The list. -->
+        <StackPanel Style="{StaticResource ListPart}">
             <TextBlock Text="Contratos" Style="{StaticResource Theme.Title}" />
             <TextBlock Text="Alquileres cargados, con su estado. Abra uno para ver todos sus datos." Style="{StaticResource Theme.Subtitle}" />
             <TextBlock Text="{Binding Runner.ErrorMessage}" Style="{StaticResource Theme.ErrorText}" Margin="0,12,0,0" />
@@ -109,6 +123,15 @@
                             </DataGridTemplateColumn>
                             <DataGridTextColumn Header="FIN" Binding="{Binding EndText}" Width="0.9*" MinWidth="100" />
                             <DataGridTextColumn Header="ALQUILER" Binding="{Binding RentText}" Width="1*" MinWidth="110" />
+                            <DataGridTemplateColumn Header="" Width="0.8*" MinWidth="100">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Button Content="Abrir" Style="{StaticResource Theme.GhostButton}" HorizontalAlignment="Center"
+                                                Command="{Binding DataContext.OpenCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                CommandParameter="{Binding}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                         </DataGrid.Columns>
                     </DataGrid>
                     <TextBlock Text="No hay ningún contrato con ese filtro o esa búsqueda." Style="{StaticResource Theme.Hint}"
@@ -119,6 +142,20 @@
                     </TextBlock>
                 </StackPanel>
             </Border>
+        </StackPanel>
+
+        <!-- The contract opened, in place of the list. -->
+        <StackPanel Visibility="{Binding IsDetailOpen, Converter={StaticResource Shown}}">
+            <DockPanel>
+                <Button Content="Volver a contratos" Style="{StaticResource Theme.GhostButton}" DockPanel.Dock="Right"
+                        VerticalAlignment="Top" Command="{Binding BackCommand}" />
+                <StackPanel>
+                    <TextBlock Text="{Binding OpenDetail.Title}" Style="{StaticResource Theme.Title}" />
+                    <TextBlock Text="{Binding OpenDetail.Subtitle}" Style="{StaticResource Theme.Subtitle}" />
+                </StackPanel>
+            </DockPanel>
+            <views:ContractDetailView DataContext="{Binding OpenDetail}" />
+        </StackPanel>
         </StackPanel>
     </ScrollViewer>
 </UserControl>
