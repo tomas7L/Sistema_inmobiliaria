@@ -32,6 +32,7 @@
                         <TextBlock Text="Dirección: " Width="140" VerticalAlignment="Center" />
                         <TextBox Width="260" Text="{Binding Address, UpdateSourceTrigger=PropertyChanged}" />
                     </StackPanel>
+                    <TextBlock Text="{Binding AddressError}" TextWrapping="Wrap" Foreground="#FFB00020" Margin="140,2,0,0" />
                     <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                         <TextBlock Text="Contraseña de aplicación: " Width="140" VerticalAlignment="Center" />
                         <PasswordBox x:Name="AppPasswordInput" Width="260" PasswordChanged="AppPasswordInput_PasswordChanged" />

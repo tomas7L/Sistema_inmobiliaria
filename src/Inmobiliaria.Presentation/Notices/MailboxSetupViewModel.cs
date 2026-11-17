@@ -1,9 +1,9 @@
 using System.ComponentModel;
-using System.Net.Mail;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Inmobiliaria.Domain.Access;
 using Inmobiliaria.Domain.Notices;
+using Inmobiliaria.Domain.Parties;
 using Inmobiliaria.Presentation.Common;
 
 namespace Inmobiliaria.Presentation.Notices;
@@ -53,7 +53,16 @@ public sealed partial class MailboxSetupViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
+    [NotifyPropertyChangedFor(nameof(AddressError))]
     private string _address;
+
+    /// <summary>
+    /// Why the address cannot be saved, in the persons' words, or null while it is empty or good (spec Decision 54): the
+    /// button is not only greyed out.
+    /// </summary>
+    public string? AddressError => Address.Trim() is { Length: > 0 } typed && !PartyDraftRules.IsValidEmail(typed)
+        ? PartyRefusal.EmailInvalid.OperatorText()
+        : null;
 
     /// <summary>What the Admin types; empty again once saved. Never filled from the store.</summary>
     [ObservableProperty]
@@ -64,11 +73,11 @@ public sealed partial class MailboxSetupViewModel : ObservableObject
     [ObservableProperty]
     private string _storedText;
 
+    /// <summary>The persons' email rule (Decision 54): the notices' own check plus a dot in the domain.</summary>
     private bool CanSave() =>
         !Runner.IsBusy
         && !string.IsNullOrWhiteSpace(AppPassword)
-        && MailAddress.TryCreate(Address.Trim(), out var parsed)
-        && parsed.Address == Address.Trim();
+        && PartyDraftRules.IsValidEmail(Address.Trim());
 
     private async Task SaveAsync()
     {
