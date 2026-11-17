@@ -334,7 +334,14 @@ public sealed record ContractResult(ContractRefusal? Refusal, ContractListing? C
 
     public static ContractResult Saved(ContractListing contract) => new(null, contract, [], null);
 
-    public static ContractResult Refused(ContractRefusal refusal, string? currentTenant = null) => new(refusal, null, [], currentTenant);
+    public static ContractResult Refused(ContractRefusal refusal, string? currentTenant = null, Guid? unitId = null) =>
+        new(refusal, null, [], currentTenant) { UnitId = unitId };
+
+    /// <summary>
+    /// The unit already let, on <see cref="ContractRefusal.UnitUnderActiveContract"/>, so the form shows the refusal under
+    /// that unit's row (Mateo's canvas, Tomás 2026-11-16); null otherwise.
+    /// </summary>
+    public Guid? UnitId { get; init; }
 
     public static ContractResult NeedsAccepting(IReadOnlyList<ContractWarning> warnings) => new(null, null, warnings, null);
 }

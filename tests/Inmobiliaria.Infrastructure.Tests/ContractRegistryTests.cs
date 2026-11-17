@@ -285,6 +285,32 @@ public sealed class ContractRegistryTests
         Assert.Equal(1, await world.CountAsync("SELECT count(*) FROM contracts"));
     }
 
+    /// <summary>
+    /// Of several units, the refusal says which one is let, so the form shows it under that unit's row (Mateo's canvas,
+    /// Tomás 2026-11-16), and writes nothing.
+    /// </summary>
+    [SkippableFact]
+    public async Task AUnitUnderAnActiveContract_AmongOthers_IsTheOneNamed()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+        await using var world = await WorldAsync();
+        var cast = await CastAsync(world);
+        await SavedAsync(Registry(world).CreateAsync(Draft(cast), false));
+        var successor = await PartyAsync(world, "Lía", "Sosa");
+
+        // Free units listed before and after the let one ("Alem 1258"), so neither end of the list can pass for it.
+        var before = await UnitAsync(world, "Aguado", "10");
+        var after = await UnitAsync(world, "Zeballos", "9");
+
+        var result = await Registry(world).CreateAsync(
+            Draft(cast) with { TenantId = successor, Shares = [new UnitShare(before, 40m), new UnitShare(cast.Unit, 30m), new UnitShare(after, 30m)] },
+            true);
+
+        Assert.Equal(ContractRefusal.UnitUnderActiveContract, result.Refusal);
+        Assert.Equal(cast.Unit, result.UnitId);
+        Assert.Equal(1, await world.CountAsync("SELECT count(*) FROM contracts"));
+    }
+
     /// <summary>Spec Test 18: under PendingTermination it warns with the date, and the operator can proceed.</summary>
     [SkippableFact]
     public async Task AUnitBeingVacated_WarnsWithTheDate_AndCanProceed()

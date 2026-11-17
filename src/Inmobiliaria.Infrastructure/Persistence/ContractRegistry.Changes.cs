@@ -288,7 +288,7 @@ public sealed partial class ContractRegistry
 
         if (named.FirstOrDefault(u => u.Covering?.Status == ContractStatus.Active) is { } rented)
         {
-            return ContractResult.Refused(ContractRefusal.UnitUnderActiveContract, rented.Covering!.TenantName);
+            return ContractResult.Refused(ContractRefusal.UnitUnderActiveContract, rented.Covering!.TenantName, rented.Id);
         }
 
         var tenantId = correction.TenantId!.Value;

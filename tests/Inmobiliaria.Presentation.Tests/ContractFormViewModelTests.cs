@@ -165,6 +165,28 @@ public class ContractFormViewModelTests
         Assert.Contains("Juan Pérez", viewModel.RefusalMessage);
     }
 
+    /// <summary>
+    /// Spec Test 18 on Mateo's canvas (Tomás 2026-11-16): when the port says which unit is let, the refusal goes under that
+    /// unit's row, naming the tenant, and not over the form.
+    /// </summary>
+    [Fact]
+    public async Task AUnitUnderAnActiveContract_IsRefusedUnderItsRow()
+    {
+        var port = new FakeContractRegistry();
+        var viewModel = await FilledAsync(port);
+        var let = new ContractFormUnit(Unit());
+        viewModel.Units.Add(let);
+        port.OnCreate = (_, _) => ContractResult.Refused(ContractRefusal.UnitUnderActiveContract, "Juan Pérez", let.Unit.Id);
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal("Esa unidad ya está alquilada a Juan Pérez.", viewModel.Errors.ForRow(ContractField.Units, 1));
+        Assert.Null(viewModel.Errors.ForRow(ContractField.Units, 0));
+        Assert.Null(viewModel.Errors[ContractField.Units]);
+        Assert.Equal(ContractFieldErrors.SummaryText, viewModel.Errors.Summary);
+        Assert.Null(viewModel.RefusalMessage);
+    }
+
     /// <summary>Spec Tests 16, 18, 19: warnings show, write nothing, and accepting sends the same form again.</summary>
     [Fact]
     public async Task Warnings_Show_AndAcceptingProceeds()
@@ -322,17 +344,6 @@ public class ContractFormViewModelTests
         Assert.Equal("0", typed.HonorariosText);
     }
 
-    [Fact]
-    public async Task TheSameLessorTwice_IsOneLessor()
-    {
-        var viewModel = new ContractFormViewModel(new FakeContractRegistry(), false, new FakeClock(new DateOnly(2026, 11, 15)), new FakeIndexRegistry());
-
-        await viewModel.AddLessorCommand.ExecuteAsync(Ana);
-        await viewModel.AddLessorCommand.ExecuteAsync(Ana);
-
-        Assert.Single(viewModel.Lessors);
-    }
-
     /// <summary>Spec Test 19: empty stays null and 0 stays 0 on the way to the port.</summary>
     [Theory]
     [InlineData("", null)]
@@ -475,17 +486,35 @@ public class ContractFormViewModelTests
         Assert.Empty(port.Created);
     }
 
-    /// <summary>Spec Test 113 on the form: the tenant among the codeudores is refused beside the codeudores.</summary>
+    /// <summary>Spec Test 113 on the form: the tenant among the codeudores is refused under that codeudor's row.</summary>
     [Fact]
-    public async Task TheTenantAmongTheCodebtors_IsRefusedBesideThem()
+    public async Task TheTenantAmongTheCodebtors_IsRefusedUnderItsRow()
     {
         var port = new FakeContractRegistry();
         var viewModel = await FilledAsync(port);
+        viewModel.Codebtors.Add(Raul);
         viewModel.Codebtors.Add(Juan);
 
         await viewModel.SaveCommand.ExecuteAsync(null);
 
-        Assert.Equal(ContractRefusal.TenantIsCodebtor.OperatorText(), viewModel.Errors[ContractField.Codebtors]);
+        Assert.Equal(ContractRefusal.TenantIsCodebtor.OperatorText(), viewModel.Errors.ForRow(ContractField.Codebtors, 1));
+        Assert.Null(viewModel.Errors.ForRow(ContractField.Codebtors, 0));
+        Assert.Null(viewModel.Errors[ContractField.Codebtors]);
+        Assert.Empty(port.Created);
+    }
+
+    /// <summary>The same unit twice is refused under the row that repeats it, and nothing is sent.</summary>
+    [Fact]
+    public async Task TheSameUnitTwice_IsRefusedUnderTheRepeatingRow()
+    {
+        var port = new FakeContractRegistry();
+        var viewModel = await FilledAsync(port);
+        viewModel.Units.Add(new ContractFormUnit(viewModel.Units[0].Unit));
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal("Esa unidad ya está elegida.", viewModel.Errors.ForRow(ContractField.Units, 1));
+        Assert.Null(viewModel.Errors.ForRow(ContractField.Units, 0));
         Assert.Empty(port.Created);
     }
 
@@ -630,15 +659,26 @@ public class ContractFormViewModelTests
         Assert.Equal(("450.000", "5.000", "225.000"), (viewModel.MonthlyRentText, viewModel.FeePlanAmountText, viewModel.Units[0].ShareText));
     }
 
-    /// <summary>Choosing a lessor already on the form says so under the lessors, instead of doing nothing.</summary>
+    /// <summary>
+    /// Choosing a lessor already on the form takes its own row and says so under it at once, as Mateo's canvas does
+    /// (Tomás 2026-11-16), and saving refuses it there too.
+    /// </summary>
     [Fact]
-    public async Task ChoosingTheSameLessorAgain_SaysSo_AndKeepsOne()
+    public async Task ChoosingTheSameLessorAgain_SaysSoUnderItsRow()
     {
-        var viewModel = await FilledAsync(new FakeContractRegistry());
+        var port = new FakeContractRegistry();
+        var viewModel = await FilledAsync(port);
 
         await viewModel.AddLessorCommand.ExecuteAsync(Ana);
 
-        Assert.Single(viewModel.Lessors);
-        Assert.Equal("Esa persona ya está como propietaria.", viewModel.Errors[ContractField.Lessors]);
+        Assert.Equal(2, viewModel.Lessors.Count);
+        Assert.Equal("Esa persona ya está como propietaria.", viewModel.Errors.ForRow(ContractField.Lessors, 1));
+        Assert.Null(viewModel.Errors.ForRow(ContractField.Lessors, 0));
+        Assert.Null(viewModel.Errors[ContractField.Lessors]);
+
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal("Esa persona ya está como propietaria.", viewModel.Errors.ForRow(ContractField.Lessors, 1));
+        Assert.Empty(port.Created);
     }
 }
