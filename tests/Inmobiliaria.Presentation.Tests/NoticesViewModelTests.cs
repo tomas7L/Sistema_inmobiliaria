@@ -1,5 +1,6 @@
 using Inmobiliaria.Domain.Access;
 using Inmobiliaria.Domain.Notices;
+using Inmobiliaria.Domain.Parties;
 using Inmobiliaria.Presentation.Notices;
 using Inmobiliaria.Presentation.Tests.Fakes;
 
@@ -391,11 +392,54 @@ public class MailboxSetupViewModelTests
     [InlineData("", "abcd efgh ijkl mnop")]
     [InlineData("not an address", "abcd efgh ijkl mnop")]
     [InlineData("avisos@example.com", "  ")]
+    [InlineData("avisos@gmail", "abcd efgh ijkl mnop")]
     public void AMissingOrMalformedField_CannotBeSaved(string address, string password)
     {
         var setup = new MailboxSetupViewModel(new Store()) { Address = address, AppPassword = password };
 
         Assert.False(setup.SaveCommand.CanExecute(null));
+    }
+
+    /// <summary>
+    /// Spec Decision 54: the mailbox takes the persons' email rule, a dot in the domain included, and says why it refuses
+    /// an address instead of only greying out its button. Nothing is said while the field is empty or the address is good.
+    /// </summary>
+    [Theory]
+    [InlineData("avisos@gmail")]
+    [InlineData("not an address")]
+    [InlineData("avisos@gmail.")]
+    public void AMalformedAddress_SaysWhy_InThePersonsWords(string address)
+    {
+        var setup = new MailboxSetupViewModel(new Store()) { Address = address, AppPassword = "abcd efgh ijkl mnop" };
+
+        Assert.Equal(PartyRefusal.EmailInvalid.OperatorText(), setup.AddressError);
+        Assert.False(setup.SaveCommand.CanExecute(null));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("avisos@gmail.com")]
+    [InlineData(" avisos@gmail.com ")]
+    public void AnEmptyOrGoodAddress_SaysNothing(string address)
+    {
+        var setup = new MailboxSetupViewModel(new Store()) { Address = address };
+
+        Assert.Null(setup.AddressError);
+    }
+
+    [Fact]
+    public void CorrectingTheAddress_ClearsItsError()
+    {
+        var setup = new MailboxSetupViewModel(new Store()) { Address = "avisos@gmail", AppPassword = "abcd efgh ijkl mnop" };
+        var raised = new List<string?>();
+        setup.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        setup.Address = "avisos@gmail.com";
+
+        Assert.Null(setup.AddressError);
+        Assert.Contains(nameof(MailboxSetupViewModel.AddressError), raised);
+        Assert.True(setup.SaveCommand.CanExecute(null));
     }
 
     [Fact]
