@@ -18,6 +18,7 @@
     <SolidColorBrush x:Key="Theme.Warn" Color="#7F4B06" />
     <SolidColorBrush x:Key="Theme.WarnBack" Color="#297F4B06" />
     <SolidColorBrush x:Key="Theme.Bad" Color="#A01C15" />
+    <SolidColorBrush x:Key="Theme.BadBack" Color="#24A01C15" />
     <SolidColorBrush x:Key="Theme.Field" Color="#FFFFFF" />
     <SolidColorBrush x:Key="Theme.FieldLine" Color="#8A92A3" />
     <SolidColorBrush x:Key="Theme.Button" Color="#07109B" />

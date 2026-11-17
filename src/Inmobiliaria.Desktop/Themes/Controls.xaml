@@ -388,7 +388,7 @@
         <Setter Property="CellStyle" Value="{StaticResource Theme.TableCell}" />
     </Style>
 
-    <!-- A coloured label, as a role. Its Tag picks the colour: "ok", "warn" or anything else for the neutral one. -->
+    <!-- A coloured label, as a role. Its Tag picks the colour: "ok", "warn", "bad" or anything else for the neutral one. -->
     <Style x:Key="Theme.Chip" TargetType="Border">
         <Setter Property="CornerRadius" Value="12" />
         <Setter Property="Padding" Value="12,4" />
@@ -405,6 +405,10 @@
             <Trigger Property="Tag" Value="warn">
                 <Setter Property="Background" Value="{DynamicResource Theme.WarnBack}" />
                 <Setter Property="TextElement.Foreground" Value="{DynamicResource Theme.Warn}" />
+            </Trigger>
+            <Trigger Property="Tag" Value="bad">
+                <Setter Property="Background" Value="{DynamicResource Theme.BadBack}" />
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource Theme.Bad}" />
             </Trigger>
         </Style.Triggers>
     </Style>

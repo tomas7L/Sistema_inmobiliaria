@@ -1,0 +1,124 @@
+<UserControl x:Class="Inmobiliaria.Desktop.Views.ContractsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:contracts="clr-namespace:Inmobiliaria.Presentation.Contracts;assembly=Inmobiliaria.Presentation"
+             xmlns:leasing="clr-namespace:Inmobiliaria.Domain.Leasing;assembly=Inmobiliaria.Domain"
+             xmlns:views="clr-namespace:Inmobiliaria.Desktop.Views"
+             mc:Ignorable="d"
+             d:DesignHeight="900" d:DesignWidth="1100"
+             Style="{StaticResource Theme.Page}">
+    <!--
+        The Contratos screen as the designer drew it (canvas "Contratos"): the contracts with their state, filtered by state
+        on the screen and searched by tenant, lessor or unit. Bound to ContractsViewModel; no logic lives here.
+    -->
+    <UserControl.Resources>
+        <views:EqualsConverter x:Key="Equals" />
+        <BooleanToVisibilityConverter x:Key="Shown" />
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="32,28">
+            <TextBlock Text="Contratos" Style="{StaticResource Theme.Title}" />
+            <TextBlock Text="Alquileres cargados, con su estado. Abra uno para ver todos sus datos." Style="{StaticResource Theme.Subtitle}" />
+            <TextBlock Text="{Binding Runner.ErrorMessage}" Style="{StaticResource Theme.ErrorText}" Margin="0,12,0,0" />
+
+            <Border Style="{StaticResource Theme.Card}" CornerRadius="22" Padding="16,12" Margin="0,18,0,0">
+                <!-- The search box takes what the filters leave, to the card's right edge, as on the canvas. -->
+                <DockPanel LastChildFill="True">
+                    <Border Style="{StaticResource Theme.SegmentGroup}" Margin="0,4,0,4" DockPanel.Dock="Left">
+                        <StackPanel Orientation="Horizontal">
+                            <RadioButton Content="Todos" GroupName="StateFilter" Style="{StaticResource Theme.Segment}"
+                                         IsChecked="{Binding Filter, Converter={StaticResource Equals}, ConverterParameter={x:Static contracts:ContractListFilter.All}}" />
+                            <RadioButton Content="Vigentes" GroupName="StateFilter" Style="{StaticResource Theme.Segment}"
+                                         IsChecked="{Binding Filter, Converter={StaticResource Equals}, ConverterParameter={x:Static contracts:ContractListFilter.Active}}" />
+                            <RadioButton Content="En rescisión" GroupName="StateFilter" Style="{StaticResource Theme.Segment}"
+                                         IsChecked="{Binding Filter, Converter={StaticResource Equals}, ConverterParameter={x:Static contracts:ContractListFilter.PendingTermination}}" />
+                            <RadioButton Content="Finalizados" GroupName="StateFilter" Style="{StaticResource Theme.Segment}"
+                                         IsChecked="{Binding Filter, Converter={StaticResource Equals}, ConverterParameter={x:Static contracts:ContractListFilter.Ended}}" />
+                            <RadioButton Content="Cancelados" GroupName="StateFilter" Style="{StaticResource Theme.Segment}"
+                                         IsChecked="{Binding Filter, Converter={StaticResource Equals}, ConverterParameter={x:Static contracts:ContractListFilter.Cancelled}}" />
+                        </StackPanel>
+                    </Border>
+                    <TextBox Style="{StaticResource Theme.Input}" Margin="12,4,0,4" MinWidth="220"
+                             Tag="Inquilino, propietario o propiedad (Enter para buscar)"
+                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}">
+                        <TextBox.InputBindings>
+                            <KeyBinding Key="Enter" Command="{Binding LoadCommand}" />
+                        </TextBox.InputBindings>
+                    </TextBox>
+                </DockPanel>
+            </Border>
+
+            <Border Style="{StaticResource Theme.Card}" Padding="8,8,8,4" Margin="0,18,0,0">
+                <StackPanel>
+                    <DataGrid Style="{StaticResource Theme.Table}" ItemsSource="{Binding Contracts}">
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="INQUILINO" Width="1.4*" MinWidth="140">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Tenants}" FontWeight="Bold" TextAlignment="Center" TextWrapping="Wrap" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="PROPIETARIO" Width="1.4*" MinWidth="140">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Lessors}" TextAlignment="Center" TextWrapping="Wrap" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="PROPIEDAD" Width="1.6*" MinWidth="160">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Units}" TextAlignment="Center" TextWrapping="Wrap" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <!-- The state, and under it the past-end mark, which never ends the contract (spec Requirement 6). -->
+                            <DataGridTemplateColumn Header="ESTADO" Width="1.8*" MinWidth="180">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <Border x:Name="Chip" Style="{StaticResource Theme.Chip}" HorizontalAlignment="Center">
+                                                <TextBlock Text="{Binding StatusText}" TextWrapping="Wrap" TextAlignment="Center" />
+                                            </Border>
+                                            <Border x:Name="PastEnd" Style="{StaticResource Theme.Chip}" Tag="warn" HorizontalAlignment="Center"
+                                                    Margin="3,4,3,0">
+                                                <TextBlock Text="{Binding PastEndFlag}" />
+                                            </Border>
+                                        </StackPanel>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding Listing.Status}" Value="{x:Static leasing:ContractStatus.Active}">
+                                                <Setter TargetName="Chip" Property="Tag" Value="ok" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Listing.Status}" Value="{x:Static leasing:ContractStatus.PendingTermination}">
+                                                <Setter TargetName="Chip" Property="Tag" Value="warn" />
+                                            </DataTrigger>
+                                            <!-- Last, so a cancelled one reads red although its state is Ended. -->
+                                            <DataTrigger Binding="{Binding Listing.IsCancelled}" Value="True">
+                                                <Setter TargetName="Chip" Property="Tag" Value="bad" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding PastEndFlag}" Value="{x:Null}">
+                                                <Setter TargetName="PastEnd" Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="FIN" Binding="{Binding EndText}" Width="0.9*" MinWidth="100" />
+                            <DataGridTextColumn Header="ALQUILER" Binding="{Binding RentText}" Width="1*" MinWidth="110" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                    <TextBlock Text="No hay ningún contrato con ese filtro o esa búsqueda." Style="{StaticResource Theme.Hint}"
+                               FontSize="15" Margin="14,18"
+                               Visibility="{Binding IsEmpty, Converter={StaticResource Shown}}" />
+                    <TextBlock Style="{StaticResource Theme.Hint}" Margin="14,10,14,14" TextWrapping="Wrap">
+                        <Run Text="{Binding CountText, Mode=OneWay}" /><Run Text=". Un contrato que pasó su fecha de fin sigue vigente hasta que se lo termine: acá solo se marca. Los cancelados siguen visibles, con su motivo en el detalle." />
+                    </TextBlock>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
