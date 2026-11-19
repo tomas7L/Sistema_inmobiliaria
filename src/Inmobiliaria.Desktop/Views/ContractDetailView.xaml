@@ -11,7 +11,7 @@
     <!--
         One contract as the designer drew it (canvas "Detalle del contrato"): its state, and three tabs, the Resumen's cards,
         the adjustment history and the event log. Bound to ContractDetailViewModel; no logic lives here. The title and
-        "Volver a contratos" are the list's, which hosts this in its place. The canvas's 1920 x 950 fit: the tables scroll
+        "Volver a contratos" are the list's, which hosts this in its place. The canvas's 1536 x 785 fit: the tables scroll
         inside their card, the page does not.
     -->
     <UserControl.Resources>
@@ -29,6 +29,37 @@
                 <TextBlock Grid.Column="1" Text="{Binding Value}" FontWeight="Bold" TextWrapping="Wrap" TextAlignment="Right" MaxWidth="260" />
             </Grid>
         </DataTemplate>
+
+        <!-- The canvas's .tabs: plain words, the chosen one in ink over a 3 px rule in the menu's blue, all on one grey line. -->
+        <Style x:Key="Tab" TargetType="RadioButton">
+            <Setter Property="FontFamily" Value="{StaticResource Theme.Font}" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource Theme.Muted}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Margin" Value="0,0,6,-1" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Rule" Background="Transparent" BorderBrush="Transparent" BorderThickness="0,0,0,3" Padding="18,10">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource Theme.Ink}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource Theme.Ink}" />
+                                <Setter TargetName="Rule" Property="BorderBrush" Value="{DynamicResource Theme.NavOn}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Rule" Property="Background" Value="{DynamicResource Theme.Select}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
         <!-- The card's 12 gap before each line; the card's title then carries no margin of its own, so the gap is not doubled. -->
         <Style x:Key="DetailLineGap" TargetType="ContentPresenter">
@@ -70,13 +101,13 @@
         </StackPanel>
 
         <!-- The tabs. -->
-        <Border Grid.Row="2" Style="{StaticResource Theme.SegmentGroup}" HorizontalAlignment="Left" Margin="0,12,0,0">
+        <Border Grid.Row="2" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Theme.Line}" Margin="0,12,0,0">
             <StackPanel Orientation="Horizontal">
-                <RadioButton Content="Resumen" GroupName="DetailTab" Style="{StaticResource Theme.Segment}"
+                <RadioButton Content="Resumen" GroupName="DetailTab" Style="{StaticResource Tab}"
                              IsChecked="{Binding Tab, Converter={StaticResource Equals}, ConverterParameter={x:Static contracts:ContractDetailTab.Summary}}" />
-                <RadioButton Content="Historial de ajustes" GroupName="DetailTab" Style="{StaticResource Theme.Segment}"
+                <RadioButton Content="Historial de ajustes" GroupName="DetailTab" Style="{StaticResource Tab}"
                              IsChecked="{Binding Tab, Converter={StaticResource Equals}, ConverterParameter={x:Static contracts:ContractDetailTab.Adjustments}}" />
-                <RadioButton Content="Registro de eventos" GroupName="DetailTab" Style="{StaticResource Theme.Segment}"
+                <RadioButton Content="Registro de eventos" GroupName="DetailTab" Style="{StaticResource Tab}"
                              IsChecked="{Binding Tab, Converter={StaticResource Equals}, ConverterParameter={x:Static contracts:ContractDetailTab.Events}}" />
             </StackPanel>
         </Border>
