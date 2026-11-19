@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-17 (cierre), con el listado, el detalle y el formulario de Contratos mergeados (#147 a #151)_
+_Última actualización: 2026-11-18, con el arreglo del Test60 mergeado (#156) e Índices a 1536 x 785 aprobada, sin mergear_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -8,22 +8,23 @@ _Última actualización: 2026-11-17 (cierre), con el listado, el detalle y el fo
 
 ## En qué estamos
 
-**Change activo: `gestion-de-alquileres`, Phase 12 (Pantallas).** Con vista: Personas, Propiedades, Índices y, de Contratos,
-el listado, el detalle (solo lectura) y el formulario de nuevo contrato. **Faltan las pantallas de acciones del contrato y
-Ajustes.** El lienzo de Mateo está en **V78** y coincide con el sistema. El detalle de lo hecho y lo que falta:
-`gestion-de-alquileres/tasks.md`, 12.3d (las entradas del 2026-11-16 y 2026-11-17) y 12.3e.
+**Change activo: `gestion-de-alquileres`, Phase 12 (Pantallas).** Llegó el rediseño de Mateo a **1536 x 785** (las 80
+pantallas). Se pasa **una pantalla por vez**: **Índices está hecha y aprobada por Tomás en PRUEBA**, sin commitear. Detalle:
+`gestion-de-alquileres/tasks.md`, 12.3d (entrada del 2026-11-18), y Engram `decisions/s12-indices-1536`.
 
 ## Próximos pasos
 
-1. **Las pantallas de acciones del detalle**, una por slice, copiando el lienzo: Editar (`Editar.dc.html`), Registrar aviso
-   (`ContratoAviso`), Terminar (`ContratoTerminar`), Deshacer aviso, Deshacer fin, Cancelar por error y Ver cuenta, y el Corregir
-   del historial (`AjusteCorregir`); después Ajustes (`Ajustes`, `AjusteConfirmar`). La lógica ya está en
-   `ContractDetailViewModel` y `ContractAdjustmentsViewModel`; los botones van en `Views/ContractDetailView.xaml`. Antes de
-   mostrar cada una, revisar `memory/wpf-screen-lessons.md`.
-2. **Revisar con capturas qué pantallas no entran sin bajar** (`tasks.md`, 12.3d, "Pending check, not done"): solo anotado,
-   Tomás lo quiere cambiar después.
-3. **Pendientes chicos:** de 12.3e, alinear el email del buzón de avisos con la Decisión 54. **Tomás:** imprimir un recibo en
-   papel en PRUEBA para ver que el "$" entra.
+1. **Tomás:** el PR de Índices (`IndicesView.xaml`, `Controls.xaml`, `IndicesViewModel.cs` y su test, `tasks.md`) y este archivo.
+   El arreglo del Test60 ya está en `develop` (#156, el 2026-11-18), pero su commit `599d37e` quedó con el título y la descripción
+   de Índices: el código es solo `AdjustmentDeskTests.cs` (Engram `bug/test60-received-on-bound-time-bomb`).
+2. **La siguiente pantalla ya hecha**, igual que Índices: leer su `.dc.html` y el `caja.css`, contarle a Tomás qué cambia, cambiar
+   solo esa y que la revise en pantalla. Quedan Personas, Propiedades y, de Contratos, el listado, el detalle y el formulario. El menú
+   lateral (`MainWindow`) todavía no tiene el estilo del lienzo: va como pantalla propia, con el nombre del usuario en el encabezado.
+   Antes de mostrar cada una, revisar `memory/wpf-screen-lessons.md`. En las pruebas en pantalla, dar períodos **posteriores** al
+   último cargado: el aviso de nivel lejano compara con el mes anterior.
+3. **Después:** las pantallas de acciones del detalle (Editar, Registrar aviso, Terminar, Deshacer aviso, Deshacer fin,
+   Cancelar por error, Ver cuenta, Corregir ajuste, que trae además los alquileres y el botón "Corregir ajuste" en Índices) y
+   Ajustes; la vista de Mora (`mora/tasks.md` 2.2 a 2.4) y la de Avisos (`notificaciones/tasks.md` 4.2).
 4. **Reunión con Nicolás:** `lectura-reunion-nicolas.md` (raíz, local), preguntas N1 a N22 que siguen abiertas.
 5. **Panorama de lo que falta:** Engram `plan/remaining-work-panorama`. `carga-inicial` espera el Excel de la reunión.
 
@@ -55,6 +56,9 @@ Ajustes.** El lienzo de Mateo está en **V78** y coincide con el sistema. El det
 - **Producción** es `bwiqgfhokolndygqkchp`, `aws-0-sa-east-1`. El rechazo por usuario o contraseña ya se vio ahí el 2026-11-13.
 - **El registro de errores de la versión en producción puede contener contraseñas** de antes de #81 (design F5). Conviene
   revisar y borrar `%LOCALAPPDATA%\SistemaInmobiliaria\logs` en la PC de la inmobiliaria al instalar.
+- **Tomás:** imprimir un recibo en papel en PRUEBA para ver que el "$" entra.
+- **La app se abre con `Start-Process` de PowerShell, aparte:** abierta como proceso de la terminal del asistente se cerró sola
+  el 2026-11-18 (sin error en el registro ni reinicio de Windows).
 - **Una conexión caída entre el login y la apertura de la ventana principal** todavía cierra la app (`App.xaml.cs:220`).
   Quedó sin tocar: la ventana es muy corta y todavía no hay nada escrito que perder.
 - **`engram doctor`** marca `sync_target_closed_space` y `sync_mutation_required_fields` (102 memorias viejas sin título):
@@ -80,7 +84,7 @@ Ajustes.** El lienzo de Mateo está en **V78** y coincide con el sistema. El det
 | | |
 |---|---|
 | **Docker** | **Sí**, para la suite completa (Testcontainers `postgres:17.6`) |
-| **Supabase** | **PRUEBA** solo al final de cada pantalla con vista, cuando Tomás la prueba con capturas. Antes de abrir la app, `grep` del `appsettings.json` compilado. La lógica sin vista no la necesita |
+| **Supabase** | **PRUEBA** solo al final de cada pantalla, cuando Tomás la prueba con capturas. Antes de abrir la app, `grep` del `appsettings.json` compilado. La lógica sin vista no la necesita |
 | **Límite diario** | Tomás pasa el porcentaje al arrancar |
 
 ## Para retomar
@@ -99,7 +103,7 @@ dotnet test Inmobiliaria.Core.slnf --configuration Release
 dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure
 ```
 
-Esperado en `develop` (#151): **2543 pasados (Domain 844, Presentation 751, Infrastructure 948), 0 fallas, 0 omitidos**, build
+Esperado con el PR de Índices mergeado: **2574 pasados (Domain 857, Presentation 761, Infrastructure 956), 0 fallas, 0 omitidos**, build
 sin advertencias y el modelo en sintonía con `20261113165451_RevokeSupabaseApiRoles`. Si el build de Desktop falla con MSB3027,
 la aplicación está abierta y tiene tomadas sus DLL: cerrarla. La app la abre siempre el asistente (Tomás, 2026-11-13).
 

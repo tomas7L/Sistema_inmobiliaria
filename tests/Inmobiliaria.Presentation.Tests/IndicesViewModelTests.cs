@@ -463,6 +463,22 @@ public class IndicesViewModelTests
         Assert.Equal("90.000", viewModel.FarTypedLevel);
     }
 
+    /// <summary>The canvas: the level field's example is the index's latest stored level, so ICL is not shown a figure in millions.</summary>
+    [Fact]
+    public async Task TheLevelExample_IsTheLatestStoredLevel_OrAGeneralOneWithNone()
+    {
+        var port = Port();
+        port.Indices[0] = new IndexListing(IpcId, "IPC", null, [new(Guid.NewGuid(), new IndexPeriod(2026, 7), 9_300m), August]);
+        port.Indices[1] = new IndexListing(RipteId, "RIPTE", null, []);
+        var viewModel = await LoadedAsync(port);
+
+        Assert.Equal("Por ejemplo: 9.440", viewModel.LevelExample);
+
+        viewModel.SelectedIndex = viewModel.Indices[1];
+
+        Assert.Equal("Por ejemplo: 1.915.878,76", viewModel.LevelExample);
+    }
+
     /// <summary>The canvas's list: each value's corrections, and RIPTE's level in pesos.</summary>
     [Fact]
     public async Task TheValues_SayHowOftenEachWasCorrected_AndRipteShowsPesos()
@@ -475,6 +491,7 @@ public class IndicesViewModelTests
         Assert.Equal(["Corregido 2 veces", "—"], viewModel.Values.Select(v => v.CorrectionsText));
         Assert.Equal("2 valores", viewModel.CountText);
         Assert.Equal("INDEC", viewModel.Indices[0].SourceText);
+        Assert.Equal("#", viewModel.LevelPrefix);
 
         viewModel.SelectedIndex = viewModel.Indices[1];
 
@@ -484,7 +501,7 @@ public class IndicesViewModelTests
         Assert.Equal("Corregido 1 vez", ripte.CorrectionsText);
         Assert.Equal("1 valor", viewModel.CountText);
         Assert.Equal("$", viewModel.LevelUnit);
-        Assert.Equal("Nivel publicado ($)", viewModel.LevelLabel);
+        Assert.Equal("$", viewModel.LevelPrefix);
     }
 
     /// <summary>Spec Decision 53 on the form's note: ICL takes the current month, IPC and RIPTE do not.</summary>
