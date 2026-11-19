@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Inmobiliaria.Domain.Accounts;
 using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Domain.Parties;
 using Inmobiliaria.Presentation.Common;
@@ -18,14 +19,17 @@ public sealed partial class ContractDetailViewModel : ObservableObject
 {
     private readonly IContractRegistry _contracts;
     private readonly Guid _contractId;
+    private readonly IAgencyClock _clock;
 
-    public ContractDetailViewModel(IContractRegistry contracts, IAdjustmentDesk adjustments, Guid contractId)
+    public ContractDetailViewModel(IContractRegistry contracts, IAdjustmentDesk adjustments, Guid contractId, IAgencyClock clock)
     {
         ArgumentNullException.ThrowIfNull(contracts);
         ArgumentNullException.ThrowIfNull(adjustments);
+        ArgumentNullException.ThrowIfNull(clock);
 
         _contracts = contracts;
         _contractId = contractId;
+        _clock = clock;
         Adjustments = new ContractAdjustmentsViewModel(adjustments, Runner, LoadAsync);
         LoadCommand = new AsyncRelayCommand(LoadAsync, CanAct);
         ReviewNoticeCommand = new RelayCommand(ReviewNotice, CanAct);
@@ -35,6 +39,8 @@ public sealed partial class ContractDetailViewModel : ObservableObject
         ReviewCancelCommand = new AsyncRelayCommand(ReviewCancelAsync, CanAct);
         ConfirmCommand = new AsyncRelayCommand(ConfirmAsync, () => CanAct() && PendingChange is not null);
         CancelCommand = new RelayCommand(CloseSummary, CanAct);
+        OpenNoticeCommand = new RelayCommand(() => OpenActionScreen(ContractAction.Notice), () => CanAct() && IsNoticeOffered);
+        CloseActionCommand = new RelayCommand(() => OpenActionScreen(null), CanAct);
         Runner.PropertyChanged += OnRunnerChanged;
     }
 
@@ -58,6 +64,77 @@ public sealed partial class ContractDetailViewModel : ObservableObject
     public IAsyncRelayCommand ConfirmCommand { get; }
 
     public IRelayCommand CancelCommand { get; }
+
+    /// <summary>The canvas's "Registrar aviso" button: its own screen, in place of the detail.</summary>
+    public IRelayCommand OpenNoticeCommand { get; }
+
+    /// <summary>"Volver al contrato": back to the detail, forgetting what the action's screen held.</summary>
+    public IRelayCommand CloseActionCommand { get; }
+
+    /// <summary>The action whose screen is shown in place of the detail, or null for the detail itself.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsActionOpen))]
+    private ContractAction? _openAction;
+
+    public bool IsActionOpen => OpenAction is not null;
+
+    /// <summary>What an action that landed did, shown in place of its form until the operator goes back; or null.</summary>
+    [ObservableProperty]
+    private ActionDone? _done;
+
+    /// <summary>The dates as typed, read as the contract form reads them; each sets its date.</summary>
+    [ObservableProperty]
+    private string _noticeDateText = string.Empty;
+
+    [ObservableProperty]
+    private string _moveOutDateText = string.Empty;
+
+    /// <summary>Each date's error, under its field; null while it has none.</summary>
+    [ObservableProperty]
+    private string? _noticeDateError;
+
+    [ObservableProperty]
+    private string? _moveOutDateError;
+
+    partial void OnNoticeDateTextChanged(string value)
+    {
+        NoticeDate = DateEntry.Parse(value, DateEntryKind.Day);
+        NoticeDateError = null;
+    }
+
+    partial void OnMoveOutDateTextChanged(string value)
+    {
+        MoveOutDate = DateEntry.Parse(value, DateEntryKind.Day);
+        MoveOutDateError = null;
+    }
+
+    /// <summary>
+    /// The contract an action's screen is for, as the canvas heads it: tenant, unit and current rent, and its term, which the
+    /// action's dates are checked against (Tomás, 2026-11-19).
+    /// </summary>
+    public IReadOnlyList<DetailLine> ActionCardLines => Detail is { } d
+        ?
+        [
+            new DetailLine("Inquilino", Names(d, PartyRole.Tenant)),
+            new DetailLine("Propiedad", string.Join(", ", d.Units.Select(u => u.Address))),
+            new DetailLine("Vigencia", $"{Formats.Date(d.StartDate)} al {Formats.Date(d.NominalEndDate)}"),
+            new DetailLine("Alquiler actual", Formats.Money(d.MonthlyRent)),
+        ]
+        : [];
+
+    private void OpenActionScreen(ContractAction? action)
+    {
+        CloseSummary();
+        RefusalMessage = null;
+        Done = null;
+        NoticeDateText = string.Empty;
+        MoveOutDateText = string.Empty;
+        NoticeDate = null;
+        MoveOutDate = null;
+        NoticeDateError = null;
+        MoveOutDateError = null;
+        OpenAction = action;
+    }
 
     /// <summary>The reasons offered for ending, named. "Cargado por error" never is: only cancelling uses it (spec Requirement 10).</summary>
     public IReadOnlyList<EndReasonOption> EndReasons { get; } = Enum.GetValues<EndReason>()
@@ -196,6 +273,8 @@ public sealed partial class ContractDetailViewModel : ObservableObject
         }
 
         OnPropertyChanged(nameof(HasNoEvents));
+        OnPropertyChanged(nameof(ActionCardLines));
+        OpenNoticeCommand.NotifyCanExecuteChanged();
     }
 
     [ObservableProperty]
@@ -261,10 +340,30 @@ public sealed partial class ContractDetailViewModel : ObservableObject
         RefusalMessage = null;
         CloseSummary();
 
+        NoticeDateError = NoticeDate is null ? MissingNoticeDates : null;
+        MoveOutDateError = MoveOutDate is null ? MissingNoticeDates : null;
         if (NoticeDate is not { } notice || MoveOutDate is not { } moveOut)
         {
-            RefusalMessage = MissingNoticeDates;
             return;
+        }
+
+        // The port's own rules (ContractLifecycleRules.CheckNotice), each said under its date and both at once. The notice's
+        // are asked with the move-out on the same day, so only the move-out's own rule speaks for that field.
+        if (Detail is { } detail)
+        {
+            var noticeRefusal = ContractLifecycleRules.CheckNotice(detail.Status, detail.StartDate, notice, notice, _clock.Today);
+            if (noticeRefusal == ContractRefusal.NoticeNeedsActive)
+            {
+                RefusalMessage = noticeRefusal.Value.OperatorText();
+                return;
+            }
+
+            NoticeDateError = noticeRefusal?.OperatorText();
+            MoveOutDateError = moveOut < notice ? ContractRefusal.MoveOutBeforeNotice.OperatorText() : null;
+            if (NoticeDateError is not null || MoveOutDateError is not null)
+            {
+                return;
+            }
         }
 
         PendingChange = new PendingNotice(notice, moveOut);
@@ -389,6 +488,12 @@ public sealed partial class ContractDetailViewModel : ObservableObject
         {
             RefusalMessage = outcome.Value.RefusalText ?? refusal.OperatorText(outcome.Value.CurrentTenant);
         }
+        else if (pending is PendingNotice landed && Detail is { } before)
+        {
+            Done = new ActionDone(
+                "Aviso registrado",
+                $"El contrato de {Names(before, PartyRole.Tenant)} quedó En rescisión. La desocupación está prevista para el {Formats.Date(landed.MoveOutDate)}.");
+        }
 
         await LoadAsync();
     }
@@ -405,6 +510,8 @@ public sealed partial class ContractDetailViewModel : ObservableObject
             ReviewCancelCommand.NotifyCanExecuteChanged();
             ConfirmCommand.NotifyCanExecuteChanged();
             CancelCommand.NotifyCanExecuteChanged();
+            OpenNoticeCommand.NotifyCanExecuteChanged();
+            CloseActionCommand.NotifyCanExecuteChanged();
         }
     }
 
@@ -417,6 +524,15 @@ public sealed partial class ContractDetailViewModel : ObservableObject
 
 /// <summary>A reason offered for ending, with its name.</summary>
 public sealed record EndReasonOption(EndReason Reason, string Text);
+
+/// <summary>An action of the contract with its own screen, shown in place of the detail (canvas "Registrar aviso" and the rest).</summary>
+public enum ContractAction
+{
+    Notice,
+}
+
+/// <summary>The notice an action ends on when it lands: its title and its sentence.</summary>
+public sealed record ActionDone(string Title, string Text);
 
 /// <summary>The detail's tabs, as on the canvas.</summary>
 public enum ContractDetailTab

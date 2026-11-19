@@ -35,7 +35,7 @@ public class ContractAdjustmentsViewModelTests
             ],
         };
         var port = new FakeContractRegistry { Detail = Detail(reason) };
-        var detail = new ContractDetailViewModel(port, desk, ContractId);
+        var detail = new ContractDetailViewModel(port, desk, ContractId, new FakeClock(new DateOnly(2026, 11, 19)));
         await detail.LoadCommand.ExecuteAsync(null);
         return new World(detail, detail.Adjustments, desk, port);
     }
@@ -219,7 +219,7 @@ public class ContractAdjustmentsViewModelTests
     public async Task AContractWithoutAdjustments_SaysSo()
     {
         var desk = new FakeAdjustmentDesk();
-        var detail = new ContractDetailViewModel(new FakeContractRegistry { Detail = Detail() }, desk, ContractId);
+        var detail = new ContractDetailViewModel(new FakeContractRegistry { Detail = Detail() }, desk, ContractId, new FakeClock(new DateOnly(2026, 11, 19)));
 
         await detail.LoadCommand.ExecuteAsync(null);
 
