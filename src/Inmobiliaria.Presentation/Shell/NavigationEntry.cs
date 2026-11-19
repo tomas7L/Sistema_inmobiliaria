@@ -44,4 +44,22 @@ public sealed record NavigationEntry(
     NavigationTarget Target,
     string Title,
     bool IsAvailable = true,
-    string? UnavailableReason = null);
+    string? UnavailableReason = null)
+{
+    /// <summary>The sidebar heading the entry sits under, as on the canvas.</summary>
+    public string Group => Target switch
+    {
+        NavigationTarget.CashDesk or NavigationTarget.RecentCollections or NavigationTarget.Voiding
+            or NavigationTarget.Notices => NavigationGroups.Collection,
+        NavigationTarget.GoLive or NavigationTarget.Users => NavigationGroups.Administration,
+        _ => NavigationGroups.Leasing,
+    };
+}
+
+/// <summary>The canvas's sidebar headings.</summary>
+public static class NavigationGroups
+{
+    public const string Collection = "Cobranza";
+    public const string Leasing = "Alquileres";
+    public const string Administration = "Administración";
+}

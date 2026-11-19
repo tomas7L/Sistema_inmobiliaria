@@ -8,63 +8,202 @@
         xmlns:shell="clr-namespace:Inmobiliaria.Presentation.Shell;assembly=Inmobiliaria.Presentation"
         mc:Ignorable="d"
         Title="Sistema Inmobiliaria" Height="450" Width="800">
-    <DockPanel>
-        <Border DockPanel.Dock="Top" Padding="12,8" Background="#FFEFEFEF">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
-                <TextBlock Text=" - " />
-                <TextBlock Text="{Binding RoleText}" />
-            </StackPanel>
+    <Window.Resources>
+        <views:NavigationIconConverter x:Key="NavIcon" />
+        <views:UpperCaseConverter x:Key="Upper" />
+
+        <!-- The entries grouped under the canvas's headings; the grouping is the entry's own (NavigationEntry.Group). -->
+        <CollectionViewSource x:Key="GroupedNavigation" Source="{Binding Navigation}">
+            <CollectionViewSource.GroupDescriptions>
+                <PropertyGroupDescription PropertyName="Group" />
+            </CollectionViewSource.GroupDescriptions>
+        </CollectionViewSource>
+
+        <!-- One entry as the canvas's ".ni": a pill holding the icon in its circle and the name. -->
+        <Style x:Key="NavItem" TargetType="ListBoxItem">
+            <Setter Property="IsEnabled" Value="{Binding IsAvailable}" />
+            <Setter Property="ToolTip" Value="{Binding UnavailableReason}" />
+            <!-- Without this a disabled entry never shows why: Windows hides the tooltip of what is disabled. -->
+            <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Margin" Value="0,1" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Pill" CornerRadius="18" Padding="4,4,14,4" Background="Transparent">
+                            <StackPanel Orientation="Horizontal">
+                                <Border x:Name="Circle" Width="28" Height="28" CornerRadius="14" BorderThickness="1"
+                                        Background="{DynamicResource Theme.Surface}" BorderBrush="{DynamicResource Theme.Line}">
+                                    <Viewbox Width="16" Height="16">
+                                        <Canvas Width="24" Height="24">
+                                            <Path x:Name="Icon" Data="{Binding Target, Converter={StaticResource NavIcon}}"
+                                                  Stroke="{DynamicResource Theme.Ink2}" StrokeThickness="1.6"
+                                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                                        </Canvas>
+                                    </Viewbox>
+                                </Border>
+                                <TextBlock x:Name="Name" Text="{Binding Title}" FontSize="14" FontWeight="Medium"
+                                           Foreground="{DynamicResource Theme.Ink}" VerticalAlignment="Center" Margin="12,0,0,0" />
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Circle" Property="Background" Value="{DynamicResource Theme.Select}" />
+                                <Setter TargetName="Icon" Property="Stroke" Value="{DynamicResource Theme.NavOn}" />
+                            </Trigger>
+                            <!-- The canvas's aria-current: the menu's blue, white words. -->
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Pill" Property="Background" Value="{DynamicResource Theme.NavOn}" />
+                                <Setter TargetName="Name" Property="Foreground" Value="#FFFFFF" />
+                                <Setter TargetName="Name" Property="FontWeight" Value="Bold" />
+                                <Setter TargetName="Circle" Property="Background" Value="#33FFFFFF" />
+                                <Setter TargetName="Circle" Property="BorderBrush" Value="Transparent" />
+                                <Setter TargetName="Icon" Property="Stroke" Value="#FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5" />
+                                <Setter Property="Cursor" Value="No" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Cerrar sesión, at the foot: an entry like the others that opens nothing. -->
+        <Style x:Key="NavButton" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Pill" CornerRadius="18" Padding="4,4,14,4" Background="Transparent">
+                            <StackPanel Orientation="Horizontal">
+                                <Border x:Name="Circle" Width="28" Height="28" CornerRadius="14" BorderThickness="1"
+                                        Background="{DynamicResource Theme.Surface}" BorderBrush="{DynamicResource Theme.Line}">
+                                    <Viewbox Width="16" Height="16">
+                                        <Canvas Width="24" Height="24">
+                                            <Path x:Name="Icon" Data="{Binding Converter={StaticResource NavIcon}, ConverterParameter=logout}"
+                                                  Stroke="{DynamicResource Theme.Ink2}" StrokeThickness="1.6"
+                                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                                        </Canvas>
+                                    </Viewbox>
+                                </Border>
+                                <ContentPresenter VerticalAlignment="Center" Margin="12,0,0,0" TextElement.FontSize="14"
+                                                  TextElement.FontWeight="Medium" TextElement.Foreground="{DynamicResource Theme.Ink}" />
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Circle" Property="Background" Value="{DynamicResource Theme.Select}" />
+                                <Setter TargetName="Icon" Property="Stroke" Value="{DynamicResource Theme.NavOn}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Pill" Property="BorderBrush" Value="{DynamicResource Theme.Ink}" />
+                                <Setter TargetName="Pill" Property="BorderThickness" Value="2" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <DockPanel Background="{DynamicResource Theme.Background}" TextElement.FontFamily="{StaticResource Theme.Font}">
+        <!-- The canvas's sidebar (".side", 268 wide at 1536 x 785): the logo, the screens by group, Cerrar sesión at its foot. -->
+        <Border DockPanel.Dock="Left" Width="268" Padding="14,12,14,10" Background="{DynamicResource Theme.Surface2}"
+                BorderBrush="{DynamicResource Theme.Line}" BorderThickness="0,0,1,0">
+            <DockPanel>
+                <Border DockPanel.Dock="Top" Style="{StaticResource Theme.Card}" Padding="10,8" Margin="0,0,0,2">
+                    <Image Source="pack://siteoforigin:,,,/Assets/agency-logo.png" Width="70" Height="70"
+                           RenderOptions.BitmapScalingMode="HighQuality" />
+                </Border>
+
+                <Button DockPanel.Dock="Bottom" Style="{StaticResource NavButton}" Content="{Binding LogOutText}"
+                        Command="{Binding LogOutCommand}" Margin="0,8,0,0" />
+                <!-- Asked only with work pending on a screen (12.3d, Tomás 2026-11-16). -->
+                <Border DockPanel.Dock="Bottom" CornerRadius="14" Padding="12,10" Margin="0,8,0,0" BorderThickness="1"
+                        Background="{DynamicResource Theme.WarnBack}" BorderBrush="{DynamicResource Theme.Warn}">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding LogOutWarning}" Value="{x:Null}">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <StackPanel>
+                        <TextBlock Text="{Binding LogOutWarning}" TextWrapping="Wrap" FontSize="13" Foreground="{DynamicResource Theme.Warn}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <Button Content="Cerrar sesión" Style="{StaticResource Theme.SmallGhostButton}" Command="{Binding ConfirmLogOutCommand}" />
+                            <Button Content="Cancelar" Style="{StaticResource Theme.SmallGhostButton}" Command="{Binding CancelLogOutCommand}" Margin="8,0,0,0" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <ListBox x:Name="NavigationList" ItemsSource="{Binding Source={StaticResource GroupedNavigation}}"
+                         ItemContainerStyle="{StaticResource NavItem}" Background="Transparent" BorderThickness="0" Padding="0"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.GroupStyle>
+                        <GroupStyle>
+                            <!-- WPF's own group indents its entries by 5; this one does not. -->
+                            <GroupStyle.ContainerStyle>
+                                <Style TargetType="GroupItem">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="GroupItem">
+                                                <StackPanel>
+                                                    <ContentPresenter />
+                                                    <ItemsPresenter />
+                                                </StackPanel>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </GroupStyle.ContainerStyle>
+                            <!-- The canvas's ".grp": a small, bold, muted heading in capitals. -->
+                            <GroupStyle.HeaderTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Name, Converter={StaticResource Upper}}" FontSize="11.5" FontWeight="Bold"
+                                               Foreground="{DynamicResource Theme.Muted}" Margin="12,10,12,3" />
+                                </DataTemplate>
+                            </GroupStyle.HeaderTemplate>
+                        </GroupStyle>
+                    </ListBox.GroupStyle>
+                </ListBox>
+            </DockPanel>
         </Border>
 
-        <ItemsControl DockPanel.Dock="Top"
-                      ItemsSource="{Binding SettingsProblems}"
-                      Margin="12,8,12,0">
+        <!-- Configuration problems found at startup, as a red notice over the screens. -->
+        <ItemsControl DockPanel.Dock="Top" ItemsSource="{Binding SettingsProblems}" Margin="32,12,32,0">
+            <ItemsControl.Style>
+                <Style TargetType="ItemsControl">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding SettingsProblems.Count}" Value="0">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </ItemsControl.Style>
             <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                    <TextBlock Text="{Binding}" TextWrapping="Wrap" Foreground="#FFB00020" />
+                    <Border CornerRadius="14" Padding="14,10" Margin="0,0,0,6" BorderThickness="1"
+                            Background="{DynamicResource Theme.BadBack}" BorderBrush="{DynamicResource Theme.Bad}">
+                        <DockPanel>
+                            <Viewbox Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
+                                <Canvas Width="24" Height="24">
+                                    <Path Data="M3,12 A9,9 0 1 1 21,12 A9,9 0 1 1 3,12 Z M12,7.5 V12.5 M12,16 V16.5" Stroke="{DynamicResource Theme.Bad}"
+                                          StrokeThickness="1.9" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                </Canvas>
+                            </Viewbox>
+                            <TextBlock Text="{Binding}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="{DynamicResource Theme.Bad}"
+                                       VerticalAlignment="Center" />
+                        </DockPanel>
+                    </Border>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
-
-        <!-- The sidebar: the screens, and Cerrar sesión at its foot (12.3d). -->
-        <DockPanel DockPanel.Dock="Left" Width="220" Margin="12">
-            <Button DockPanel.Dock="Bottom"
-                    Content="{Binding LogOutText}"
-                    Command="{Binding LogOutCommand}"
-                    HorizontalAlignment="Stretch"
-                    Padding="12,4"
-                    Margin="0,8,0,0" />
-            <!-- Asked only with work pending on a screen (12.3d, Tomás 2026-11-16). -->
-            <Border DockPanel.Dock="Bottom" BorderBrush="#FFB00020" BorderThickness="1" Padding="8" Margin="0,8,0,0">
-                <Border.Style>
-                    <Style TargetType="Border">
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding LogOutWarning}" Value="{x:Null}">
-                                <Setter Property="Visibility" Value="Collapsed" />
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </Border.Style>
-                <StackPanel>
-                    <TextBlock Text="{Binding LogOutWarning}" TextWrapping="Wrap" />
-                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                        <Button Content="Cerrar sesión" Command="{Binding ConfirmLogOutCommand}" Padding="8,2" />
-                        <Button Content="Cancelar" Command="{Binding CancelLogOutCommand}" Padding="8,2" Margin="8,0,0,0" />
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-            <ListBox x:Name="NavigationList"
-                     ItemsSource="{Binding Navigation}"
-                     DisplayMemberPath="Title">
-                <ListBox.ItemContainerStyle>
-                    <Style TargetType="ListBoxItem">
-                        <Setter Property="IsEnabled" Value="{Binding IsAvailable}" />
-                        <Setter Property="ToolTip" Value="{Binding UnavailableReason}" />
-                    </Style>
-                </ListBox.ItemContainerStyle>
-            </ListBox>
-        </DockPanel>
 
         <!-- The screen of the selected entry. Chosen by triggers on the selection, so no code decides it. -->
         <Grid>
@@ -253,6 +392,37 @@
                     </Style>
                 </views:UsersView.Style>
             </views:UsersView>
+
+            <!-- The canvas's ".usr": the user's name and role, at the top right, level with the title. Only over the screens
+                 already drawn to the canvas, whose top right is kept free for it; an older screen has its own controls
+                 there (Usuarios' "Actualizar") and gains it when it is redrawn. -->
+            <TextBlock Text="{Binding HeaderText}" FontSize="14" Foreground="{DynamicResource Theme.Muted}"
+                       HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,30,32,0" Panel.ZIndex="1"
+                       IsHitTestVisible="False">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                        <DataTrigger Binding="{Binding SelectedItem.Target, ElementName=NavigationList}"
+                                     Value="{x:Static shell:NavigationTarget.Contracts}">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding SelectedItem.Target, ElementName=NavigationList}"
+                                     Value="{x:Static shell:NavigationTarget.Parties}">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding SelectedItem.Target, ElementName=NavigationList}"
+                                     Value="{x:Static shell:NavigationTarget.Units}">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding SelectedItem.Target, ElementName=NavigationList}"
+                                     Value="{x:Static shell:NavigationTarget.Indices}">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
         </Grid>
     </DockPanel>
 </Window>

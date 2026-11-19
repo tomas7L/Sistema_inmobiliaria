@@ -21,6 +21,7 @@ public sealed partial class ShellViewModel : ObservableObject
 
         DisplayName = session.DisplayName;
         RoleText = session.Role.ToString();
+        HeaderText = $"{session.DisplayName}, {(session.Role == UserRole.Admin ? "Administrador" : "Empleado")}";
         SettingsProblems = settingsProblems;
         Navigation = BuildNavigation(session.Role, settingsProblems);
         _pendingWork = pendingWork ?? [];
@@ -51,6 +52,9 @@ public sealed partial class ShellViewModel : ObservableObject
     public event EventHandler? LogOutRequested;
 
     public string DisplayName { get; }
+
+    /// <summary>The canvas's ".usr", at the top right of every screen: the name, then the role in the operator's words.</summary>
+    public string HeaderText { get; }
 
     /// <summary>The role's name as the database knows it ("Admin" or "Empleado").</summary>
     public string RoleText { get; }
