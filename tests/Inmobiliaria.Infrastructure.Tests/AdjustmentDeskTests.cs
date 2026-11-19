@@ -617,6 +617,22 @@ public sealed class AdjustmentDeskTests
         return result.Preview!;
     }
 
+    /// <summary>
+    /// The database refuses a payment received more than 7 days before the real today (the trigger <c>stamp_collection</c>; the
+    /// bound itself is probed by <see cref="ReciboSchemaTests"/>), so a scenario on a fixed calendar stops being able to pay once
+    /// that calendar is a week old: Test 60 broke on 2026-11-18. In this test's own database only, the trigger is recreated from
+    /// its stored definition without that one check, everything else it does unchanged. If the check is rewritten, this fails
+    /// here instead of lifting nothing.
+    /// </summary>
+    private static async Task LiftTheBackDateBoundAsync(DeskWorld world)
+    {
+        const string bound = "IF NEW.received_on < local_today - 7 THEN";
+        await using var connection = await ReciboTestSupport.OpenAsync(world.Database.Context);
+        var definition = await ReciboTestSupport.ScalarAsync<string>(connection, "SELECT pg_get_functiondef('stamp_collection'::regproc)");
+        Assert.Equal(1, definition.Split(bound).Length - 1);
+        await ReciboTestSupport.ExecAsync(connection, null, definition.Replace(bound, "IF false THEN"));
+    }
+
     private static async Task CorrectIndexAsync(DeskWorld world, Seeded seeded)
     {
         await using var change = world.NewContext();
@@ -787,6 +803,7 @@ public sealed class AdjustmentDeskTests
         // November's due day, and never after the real today: the desk refuses a payment received in the future.
         var payDay = new DateOnly(2026, 11, 10);
         await world.MaterialiseAsync(seeded.Account, payDay);
+        await LiftTheBackDateBoundAsync(world);
         var paid = await DeskWorld.PayAsync(world.NewDesk(new FixedClock(payDay)), seeded.Account, November);
         Assert.True(paid.Succeeded, paid.Refusal?.ToString());
         await CorrectIndexAsync(world, seeded);
