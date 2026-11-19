@@ -1,17 +1,19 @@
-<UserControl x:Class="Inmobiliaria.Desktop.Views.ContractNoticeView"
+<UserControl x:Class="Inmobiliaria.Desktop.Views.ContractActionView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:leasing="clr-namespace:Inmobiliaria.Domain.Leasing;assembly=Inmobiliaria.Domain"
+             xmlns:contracts="clr-namespace:Inmobiliaria.Presentation.Contracts;assembly=Inmobiliaria.Presentation"
              xmlns:views="clr-namespace:Inmobiliaria.Desktop.Views"
              mc:Ignorable="d"
              d:DesignHeight="785" d:DesignWidth="1268">
     <!--
-        "Registrar aviso" as the designer drew it (canvas "ContratoAviso", 1536 x 785): the contract it is for, the two dates,
-        then the summary to confirm, then the notice that it was registered. Each step is the view-model's: the dates' errors
-        under each field (NoticeDateError, MoveOutDateError), the summary (PendingChange), the outcome (Done). Bound to the open
-        contract's ContractDetailViewModel; no logic lives here. Cards at most 900 wide, as on the canvas.
+        The contract's actions with their own screen, as the designer drew them (canvas "ContratoAviso", "ContratoDeshacerAviso",
+        1536 x 785), in place of the detail while one is open: the title of the action open, the contract it is for, the action's
+        own form, then its summary to confirm, then the notice of what it did. Which action is the view-model's OpenAction; each
+        step is the view-model's too (the fields' errors, PendingChange, Done). Bound to the open contract's
+        ContractDetailViewModel; no logic lives here. Cards at most 900 wide, as on the canvas.
     -->
     <UserControl.Resources>
         <views:SetToVisibleConverter x:Key="Set" />
@@ -41,12 +43,13 @@
             <Setter Property="Foreground" Value="{DynamicResource Theme.Bad}" />
         </Style>
 
-        <!-- The dates: shown until the summary opens or the notice lands. -->
-        <Style x:Key="FormStep" TargetType="StackPanel">
+        <!-- Each action's form, shown until its summary opens or it lands; each action's summary while it is open. -->
+        <Style x:Key="NoticeForm" TargetType="StackPanel">
             <Setter Property="Visibility" Value="Collapsed" />
             <Style.Triggers>
                 <MultiDataTrigger>
                     <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding OpenAction}" Value="{x:Static contracts:ContractAction.Notice}" />
                         <Condition Binding="{Binding IsSummaryOpen}" Value="False" />
                         <Condition Binding="{Binding Done}" Value="{x:Null}" />
                     </MultiDataTrigger.Conditions>
@@ -54,13 +57,117 @@
                 </MultiDataTrigger>
             </Style.Triggers>
         </Style>
+
+        <Style x:Key="NoticeSummary" TargetType="StackPanel">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding OpenAction}" Value="{x:Static contracts:ContractAction.Notice}" />
+                        <Condition Binding="{Binding IsSummaryOpen}" Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Visibility" Value="Visible" />
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="UndoNoticeForm" TargetType="StackPanel">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding OpenAction}" Value="{x:Static contracts:ContractAction.UndoNotice}" />
+                        <Condition Binding="{Binding IsSummaryOpen}" Value="False" />
+                        <Condition Binding="{Binding Done}" Value="{x:Null}" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Visibility" Value="Visible" />
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="UndoNoticeSummary" TargetType="StackPanel">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding OpenAction}" Value="{x:Static contracts:ContractAction.UndoNotice}" />
+                        <Condition Binding="{Binding IsSummaryOpen}" Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Visibility" Value="Visible" />
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- The canvas's textarea: the input's box, taller, the text from the top. -->
+        <Style x:Key="TextArea" TargetType="TextBox" BasedOn="{StaticResource Theme.Input}">
+            <Setter Property="Height" Value="96" />
+            <Setter Property="AcceptsReturn" Value="True" />
+            <!-- Theme.Input centres its text; a tall box writes from the top. -->
+            <Setter Property="VerticalContentAlignment" Value="Top" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border x:Name="Box" CornerRadius="16" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                            <Grid Margin="0,10">
+                                <Border Padding="{TemplateBinding Padding}" IsHitTestVisible="False">
+                                    <TextBlock x:Name="Placeholder" Text="{TemplateBinding Tag}" VerticalAlignment="Top" Margin="2,0,0,0"
+                                               Foreground="{DynamicResource Theme.Muted}" Visibility="Collapsed" />
+                                </Border>
+                                <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="Stretch" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="Text" Value="">
+                                <Setter TargetName="Placeholder" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource Theme.Ink2}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource Theme.Focus}" />
+                                <Setter TargetName="Box" Property="BorderThickness" Value="2" />
+                            </Trigger>
+                            <Trigger Property="views:FieldError.HasError" Value="True">
+                                <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource Theme.Bad}" />
+                                <Setter TargetName="Box" Property="BorderThickness" Value="2" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel>
-            <TextBlock Text="Registrar aviso" Style="{StaticResource Theme.Title}" />
-            <TextBlock Text="El inquilino avisó que se va. El contrato sigue corriendo hasta que usted lo termine."
-                       Style="{StaticResource Theme.Subtitle}" />
+            <!-- The title and subtitle of the action open. -->
+            <TextBlock>
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock" BasedOn="{StaticResource Theme.Title}">
+                        <Setter Property="Text" Value="Registrar aviso" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding OpenAction}" Value="{x:Static contracts:ContractAction.UndoNotice}">
+                                <Setter Property="Text" Value="Deshacer aviso" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+            <TextBlock>
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock" BasedOn="{StaticResource Theme.Subtitle}">
+                        <Setter Property="Text" Value="El inquilino avisó que se va. El contrato sigue corriendo hasta que usted lo termine." />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding OpenAction}" Value="{x:Static contracts:ContractAction.UndoNotice}">
+                                <Setter Property="Text" Value="Saca el aviso de rescisión y el contrato vuelve a estar activo. Queda anotado quién lo hizo y por qué." />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
             <!-- The back link of every screen: a small ghost button with its chevron, under the title on the left. -->
             <Button Style="{StaticResource Theme.SmallGhostButton}" Padding="10,0,14,0" HorizontalAlignment="Left"
                     Margin="0,12,0,0" Command="{Binding CloseActionCommand}">
@@ -105,8 +212,8 @@
                 </StackPanel>
             </Border>
 
-            <!-- Step 1: the two dates, each with its error under it. -->
-            <StackPanel Style="{StaticResource FormStep}">
+            <!-- Registrar aviso, step 1: the two dates, each with its error under it. -->
+            <StackPanel Style="{StaticResource NoticeForm}">
                 <Border Style="{StaticResource Theme.Card}" Width="900" HorizontalAlignment="Left" Margin="0,12,0,0">
                     <StackPanel>
                         <TextBlock Text="Fechas del aviso" Style="{StaticResource Theme.CardTitle}" />
@@ -136,8 +243,8 @@
                 </StackPanel>
             </StackPanel>
 
-            <!-- Step 2: the summary to confirm; nothing is written before "Registrar aviso". -->
-            <StackPanel Visibility="{Binding IsSummaryOpen, Converter={StaticResource Shown}}">
+            <!-- Registrar aviso, step 2: the summary to confirm; nothing is written before "Registrar aviso". -->
+            <StackPanel Style="{StaticResource NoticeSummary}">
                 <Border Style="{StaticResource Theme.Card}" Width="900" HorizontalAlignment="Left" Margin="0,12,0,0">
                     <StackPanel>
                         <TextBlock Text="Revise antes de registrar" Style="{StaticResource Theme.CardTitle}" />
@@ -162,7 +269,45 @@
                 </StackPanel>
             </StackPanel>
 
-            <!-- Step 3: what was registered, with the way back. -->
+            <!-- Deshacer aviso, step 1: why, said under its field when missing. -->
+            <StackPanel Style="{StaticResource UndoNoticeForm}">
+                <Border Style="{StaticResource Theme.Card}" Width="900" HorizontalAlignment="Left" Margin="0,12,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Motivo" Style="{StaticResource Theme.CardTitle}" />
+                        <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Por qué se deshace " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
+                        <TextBox Style="{StaticResource TextArea}" Tag="Por ejemplo: el inquilino decidió quedarse"
+                                 Text="{Binding ChangeReason, UpdateSourceTrigger=PropertyChanged}"
+                                 views:FieldError.Text="{Binding ChangeReasonError}" />
+                        <TextBlock Text="{Binding ChangeReasonError}" Style="{StaticResource Theme.ErrorText}" Margin="0,6,0,0" />
+                        <TextBlock Text="El motivo queda guardado con su nombre y la fecha." Style="{StaticResource Theme.Hint}" Margin="0,12,0,0" />
+                    </StackPanel>
+                </Border>
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                    <Button Content="Continuar" Style="{StaticResource LargePrimary}" Command="{Binding ReviewUndoNoticeCommand}" />
+                    <Button Content="Volver" Style="{StaticResource LargeGhost}" Margin="12,0,0,0" Command="{Binding CloseActionCommand}" />
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Deshacer aviso, step 2: the summary to confirm; nothing is written before "Deshacer". -->
+            <StackPanel Style="{StaticResource UndoNoticeSummary}">
+                <Border Style="{StaticResource Theme.Card}" Width="900" HorizontalAlignment="Left" Margin="0,12,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Revise antes de deshacer" Style="{StaticResource Theme.CardTitle}" />
+                        <TextBlock Text="{Binding PendingChange.Summary}" TextWrapping="Wrap" />
+                        <DockPanel Margin="0,12,0,0">
+                            <TextBlock DockPanel.Dock="Right" Text="{Binding PendingChange.Reason}" FontWeight="Bold" TextWrapping="Wrap"
+                                       MaxWidth="600" TextAlignment="Right" />
+                            <TextBlock Text="Motivo" Foreground="{DynamicResource Theme.Muted}" />
+                        </DockPanel>
+                    </StackPanel>
+                </Border>
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                    <Button Content="Deshacer" Style="{StaticResource LargePrimary}" Command="{Binding ConfirmCommand}" />
+                    <Button Content="Volver y corregir" Style="{StaticResource LargeGhost}" Margin="12,0,0,0" Command="{Binding CancelCommand}" />
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Last step of every action: what it did, with the way back. -->
             <Border CornerRadius="14" Padding="20,16" Margin="0,12,0,0" BorderThickness="1" Width="900" HorizontalAlignment="Left"
                     Background="{DynamicResource Theme.OkBack}" BorderBrush="{DynamicResource Theme.Ok}"
                     Visibility="{Binding Done, Converter={StaticResource Set}}">

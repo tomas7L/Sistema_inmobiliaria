@@ -40,6 +40,7 @@ public sealed partial class ContractDetailViewModel : ObservableObject
         ConfirmCommand = new AsyncRelayCommand(ConfirmAsync, () => CanAct() && PendingChange is not null);
         CancelCommand = new RelayCommand(CloseSummary, CanAct);
         OpenNoticeCommand = new RelayCommand(() => OpenActionScreen(ContractAction.Notice), () => CanAct() && IsNoticeOffered);
+        OpenUndoNoticeCommand = new RelayCommand(() => OpenActionScreen(ContractAction.UndoNotice), () => CanAct() && IsUndoNoticeOffered);
         CloseActionCommand = new RelayCommand(() => OpenActionScreen(null), CanAct);
         Runner.PropertyChanged += OnRunnerChanged;
     }
@@ -67,6 +68,9 @@ public sealed partial class ContractDetailViewModel : ObservableObject
 
     /// <summary>The canvas's "Registrar aviso" button: its own screen, in place of the detail.</summary>
     public IRelayCommand OpenNoticeCommand { get; }
+
+    /// <summary>The canvas's "Deshacer aviso" button: its own screen, in place of the detail.</summary>
+    public IRelayCommand OpenUndoNoticeCommand { get; }
 
     /// <summary>"Volver al contrato": back to the detail, forgetting what the action's screen held.</summary>
     public IRelayCommand CloseActionCommand { get; }
@@ -96,6 +100,10 @@ public sealed partial class ContractDetailViewModel : ObservableObject
     [ObservableProperty]
     private string? _moveOutDateError;
 
+    /// <summary>The reason's error, under its field (canvas "Deshacer aviso"); null while it has none.</summary>
+    [ObservableProperty]
+    private string? _changeReasonError;
+
     partial void OnNoticeDateTextChanged(string value)
     {
         NoticeDate = DateEntry.Parse(value, DateEntryKind.Day);
@@ -119,8 +127,15 @@ public sealed partial class ContractDetailViewModel : ObservableObject
             new DetailLine("Propiedad", string.Join(", ", d.Units.Select(u => u.Address))),
             new DetailLine("Vigencia", $"{Formats.Date(d.StartDate)} al {Formats.Date(d.NominalEndDate)}"),
             new DetailLine("Alquiler actual", Formats.Money(d.MonthlyRent)),
+            .. NoticeLines(d),
         ]
         : [];
+
+    /// <summary>The notice being undone, as the canvas's "Deshacer aviso" heads the contract: its two dates.</summary>
+    private IReadOnlyList<DetailLine> NoticeLines(ContractDetail detail) =>
+        OpenAction == ContractAction.UndoNotice && detail is { NoticeGivenDate: { } notice, PlannedMoveOutDate: { } moveOut }
+            ? [new DetailLine("Fecha del aviso", Formats.Date(notice)), new DetailLine("Fecha de desocupación", Formats.Date(moveOut))]
+            : [];
 
     private void OpenActionScreen(ContractAction? action)
     {
@@ -133,7 +148,10 @@ public sealed partial class ContractDetailViewModel : ObservableObject
         MoveOutDate = null;
         NoticeDateError = null;
         MoveOutDateError = null;
+        ChangeReason = string.Empty;
+        ChangeReasonError = null;
         OpenAction = action;
+        OnPropertyChanged(nameof(ActionCardLines));
     }
 
     /// <summary>The reasons offered for ending, named. "Cargado por error" never is: only cancelling uses it (spec Requirement 10).</summary>
@@ -275,6 +293,7 @@ public sealed partial class ContractDetailViewModel : ObservableObject
         OnPropertyChanged(nameof(HasNoEvents));
         OnPropertyChanged(nameof(ActionCardLines));
         OpenNoticeCommand.NotifyCanExecuteChanged();
+        OpenUndoNoticeCommand.NotifyCanExecuteChanged();
     }
 
     [ObservableProperty]
@@ -313,7 +332,11 @@ public sealed partial class ContractDetailViewModel : ObservableObject
 
     partial void OnEndDateChanged(DateOnly? value) => CloseSummary();
 
-    partial void OnChangeReasonChanged(string value) => CloseSummary();
+    partial void OnChangeReasonChanged(string value)
+    {
+        CloseSummary();
+        ChangeReasonError = null;
+    }
 
     private bool CanAct() => !Runner.IsBusy;
 
@@ -409,7 +432,7 @@ public sealed partial class ContractDetailViewModel : ObservableObject
 
         if (string.IsNullOrWhiteSpace(ChangeReason))
         {
-            RefusalMessage = ContractRefusal.ReasonMissing.OperatorText();
+            ChangeReasonError = ContractRefusal.ReasonMissing.OperatorText();
             return;
         }
 
@@ -494,6 +517,10 @@ public sealed partial class ContractDetailViewModel : ObservableObject
                 "Aviso registrado",
                 $"El contrato de {Names(before, PartyRole.Tenant)} quedó En rescisión. La desocupación está prevista para el {Formats.Date(landed.MoveOutDate)}.");
         }
+        else if (pending is PendingUndoNotice && Detail is { } undone)
+        {
+            Done = new ActionDone("Listo", $"El aviso se deshizo. El contrato de {Names(undone, PartyRole.Tenant)} vuelve a estar Vigente.");
+        }
 
         await LoadAsync();
     }
@@ -511,6 +538,7 @@ public sealed partial class ContractDetailViewModel : ObservableObject
             ConfirmCommand.NotifyCanExecuteChanged();
             CancelCommand.NotifyCanExecuteChanged();
             OpenNoticeCommand.NotifyCanExecuteChanged();
+            OpenUndoNoticeCommand.NotifyCanExecuteChanged();
             CloseActionCommand.NotifyCanExecuteChanged();
         }
     }
@@ -529,6 +557,7 @@ public sealed record EndReasonOption(EndReason Reason, string Text);
 public enum ContractAction
 {
     Notice,
+    UndoNotice,
 }
 
 /// <summary>The notice an action ends on when it lands: its title and its sentence.</summary>
