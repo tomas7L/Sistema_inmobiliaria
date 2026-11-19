@@ -142,8 +142,8 @@ public sealed partial class IndicesViewModel : ObservableObject
 
     public string SourceName => SelectedIndex is { } index ? IndexGuidance.Source(index.Name) : string.Empty;
 
-    /// <summary>"Nivel publicado", with the unit when the index has one: "Nivel publicado ($)".</summary>
-    public string LevelLabel => LevelUnit.Length == 0 ? "Nivel publicado" : $"Nivel publicado ({LevelUnit})";
+    /// <summary>What the level field shows before the number, as the canvas: "$" for pesos, "#" for an index number.</summary>
+    public string LevelPrefix => LevelUnit.Length == 0 ? "#" : LevelUnit;
 
     public string FormTitle => Editing is null ? "Cargar un valor" : "Corregir un valor";
 
@@ -152,8 +152,14 @@ public sealed partial class IndicesViewModel : ObservableObject
     /// <summary>The foot of the values: how many there are.</summary>
     public string CountText => Values.Count == 1 ? "1 valor" : $"{Values.Count} valores";
 
+    /// <summary>
+    /// The level field's example, as the canvas: the index's latest stored level, so each index shows a figure of its own size
+    /// (ICL is in the tens, RIPTE in the millions). With no value stored yet, a general one.
+    /// </summary>
+    public string LevelExample => Values.MaxBy(row => row.Listing.Period) is { } latest ? $"Por ejemplo: {latest.LevelText}" : "Por ejemplo: 1.915.878,76";
+
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(GuidanceText), nameof(FormHint), nameof(LevelUnit), nameof(LevelLabel), nameof(SourceName), nameof(CanBringFromSource))]
+    [NotifyPropertyChangedFor(nameof(GuidanceText), nameof(FormHint), nameof(LevelUnit), nameof(LevelPrefix), nameof(SourceName), nameof(CanBringFromSource))]
     [NotifyCanExecuteChangedFor(nameof(BringFromSourceCommand), nameof(OpenBringCommand))]
     private IndexRow? _selectedIndex;
 
@@ -245,6 +251,7 @@ public sealed partial class IndicesViewModel : ObservableObject
         }
 
         OnPropertyChanged(nameof(CountText));
+        OnPropertyChanged(nameof(LevelExample));
 
         if (!_reloading)
         {
