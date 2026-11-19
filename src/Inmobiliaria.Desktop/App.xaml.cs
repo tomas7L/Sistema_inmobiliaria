@@ -217,7 +217,7 @@ public partial class App : Application
             // Only an Administrador's form offers the cutover (spec Decision 32).
             var contractsViewModel = new ContractsViewModel(
                 contractRegistry,
-                id => new ContractDetailViewModel(contractRegistry, adjustmentDesk, id),
+                id => new ContractDetailViewModel(contractRegistry, adjustmentDesk, id, _sessionProvider.GetRequiredService<IAgencyClock>()),
                 () => new ContractFormViewModel(
                     contractRegistry,
                     session.Role == UserRole.Admin,

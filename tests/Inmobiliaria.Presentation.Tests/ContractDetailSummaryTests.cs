@@ -39,7 +39,7 @@ public class ContractDetailSummaryTests
 
     private static async Task<ContractDetailViewModel> LoadedAsync(ContractDetail detail)
     {
-        var viewModel = new ContractDetailViewModel(new FakeContractRegistry { Detail = detail }, new FakeAdjustmentDesk(), ContractId);
+        var viewModel = new ContractDetailViewModel(new FakeContractRegistry { Detail = detail }, new FakeAdjustmentDesk(), ContractId, new FakeClock(new DateOnly(2026, 11, 19)));
         await viewModel.LoadCommand.ExecuteAsync(null);
         return viewModel;
     }

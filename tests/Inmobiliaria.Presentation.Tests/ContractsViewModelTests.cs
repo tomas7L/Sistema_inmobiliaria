@@ -123,7 +123,7 @@ public class ContractsViewModelTests
         var viewModel = new ContractsViewModel(port, id =>
         {
             opened.Add(id);
-            return new ContractDetailViewModel(port, new FakeAdjustmentDesk(), id);
+            return new ContractDetailViewModel(port, new FakeAdjustmentDesk(), id, new FakeClock(new DateOnly(2026, 11, 19)));
         });
         await viewModel.LoadCommand.ExecuteAsync(null);
 
@@ -140,7 +140,7 @@ public class ContractsViewModelTests
     {
         var port = new FakeContractRegistry { Detail = DetailOf(Vigente) };
         port.Contracts.Add(Vigente);
-        var viewModel = new ContractsViewModel(port, id => new ContractDetailViewModel(port, new FakeAdjustmentDesk(), id));
+        var viewModel = new ContractsViewModel(port, id => new ContractDetailViewModel(port, new FakeAdjustmentDesk(), id, new FakeClock(new DateOnly(2026, 11, 19))));
         await viewModel.LoadCommand.ExecuteAsync(null);
         await viewModel.OpenCommand.ExecuteAsync(viewModel.Contracts[0]);
         port.Contracts.Add(EnRescision);

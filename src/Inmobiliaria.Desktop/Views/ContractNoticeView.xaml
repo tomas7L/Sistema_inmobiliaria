@@ -1,0 +1,186 @@
+<UserControl x:Class="Inmobiliaria.Desktop.Views.ContractNoticeView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:leasing="clr-namespace:Inmobiliaria.Domain.Leasing;assembly=Inmobiliaria.Domain"
+             xmlns:views="clr-namespace:Inmobiliaria.Desktop.Views"
+             mc:Ignorable="d"
+             d:DesignHeight="785" d:DesignWidth="1268">
+    <!--
+        "Registrar aviso" as the designer drew it (canvas "ContratoAviso", 1536 x 785): the contract it is for, the two dates,
+        then the summary to confirm, then the notice that it was registered. Each step is the view-model's: the dates' errors
+        under each field (NoticeDateError, MoveOutDateError), the summary (PendingChange), the outcome (Done). Bound to the open
+        contract's ContractDetailViewModel; no logic lives here. Cards at most 900 wide, as on the canvas.
+    -->
+    <UserControl.Resources>
+        <views:SetToVisibleConverter x:Key="Set" />
+        <BooleanToVisibilityConverter x:Key="Shown" />
+
+        <!-- One line of a card, the canvas's "kv": what it is, muted, and its value, bold. -->
+        <DataTemplate x:Key="Line">
+            <DockPanel Margin="0,6">
+                <TextBlock DockPanel.Dock="Right" Text="{Binding Value}" FontWeight="Bold" />
+                <TextBlock Text="{Binding Label}" Foreground="{DynamicResource Theme.Muted}" />
+            </DockPanel>
+        </DataTemplate>
+
+        <Style x:Key="LargeGhost" TargetType="Button" BasedOn="{StaticResource Theme.GhostButton}">
+            <Setter Property="Height" Value="42" />
+            <Setter Property="Padding" Value="26,0" />
+            <Setter Property="FontSize" Value="15" />
+        </Style>
+
+        <Style x:Key="LargePrimary" TargetType="Button" BasedOn="{StaticResource Theme.PrimaryButton}">
+            <Setter Property="Height" Value="42" />
+            <Setter Property="Padding" Value="26,0" />
+            <Setter Property="FontSize" Value="15" />
+        </Style>
+
+        <Style x:Key="Required" TargetType="Run">
+            <Setter Property="Foreground" Value="{DynamicResource Theme.Bad}" />
+        </Style>
+
+        <!-- The dates: shown until the summary opens or the notice lands. -->
+        <Style x:Key="FormStep" TargetType="StackPanel">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsSummaryOpen}" Value="False" />
+                        <Condition Binding="{Binding Done}" Value="{x:Null}" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Visibility" Value="Visible" />
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel>
+            <TextBlock Text="Registrar aviso" Style="{StaticResource Theme.Title}" />
+            <TextBlock Text="El inquilino avisó que se va. El contrato sigue corriendo hasta que usted lo termine."
+                       Style="{StaticResource Theme.Subtitle}" />
+            <!-- The back link of every screen: a small ghost button with its chevron, under the title on the left. -->
+            <Button Style="{StaticResource Theme.SmallGhostButton}" Padding="10,0,14,0" HorizontalAlignment="Left"
+                    Margin="0,12,0,0" Command="{Binding CloseActionCommand}">
+                <StackPanel Orientation="Horizontal">
+                    <Viewbox Width="16" Height="16" Margin="0,0,6,0">
+                        <Canvas Width="24" Height="24">
+                            <Path Data="M15,6 L9,12 L15,18" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  StrokeLineJoin="Round"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                        </Canvas>
+                    </Viewbox>
+                    <TextBlock Text="Volver al contrato" VerticalAlignment="Center" />
+                </StackPanel>
+            </Button>
+
+            <TextBlock Text="{Binding Runner.ErrorMessage}" Style="{StaticResource Theme.ErrorText}" Margin="0,12,0,0" />
+            <TextBlock Text="{Binding RefusalMessage}" Style="{StaticResource Theme.ErrorText}" Margin="0,12,0,0" />
+
+            <!-- The contract it is for, with its state. -->
+            <Border Style="{StaticResource Theme.Card}" MaxWidth="900" HorizontalAlignment="Left" Width="900" Margin="0,12,0,0">
+                <StackPanel>
+                    <DockPanel>
+                        <!-- Coloured as on the list and the detail: green in force, amber with notice. -->
+                        <Border DockPanel.Dock="Right" Margin="0" VerticalAlignment="Center">
+                            <Border.Style>
+                                <Style TargetType="Border" BasedOn="{StaticResource Theme.Chip}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Detail.Status}" Value="{x:Static leasing:ContractStatus.Active}">
+                                            <Setter Property="Tag" Value="ok" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Detail.Status}" Value="{x:Static leasing:ContractStatus.PendingTermination}">
+                                            <Setter Property="Tag" Value="warn" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Text="{Binding StatusText}" />
+                        </Border>
+                        <TextBlock Text="Contrato" Style="{StaticResource Theme.CardTitle}" Margin="0" VerticalAlignment="Center" />
+                    </DockPanel>
+                    <ItemsControl ItemsSource="{Binding ActionCardLines}" ItemTemplate="{StaticResource Line}" Margin="0,4,0,0" />
+                </StackPanel>
+            </Border>
+
+            <!-- Step 1: the two dates, each with its error under it. -->
+            <StackPanel Style="{StaticResource FormStep}">
+                <Border Style="{StaticResource Theme.Card}" Width="900" HorizontalAlignment="Left" Margin="0,12,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Fechas del aviso" Style="{StaticResource Theme.CardTitle}" />
+                        <StackPanel Orientation="Horizontal">
+                            <StackPanel Width="220">
+                                <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Fecha del aviso " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
+                                <TextBox Style="{StaticResource Theme.Input}" Tag="dd/mm/aaaa"
+                                         Text="{Binding NoticeDateText, UpdateSourceTrigger=PropertyChanged}"
+                                         views:FieldError.Text="{Binding NoticeDateError}" />
+                                <TextBlock Text="{Binding NoticeDateError}" Style="{StaticResource Theme.ErrorText}" Margin="0,6,0,0" />
+                            </StackPanel>
+                            <StackPanel Width="220" Margin="16,0,0,0">
+                                <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Fecha de desocupación " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
+                                <TextBox Style="{StaticResource Theme.Input}" Tag="dd/mm/aaaa"
+                                         Text="{Binding MoveOutDateText, UpdateSourceTrigger=PropertyChanged}"
+                                         views:FieldError.Text="{Binding MoveOutDateError}" />
+                                <TextBlock Text="{Binding MoveOutDateError}" Style="{StaticResource Theme.ErrorText}" Margin="0,6,0,0" />
+                            </StackPanel>
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource Theme.Hint}" Margin="0,12,0,0"
+                                   Text="La fecha del aviso no puede ser anterior al inicio del contrato ni posterior a hoy. La de desocupación no puede ser anterior a la del aviso. Al registrarlo, el contrato pasa a En rescisión." />
+                    </StackPanel>
+                </Border>
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                    <Button Content="Continuar" Style="{StaticResource LargePrimary}" Command="{Binding ReviewNoticeCommand}" />
+                    <Button Content="Cancelar" Style="{StaticResource LargeGhost}" Margin="12,0,0,0" Command="{Binding CloseActionCommand}" />
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Step 2: the summary to confirm; nothing is written before "Registrar aviso". -->
+            <StackPanel Visibility="{Binding IsSummaryOpen, Converter={StaticResource Shown}}">
+                <Border Style="{StaticResource Theme.Card}" Width="900" HorizontalAlignment="Left" Margin="0,12,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Revise antes de registrar" Style="{StaticResource Theme.CardTitle}" />
+                        <ItemsControl ItemsSource="{Binding ActionCardLines}" ItemTemplate="{StaticResource Line}" />
+                        <DockPanel Margin="0,6">
+                            <TextBlock DockPanel.Dock="Right" Text="{Binding PendingChange.NoticeDate, StringFormat=dd/MM/yyyy}" FontWeight="Bold" />
+                            <TextBlock Text="Fecha del aviso" Foreground="{DynamicResource Theme.Muted}" />
+                        </DockPanel>
+                        <DockPanel Margin="0,6">
+                            <TextBlock DockPanel.Dock="Right" Text="{Binding PendingChange.MoveOutDate, StringFormat=dd/MM/yyyy}" FontWeight="Bold" />
+                            <TextBlock Text="Fecha de desocupación" Foreground="{DynamicResource Theme.Muted}" />
+                        </DockPanel>
+                        <Separator Margin="0,8" Background="{DynamicResource Theme.Line}" />
+                        <TextBlock Text="{Binding PendingChange.Summary}" TextWrapping="Wrap" />
+                        <TextBlock Style="{StaticResource Theme.Hint}" Margin="0,12,0,0"
+                                   Text="El aviso no termina el contrato: sigue vigente y generando períodos hasta que usted lo termine. Si se equivocó, el aviso se puede deshacer." />
+                    </StackPanel>
+                </Border>
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                    <Button Content="Registrar aviso" Style="{StaticResource LargePrimary}" Command="{Binding ConfirmCommand}" />
+                    <Button Content="Volver y corregir" Style="{StaticResource LargeGhost}" Margin="12,0,0,0" Command="{Binding CancelCommand}" />
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Step 3: what was registered, with the way back. -->
+            <Border CornerRadius="14" Padding="20,16" Margin="0,12,0,0" BorderThickness="1" Width="900" HorizontalAlignment="Left"
+                    Background="{DynamicResource Theme.OkBack}" BorderBrush="{DynamicResource Theme.Ok}"
+                    Visibility="{Binding Done, Converter={StaticResource Set}}">
+                <DockPanel>
+                    <Viewbox Width="26" Height="26" Margin="0,0,14,0" VerticalAlignment="Center" DockPanel.Dock="Left">
+                        <Canvas Width="24" Height="24">
+                            <Path Data="M3,12 A9,9 0 1 1 21,12 A9,9 0 1 1 3,12 Z M8,12.5 L11,15.5 L16,9.5" Stroke="{DynamicResource Theme.Ok}"
+                                  StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                        </Canvas>
+                    </Viewbox>
+                    <Button Content="Volver al contrato" Style="{StaticResource Theme.PrimaryButton}" DockPanel.Dock="Right"
+                            VerticalAlignment="Center" Margin="14,0,0,0" Command="{Binding CloseActionCommand}" />
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Done.Title}" FontSize="17" FontWeight="Bold" Foreground="{DynamicResource Theme.Ink}" Margin="0,0,0,2" />
+                        <TextBlock Text="{Binding Done.Text}" Foreground="{DynamicResource Theme.Ok}" TextWrapping="Wrap" />
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -185,8 +185,23 @@
             </Border>
         </Grid>
 
-        <!-- The contract opened, in place of the list: its tables scroll inside their card, as the list's. -->
-        <Grid Visibility="{Binding IsDetailOpen, Converter={StaticResource Shown}}">
+        <!-- The contract opened, in place of the list: its tables scroll inside their card, as the list's. An action with its
+             own screen ("Registrar aviso") takes the detail's place while it is open. -->
+        <Grid>
+            <Grid.Style>
+                <Style TargetType="Grid">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding IsDetailOpen}" Value="True" />
+                                <Condition Binding="{Binding OpenDetail.IsActionOpen}" Value="False" />
+                            </MultiDataTrigger.Conditions>
+                            <Setter Property="Visibility" Value="Visible" />
+                        </MultiDataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Grid.Style>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
@@ -196,22 +211,36 @@
                 <TextBlock Text="{Binding OpenDetail.Subtitle}" Style="{StaticResource Theme.Subtitle}" />
                 <!-- The canvas's back link: a small ghost button with its chevron, under the title on the left. The contract's
                      actions go on its right as their screens are built. -->
-                <Button Style="{StaticResource Theme.SmallGhostButton}" Padding="10,0,14,0" HorizontalAlignment="Left"
-                        Margin="0,12,0,0" Command="{Binding BackCommand}">
-                    <StackPanel Orientation="Horizontal">
-                        <Viewbox Width="16" Height="16" Margin="0,0,6,0">
-                            <Canvas Width="24" Height="24">
-                                <Path Data="M15,6 L9,12 L15,18" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
-                                      StrokeLineJoin="Round"
-                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
-                            </Canvas>
-                        </Viewbox>
-                        <TextBlock Text="Volver a contratos" VerticalAlignment="Center" />
+                <!-- The canvas's line under the title: the way back on the left, the contract's actions on the right, each
+                     shown where its state offers it. Only the actions whose screens are built are here. -->
+                <DockPanel Margin="0,12,0,0">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                        <Button Content="Registrar aviso" Style="{StaticResource Theme.GhostButton}"
+                                Command="{Binding OpenDetail.OpenNoticeCommand}"
+                                Visibility="{Binding OpenDetail.IsNoticeOffered, Converter={StaticResource Shown}}" />
                     </StackPanel>
-                </Button>
+                    <Button Style="{StaticResource Theme.SmallGhostButton}" Padding="10,0,14,0" HorizontalAlignment="Left"
+                            VerticalAlignment="Center" Command="{Binding BackCommand}">
+                        <StackPanel Orientation="Horizontal">
+                            <Viewbox Width="16" Height="16" Margin="0,0,6,0">
+                                <Canvas Width="24" Height="24">
+                                    <Path Data="M15,6 L9,12 L15,18" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                          StrokeLineJoin="Round"
+                                          Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                                </Canvas>
+                            </Viewbox>
+                            <TextBlock Text="Volver a contratos" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </DockPanel>
             </StackPanel>
             <views:ContractDetailView Grid.Row="1" DataContext="{Binding OpenDetail}" />
         </Grid>
+
+        <!-- "Registrar aviso", in place of the detail while it is open. Its DataContext is the open contract, so its own
+             bindings, Visibility included, are read from it: IsActionOpen, not OpenDetail.IsActionOpen. -->
+        <views:ContractNoticeView DataContext="{Binding OpenDetail}"
+                                  Visibility="{Binding IsActionOpen, Converter={StaticResource Shown}, FallbackValue=Collapsed}" />
 
         <!-- The form of a new contract, in place of the list. It scrolls only on a screen smaller than the canvas's. -->
         <ScrollViewer VerticalScrollBarVisibility="Auto" Visibility="{Binding IsFormOpen, Converter={StaticResource Shown}}">

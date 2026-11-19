@@ -137,6 +137,8 @@
             <Setter Property="CornerRadius" Value="9" />
             <Setter Property="MinWidth" Value="18" />
             <Setter Property="Padding" Value="5,0" />
+            <Setter Property="Height" Value="18" />
+            <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="Margin" Value="8,0,0,0" />
             <Setter Property="TextElement.Foreground" Value="#FFFFFF" />
             <Setter Property="TextElement.FontSize" Value="12" />
@@ -254,25 +256,25 @@
                 <RadioButton x:Name="PartiesTab" GroupName="FormTab" Style="{StaticResource Tab}" IsChecked="True">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="Partes" />
-                        <Border Style="{StaticResource TabMark}" Visibility="{Binding Errors.PartiesCount, Converter={StaticResource SetShown}}"><TextBlock Text="{Binding Errors.PartiesCount}" /></Border>
+                        <Border Style="{StaticResource TabMark}" Visibility="{Binding Errors.PartiesCount, Converter={StaticResource SetShown}}"><TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" LineStackingStrategy="BlockLineHeight" LineHeight="16" Margin="0,0,0,1" Text="{Binding Errors.PartiesCount}" /></Border>
                     </StackPanel>
                 </RadioButton>
                 <RadioButton x:Name="UnitsTab" GroupName="FormTab" Style="{StaticResource Tab}">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="Propiedad" />
-                        <Border Style="{StaticResource TabMark}" Visibility="{Binding Errors.UnitsCount, Converter={StaticResource SetShown}}"><TextBlock Text="{Binding Errors.UnitsCount}" /></Border>
+                        <Border Style="{StaticResource TabMark}" Visibility="{Binding Errors.UnitsCount, Converter={StaticResource SetShown}}"><TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" LineStackingStrategy="BlockLineHeight" LineHeight="16" Margin="0,0,0,1" Text="{Binding Errors.UnitsCount}" /></Border>
                     </StackPanel>
                 </RadioButton>
                 <RadioButton x:Name="DatesTab" GroupName="FormTab" Style="{StaticResource Tab}">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="Fechas e importes" />
-                        <Border Style="{StaticResource TabMark}" Visibility="{Binding Errors.DatesAndAmountsCount, Converter={StaticResource SetShown}}"><TextBlock Text="{Binding Errors.DatesAndAmountsCount}" /></Border>
+                        <Border Style="{StaticResource TabMark}" Visibility="{Binding Errors.DatesAndAmountsCount, Converter={StaticResource SetShown}}"><TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" LineStackingStrategy="BlockLineHeight" LineHeight="16" Margin="0,0,0,1" Text="{Binding Errors.DatesAndAmountsCount}" /></Border>
                     </StackPanel>
                 </RadioButton>
                 <RadioButton x:Name="ClauseTab" GroupName="FormTab" Style="{StaticResource Tab}">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="Cláusula de ajuste" />
-                        <Border Style="{StaticResource TabMark}" Visibility="{Binding Errors.ClauseCount, Converter={StaticResource SetShown}}"><TextBlock Text="{Binding Errors.ClauseCount}" /></Border>
+                        <Border Style="{StaticResource TabMark}" Visibility="{Binding Errors.ClauseCount, Converter={StaticResource SetShown}}"><TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" LineStackingStrategy="BlockLineHeight" LineHeight="16" Margin="0,0,0,1" Text="{Binding Errors.ClauseCount}" /></Border>
                     </StackPanel>
                 </RadioButton>
                 </StackPanel>

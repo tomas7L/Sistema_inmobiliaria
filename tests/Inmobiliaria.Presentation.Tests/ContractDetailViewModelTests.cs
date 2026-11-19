@@ -1,4 +1,5 @@
 using Inmobiliaria.Domain.Leasing;
+using Inmobiliaria.Domain.Parties;
 using Inmobiliaria.Presentation.Contracts;
 using Inmobiliaria.Presentation.Tests.Fakes;
 
@@ -11,11 +12,24 @@ public class ContractDetailViewModelTests
     private static readonly DateOnly Notice = new(2026, 10, 10);
     private static readonly DateOnly MoveOut = new(2026, 12, 31);
     private static readonly DateOnly EndOn = new(2026, 11, 5);
+    private static readonly DateOnly Today = new(2026, 11, 19);
 
     private static ContractDetail Detail(ContractStatus status) => new(
         ContractId, status, new DateOnly(2026, 1, 1), new DateOnly(2027, 12, 31), false, null, null, null, null, null, 450_000m, 10, 8m, null, [], [], null, []);
 
-    private static ContractDetailViewModel New(FakeContractRegistry port) => new(port, new FakeAdjustmentDesk(), ContractId);
+    private static ContractDetailViewModel New(FakeContractRegistry port) =>
+        new(port, new FakeAdjustmentDesk(), ContractId, new FakeClock(Today));
+
+    /// <summary>A contract in force with its tenant, lessor and unit, as the canvas's "Registrar aviso" shows it.</summary>
+    private static ContractDetail Peopled(ContractStatus status) => Detail(status) with
+    {
+        Parties =
+        [
+            new ContractPartyLine(Guid.NewGuid(), "Ruiz, Elena", PartyRole.Lessor),
+            new ContractPartyLine(Guid.NewGuid(), "Ocampo, Martín", PartyRole.Tenant),
+        ],
+        Units = [new ContractUnitLine(Guid.NewGuid(), "Pellegrini 722", 100m)],
+    };
 
     private static async Task<ContractDetailViewModel> LoadedAsync(ContractDetail detail)
     {
@@ -150,10 +164,11 @@ public class ContractDetailViewModelTests
         Assert.Empty(port.Calls);
     }
 
+    /// <summary>Canvas "Registrar aviso": a missing date is said under its own field, not over the screen.</summary>
     [Theory]
     [InlineData(true, false)]
     [InlineData(false, true)]
-    public void ReviewingNotice_WithADateMissing_SaysSo(bool hasNotice, bool hasMoveOut)
+    public void ReviewingNotice_WithADateMissing_SaysSoUnderThatField(bool hasNotice, bool hasMoveOut)
     {
         var viewModel = New(new FakeContractRegistry());
         viewModel.NoticeDate = hasNotice ? Notice : null;
@@ -161,8 +176,97 @@ public class ContractDetailViewModelTests
 
         viewModel.ReviewNoticeCommand.Execute(null);
 
-        Assert.Equal(ContractDetailViewModel.MissingNoticeDates, viewModel.RefusalMessage);
+        Assert.Equal(hasNotice ? null : ContractDetailViewModel.MissingNoticeDates, viewModel.NoticeDateError);
+        Assert.Equal(hasMoveOut ? null : ContractDetailViewModel.MissingNoticeDates, viewModel.MoveOutDateError);
+        Assert.Null(viewModel.RefusalMessage);
         Assert.False(viewModel.IsSummaryOpen);
+    }
+
+    /// <summary>
+    /// Canvas "Registrar aviso" and task 12.3e: on Continuar, a notice after today and a move-out before the notice are each
+    /// said under their field, both at once, before anything is written (spec Requirement 10's rules, as the port applies them).
+    /// </summary>
+    [Fact]
+    public async Task ReviewingNotice_SaysEveryDateErrorUnderItsField_AtOnce()
+    {
+        var port = new FakeContractRegistry { Detail = Peopled(ContractStatus.Active) };
+        var viewModel = New(port);
+        await viewModel.LoadCommand.ExecuteAsync(null);
+        viewModel.NoticeDateText = "20/11/2026";
+        viewModel.MoveOutDateText = "01/11/2026";
+
+        viewModel.ReviewNoticeCommand.Execute(null);
+
+        Assert.Equal(ContractRefusal.NoticeAfterToday.OperatorText(), viewModel.NoticeDateError);
+        Assert.Equal(ContractRefusal.MoveOutBeforeNotice.OperatorText(), viewModel.MoveOutDateError);
+        Assert.False(viewModel.IsSummaryOpen);
+        Assert.Empty(port.Calls);
+    }
+
+    /// <summary>The dates are typed as the contract form's are: short, or run together.</summary>
+    [Fact]
+    public void TheNoticeDates_AreReadAsTyped()
+    {
+        var viewModel = New(new FakeContractRegistry());
+
+        viewModel.NoticeDateText = "10/10/26";
+        viewModel.MoveOutDateText = "31122026";
+
+        Assert.Equal(Notice, viewModel.NoticeDate);
+        Assert.Equal(MoveOut, viewModel.MoveOutDate);
+    }
+
+    /// <summary>
+    /// Canvas "Registrar aviso": its own screen, in place of the detail, offered only where notice is (a contract in force),
+    /// with the contract it is for, its term included so the dates can be chosen without leaving (Tomás, 2026-11-19: "que
+    /// aparezcan los diferentes datos para poder rellenar esos campos"); "Volver al contrato" goes back to the detail.
+    /// </summary>
+    [Fact]
+    public async Task TheNoticeScreen_OpensWhereNoticeIsOffered_ShowsTheContract_AndGoesBack()
+    {
+        var viewModel = await LoadedAsync(Peopled(ContractStatus.Active));
+
+        Assert.True(viewModel.OpenNoticeCommand.CanExecute(null));
+        viewModel.OpenNoticeCommand.Execute(null);
+
+        Assert.Equal(ContractAction.Notice, viewModel.OpenAction);
+        Assert.True(viewModel.IsActionOpen);
+        Assert.Equal(
+            [
+                new DetailLine("Inquilino", "Ocampo, Martín"), new DetailLine("Propiedad", "Pellegrini 722"),
+                new DetailLine("Vigencia", "01/01/2026 al 31/12/2027"), new DetailLine("Alquiler actual", "$ 450.000"),
+            ],
+            viewModel.ActionCardLines);
+
+        viewModel.CloseActionCommand.Execute(null);
+
+        Assert.Null(viewModel.OpenAction);
+        Assert.False(viewModel.IsActionOpen);
+
+        var withNotice = await LoadedAsync(Peopled(ContractStatus.PendingTermination));
+        Assert.False(withNotice.OpenNoticeCommand.CanExecute(null));
+    }
+
+    /// <summary>Canvas "Registrar aviso": a notice registered ends on its notice, naming the tenant and the move-out.</summary>
+    [Fact]
+    public async Task ARegisteredNotice_EndsOnItsNotice_AndGoingBackForgetsIt()
+    {
+        var viewModel = await LoadedAsync(Peopled(ContractStatus.Active));
+        viewModel.OpenNoticeCommand.Execute(null);
+        viewModel.NoticeDateText = "10/10/2026";
+        viewModel.MoveOutDateText = "31/12/2026";
+        viewModel.ReviewNoticeCommand.Execute(null);
+
+        await viewModel.ConfirmCommand.ExecuteAsync(null);
+
+        Assert.Equal(
+            new ActionDone("Aviso registrado", "El contrato de Ocampo, Martín quedó En rescisión. La desocupación está prevista para el 31/12/2026."),
+            viewModel.Done);
+
+        viewModel.CloseActionCommand.Execute(null);
+
+        Assert.Null(viewModel.Done);
+        Assert.Equal(string.Empty, viewModel.NoticeDateText);
     }
 
     [Fact]
@@ -196,6 +300,7 @@ public class ContractDetailViewModelTests
         Assert.Equal(ContractRefusal.MoveOutBeforeNotice.OperatorText(), viewModel.RefusalMessage);
         Assert.Equal(Notice, viewModel.NoticeDate);
         Assert.False(viewModel.IsSummaryOpen);
+        Assert.Null(viewModel.Done);
     }
 
     /// <summary>Spec scenario: a contract owing 500,000 shows it, and debt does not stop the end.</summary>
