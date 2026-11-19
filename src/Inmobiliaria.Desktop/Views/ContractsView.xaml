@@ -216,15 +216,23 @@
         <!-- The form of a new contract, in place of the list. It scrolls only on a screen smaller than the canvas's. -->
         <ScrollViewer VerticalScrollBarVisibility="Auto" Visibility="{Binding IsFormOpen, Converter={StaticResource Shown}}">
             <StackPanel>
-                <DockPanel>
-                    <Button Content="Volver a contratos" Style="{StaticResource Theme.GhostButton}" DockPanel.Dock="Right"
-                            VerticalAlignment="Top" Command="{Binding BackCommand}" />
-                    <StackPanel>
-                        <TextBlock Text="Nuevo contrato" Style="{StaticResource Theme.Title}" />
-                        <TextBlock Text="Complete las partes, la propiedad, las fechas y los importes. Al guardar se crea también su cuenta, vacía."
-                                   Style="{StaticResource Theme.Subtitle}" />
+                <TextBlock Text="Nuevo contrato" Style="{StaticResource Theme.Title}" />
+                <TextBlock Text="Complete las partes, la propiedad, las fechas y los importes. Al guardar se crea también su cuenta, vacía."
+                           Style="{StaticResource Theme.Subtitle}" />
+                <!-- The back link of every screen: a small ghost button with its chevron, under the title on the left. -->
+                <Button Style="{StaticResource Theme.SmallGhostButton}" Padding="10,0,14,0" HorizontalAlignment="Left"
+                        Margin="0,12,0,0" Command="{Binding BackCommand}">
+                    <StackPanel Orientation="Horizontal">
+                        <Viewbox Width="16" Height="16" Margin="0,0,6,0">
+                            <Canvas Width="24" Height="24">
+                                <Path Data="M15,6 L9,12 L15,18" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                      StrokeLineJoin="Round"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                            </Canvas>
+                        </Viewbox>
+                        <TextBlock Text="Volver a contratos" VerticalAlignment="Center" />
                     </StackPanel>
-                </DockPanel>
+                </Button>
                 <views:ContractFormView DataContext="{Binding OpenForm}" />
             </StackPanel>
         </ScrollViewer>

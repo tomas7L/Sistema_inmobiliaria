@@ -8,7 +8,7 @@
              mc:Ignorable="d"
              d:DesignHeight="1000" d:DesignWidth="1300">
     <!--
-        A new contract as the designer drew it (canvas "Nuevo contrato"): four tabs, each marked with the errors it holds,
+        A new contract as the designer drew it (canvas "Nuevo contrato", at 1536 x 785): four tabs, each marked with the errors it holds,
         people and units picked by typing, every error beside its field or under its row. Bound to ContractFormViewModel;
         no logic lives here. The title and "Volver a contratos" are the list's, which hosts this in its place.
     -->
@@ -19,6 +19,94 @@
         <BooleanToVisibilityConverter x:Key="Shown" />
         <sys:Boolean x:Key="True">True</sys:Boolean>
         <sys:Boolean x:Key="False">False</sys:Boolean>
+
+        <!-- The canvas's .alert: a coloured band with an icon and its text. Tag picks the colour: "bad", "warn" or "info". -->
+        <Style x:Key="Notice" TargetType="Border">
+            <Setter Property="CornerRadius" Value="14" />
+            <Setter Property="Padding" Value="14,10" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Background" Value="{DynamicResource Theme.Surface}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Theme.Line}" />
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource Theme.Ink2}" />
+            <Setter Property="TextElement.FontSize" Value="14" />
+            <Style.Triggers>
+                <Trigger Property="Tag" Value="bad">
+                    <Setter Property="Background" Value="{DynamicResource Theme.BadBack}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource Theme.Bad}" />
+                    <Setter Property="TextElement.Foreground" Value="{DynamicResource Theme.Bad}" />
+                </Trigger>
+                <Trigger Property="Tag" Value="warn">
+                    <Setter Property="Background" Value="{DynamicResource Theme.WarnBack}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource Theme.Warn}" />
+                    <Setter Property="TextElement.Foreground" Value="{DynamicResource Theme.Warn}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- A notice's icon, drawn on the canvas's 24 x 24 grid in the notice's own colour. -->
+        <Style x:Key="NoticeIcon" TargetType="Path">
+            <Setter Property="Stroke" Value="{Binding (TextElement.Foreground), RelativeSource={RelativeSource Self}}" />
+            <Setter Property="StrokeThickness" Value="1.9" />
+            <Setter Property="StrokeStartLineCap" Value="Round" />
+            <Setter Property="StrokeEndLineCap" Value="Round" />
+            <Setter Property="StrokeLineJoin" Value="Round" />
+        </Style>
+
+        <!-- The canvas's .tabs, as on the contract's detail: plain words over one grey rule, the chosen one over the menu's blue. -->
+        <Style x:Key="Tab" TargetType="RadioButton">
+            <Setter Property="FontFamily" Value="{StaticResource Theme.Font}" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource Theme.Muted}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Margin" Value="0,0,6,-1" />
+            <Setter Property="VerticalAlignment" Value="Bottom" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Rule" Background="Transparent" BorderBrush="Transparent" BorderThickness="0,0,0,3" Padding="18,10">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource Theme.Ink}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource Theme.Ink}" />
+                                <Setter TargetName="Rule" Property="BorderBrush" Value="{DynamicResource Theme.NavOn}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- The canvas's .btn-lg, for Cancelar and Guardar contrato on the tabs' line. -->
+        <Style x:Key="LargeGhost" TargetType="Button" BasedOn="{StaticResource Theme.GhostButton}">
+            <Setter Property="Height" Value="42" />
+            <Setter Property="Padding" Value="26,0" />
+            <Setter Property="FontSize" Value="15" />
+        </Style>
+
+        <Style x:Key="LargePrimary" TargetType="Button" BasedOn="{StaticResource Theme.PrimaryButton}">
+            <Setter Property="Height" Value="42" />
+            <Setter Property="Padding" Value="26,0" />
+            <Setter Property="FontSize" Value="15" />
+        </Style>
+
+        <Style x:Key="SmallPrimary" TargetType="Button" BasedOn="{StaticResource Theme.PrimaryButton}">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="14,0" />
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+
+        <!-- The "$" before an amount and the "%" after a percentage, inside the field, as the canvas's .pre and .suf. -->
+        <Style x:Key="FieldAffix" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource Theme.Muted}" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+        </Style>
 
         <!-- A field's error, under it; collapsed while there is none. -->
         <Style x:Key="FieldError" TargetType="TextBlock" BasedOn="{StaticResource Theme.ErrorText}">
@@ -117,7 +205,7 @@
             <StackPanel Margin="0,0,0,8">
                 <Border BorderBrush="{DynamicResource Theme.Line}" BorderThickness="1" CornerRadius="12" Padding="14,8">
                     <DockPanel>
-                        <Button Content="Quitar" Style="{StaticResource Theme.GhostButton}" DockPanel.Dock="Right"
+                        <Button Content="Quitar" Style="{StaticResource Theme.SmallGhostButton}" DockPanel.Dock="Right"
                                 Command="{Binding Tag.RemoveCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                 CommandParameter="{Binding}" />
                         <TextBlock VerticalAlignment="Center" FontWeight="Bold">
@@ -141,36 +229,54 @@
 
     <StackPanel>
         <TextBlock Text="{Binding Runner.ErrorMessage}" Style="{StaticResource FieldError}" />
-        <TextBlock Text="{Binding Errors.Summary}" Style="{StaticResource FieldError}" Margin="0,12,0,0" />
+        <Border Style="{StaticResource Notice}" Tag="bad" Margin="0,12,0,0"
+                Visibility="{Binding Errors.Summary, Converter={StaticResource SetShown}}">
+            <DockPanel>
+                <Viewbox Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,12,0" DockPanel.Dock="Left">
+                    <Canvas Width="24" Height="24">
+                        <Path Style="{StaticResource NoticeIcon}" Data="M3,12 A9,9 0 1 1 21,12 A9,9 0 1 1 3,12 Z M12,7.5 V12.5 M12,16 V16.5" />
+                    </Canvas>
+                </Viewbox>
+                <TextBlock Text="{Binding Errors.Summary}" FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center" />
+            </DockPanel>
+        </Border>
 
-        <!-- The tabs, each with the count of its errors. -->
-        <Border Style="{StaticResource Theme.SegmentGroup}" HorizontalAlignment="Left" Margin="0,12,0,0">
-            <StackPanel Orientation="Horizontal">
-                <RadioButton x:Name="PartiesTab" GroupName="FormTab" Style="{StaticResource Theme.Segment}" IsChecked="True">
+        <!-- The tabs, each with the count of its errors, and on their line, to the right, the form's two buttons, as the
+             canvas's .tabact: in reach from every tab. -->
+        <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Theme.Line}" Margin="0,12,0,0">
+            <DockPanel>
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="12,4,0,6">
+                    <Button Content="Cancelar" Style="{StaticResource LargeGhost}"
+                            Command="{Binding DataContext.BackCommand, RelativeSource={RelativeSource AncestorType=views:ContractsView}}" />
+                    <Button Content="Guardar contrato" Style="{StaticResource LargePrimary}" Margin="12,0,0,0" Command="{Binding SaveCommand}" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                <RadioButton x:Name="PartiesTab" GroupName="FormTab" Style="{StaticResource Tab}" IsChecked="True">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="Partes" />
                         <Border Style="{StaticResource TabMark}" Visibility="{Binding Errors.PartiesCount, Converter={StaticResource SetShown}}"><TextBlock Text="{Binding Errors.PartiesCount}" /></Border>
                     </StackPanel>
                 </RadioButton>
-                <RadioButton x:Name="UnitsTab" GroupName="FormTab" Style="{StaticResource Theme.Segment}">
+                <RadioButton x:Name="UnitsTab" GroupName="FormTab" Style="{StaticResource Tab}">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="Propiedad" />
                         <Border Style="{StaticResource TabMark}" Visibility="{Binding Errors.UnitsCount, Converter={StaticResource SetShown}}"><TextBlock Text="{Binding Errors.UnitsCount}" /></Border>
                     </StackPanel>
                 </RadioButton>
-                <RadioButton x:Name="DatesTab" GroupName="FormTab" Style="{StaticResource Theme.Segment}">
+                <RadioButton x:Name="DatesTab" GroupName="FormTab" Style="{StaticResource Tab}">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="Fechas e importes" />
                         <Border Style="{StaticResource TabMark}" Visibility="{Binding Errors.DatesAndAmountsCount, Converter={StaticResource SetShown}}"><TextBlock Text="{Binding Errors.DatesAndAmountsCount}" /></Border>
                     </StackPanel>
                 </RadioButton>
-                <RadioButton x:Name="ClauseTab" GroupName="FormTab" Style="{StaticResource Theme.Segment}">
+                <RadioButton x:Name="ClauseTab" GroupName="FormTab" Style="{StaticResource Tab}">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="Cláusula de ajuste" />
                         <Border Style="{StaticResource TabMark}" Visibility="{Binding Errors.ClauseCount, Converter={StaticResource SetShown}}"><TextBlock Text="{Binding Errors.ClauseCount}" /></Border>
                     </StackPanel>
                 </RadioButton>
-            </StackPanel>
+                </StackPanel>
+            </DockPanel>
         </Border>
 
         <!-- Partes. -->
@@ -193,7 +299,7 @@
                         <Border BorderBrush="{DynamicResource Theme.Line}" BorderThickness="1" CornerRadius="12" Padding="14,8"
                                 Visibility="{Binding Tenant, Converter={StaticResource SetShown}}">
                             <DockPanel>
-                                <Button Content="Quitar" Style="{StaticResource Theme.GhostButton}" DockPanel.Dock="Right"
+                                <Button Content="Quitar" Style="{StaticResource Theme.SmallGhostButton}" DockPanel.Dock="Right"
                                         Command="{Binding ClearTenantCommand}" />
                                 <TextBlock VerticalAlignment="Center" FontWeight="Bold">
                                     <Run Text="{Binding Tenant.LastName, Mode=OneWay}" /><Run Text=", " /><Run Text="{Binding Tenant.FirstName, Mode=OneWay}" />
@@ -248,7 +354,7 @@
                             <StackPanel Margin="0,0,0,8">
                                 <Border BorderBrush="{DynamicResource Theme.Line}" BorderThickness="1" CornerRadius="12" Padding="14,8">
                                     <DockPanel>
-                                        <Button Content="Quitar" Style="{StaticResource Theme.GhostButton}" DockPanel.Dock="Right" Margin="12,0,0,0"
+                                        <Button Content="Quitar" Style="{StaticResource Theme.SmallGhostButton}" DockPanel.Dock="Right" Margin="12,0,0,0"
                                                 Command="{Binding DataContext.RemoveUnitCommand, ElementName=UnitRows}" CommandParameter="{Binding}" />
                                         <!-- The share, only with more than one unit: one alone takes the whole rent. -->
                                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
@@ -327,7 +433,7 @@
                         <StackPanel>
                             <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Inicio " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
                             <TextBox Style="{StaticResource Theme.Input}" Tag="01/12/2026"
-                                     Text="{Binding StartDateText, UpdateSourceTrigger=LostFocus}" />
+                                     Text="{Binding StartDateText, UpdateSourceTrigger=LostFocus}" views:FieldError.Text="{Binding Errors[StartDate]}" />
                             <TextBlock Text="{Binding Errors[StartDate]}" Style="{StaticResource FieldError}" />
                             <TextBlock Text="Siempre el día 1 de un mes: con el mes y el año alcanza." Style="{StaticResource FieldHint}" />
                         </StackPanel>
@@ -335,13 +441,13 @@
                         <StackPanel Grid.Column="2">
                             <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Fin " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
                             <TextBox Style="{StaticResource Theme.Input}" Tag="30/11/2028"
-                                     Text="{Binding NominalEndDateText, UpdateSourceTrigger=LostFocus}" />
+                                     Text="{Binding NominalEndDateText, UpdateSourceTrigger=LostFocus}" views:FieldError.Text="{Binding Errors[EndDate]}" />
                             <TextBlock Text="{Binding Errors[EndDate]}" Style="{StaticResource FieldError}" />
                         </StackPanel>
 
                         <StackPanel Grid.Column="4">
                             <TextBlock Text="Día de vencimiento" Style="{StaticResource Theme.Label}" />
-                            <TextBox Style="{StaticResource Theme.Input}" Tag="Del 1 al 31" Text="{Binding DueDayText, UpdateSourceTrigger=LostFocus}" />
+                            <TextBox Style="{StaticResource Theme.Input}" Tag="Del 1 al 31" Text="{Binding DueDayText, UpdateSourceTrigger=LostFocus}" views:FieldError.Text="{Binding Errors[DueDay]}" />
                             <TextBlock Text="{Binding Errors[DueDay]}" Style="{StaticResource FieldError}" />
                             <TextBlock Text="Por defecto, el 10. Si el mes es más corto, vence el último día." Style="{StaticResource FieldHint}" />
                         </StackPanel>
@@ -351,12 +457,23 @@
 
                     <!-- Only an Administrador loads a contract that started before this month, with its cutover. -->
                     <StackPanel Margin="0,12,0,0" Visibility="{Binding IsCutoverShown, Converter={StaticResource Shown}}">
-                        <TextBlock Text="Fecha de corte" Style="{StaticResource Theme.Label}" />
+                        <Border Style="{StaticResource Notice}" Tag="info" Margin="0,0,0,12">
+                            <DockPanel>
+                                <Viewbox Width="18" Height="18" VerticalAlignment="Top" Margin="0,2,12,0" DockPanel.Dock="Left">
+                                    <Canvas Width="24" Height="24">
+                                        <Path Style="{StaticResource NoticeIcon}" Data="M3,12 A9,9 0 1 1 21,12 A9,9 0 1 1 3,12 Z M12,11 V16 M12,7.5 V8" />
+                                    </Canvas>
+                                </Viewbox>
+                                <TextBlock TextWrapping="Wrap"
+                                           Text="Este contrato empezó antes de este mes. Solo un Administrador puede cargarlo, con una fecha de corte: el sistema no cobra nada de los períodos que vencen hasta esa fecha." />
+                            </DockPanel>
+                        </Border>
+                        <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Fecha de corte " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
                         <TextBox Style="{StaticResource Theme.Input}" Tag="Por ejemplo 9/11/26; solo si empezó antes de este mes"
-                                 Text="{Binding CutoverDateText, UpdateSourceTrigger=LostFocus}" />
+                                 Text="{Binding CutoverDateText, UpdateSourceTrigger=LostFocus}" views:FieldError.Text="{Binding Errors[Cutover]}" />
                         <TextBlock Text="{Binding Errors[Cutover]}" Style="{StaticResource FieldError}" />
                         <TextBlock Style="{StaticResource FieldHint}"
-                                   Text="Para un contrato que empezó antes de este mes: el sistema no cobra nada de los períodos que vencen hasta esa fecha. No puede ser posterior a hoy ni anterior al inicio." />
+                                   Text="No puede ser posterior a hoy ni anterior al inicio. Desde esa fecha empieza la cuenta." />
                     </StackPanel>
                 </StackPanel>
             </Border>
@@ -372,15 +489,22 @@
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <StackPanel>
-                            <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Alquiler mensual ($) " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
-                            <TextBox Style="{StaticResource Theme.Input}" Tag="En pesos enteros" Text="{Binding MonthlyRentText, UpdateSourceTrigger=LostFocus}" />
+                            <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Alquiler mensual " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
+                            <Grid>
+                                <TextBox Style="{StaticResource Theme.Input}" Padding="36,0,16,0" Tag="En pesos enteros"
+                                         Text="{Binding MonthlyRentText, UpdateSourceTrigger=LostFocus}" views:FieldError.Text="{Binding Errors[Rent]}" />
+                                <TextBlock Text="$" Style="{StaticResource FieldAffix}" HorizontalAlignment="Left" Margin="18,0,0,0" />
+                            </Grid>
                             <TextBlock Text="{Binding Errors[Rent]}" Style="{StaticResource FieldError}" />
                         </StackPanel>
 
                         <StackPanel Grid.Column="2">
-                            <TextBlock Text="Honorarios de administración (%)" Style="{StaticResource Theme.Label}" />
-                            <TextBox Style="{StaticResource Theme.Input}" Tag="Vacío si todavía no se conocen"
-                                     Text="{Binding HonorariosText, UpdateSourceTrigger=LostFocus}" />
+                            <TextBlock Text="Honorarios de administración" Style="{StaticResource Theme.Label}" />
+                            <Grid>
+                                <TextBox Style="{StaticResource Theme.Input}" Padding="16,0,40,0" Tag="Vacío si todavía no se conocen"
+                                         Text="{Binding HonorariosText, UpdateSourceTrigger=LostFocus}" views:FieldError.Text="{Binding Errors[Honorarios]}" />
+                                <TextBlock Text="%" Style="{StaticResource FieldAffix}" HorizontalAlignment="Right" Margin="0,0,18,0" />
+                            </Grid>
                             <TextBlock Text="{Binding Errors[Honorarios]}" Style="{StaticResource FieldError}" />
                             <TextBlock Style="{StaticResource FieldHint}"
                                        Text="Porcentaje del alquiler, a cargo del propietario. De 0 a 100. Vacío y 0 % no es lo mismo: sin porcentaje, la caja no puede cobrar el contrato." />
@@ -388,23 +512,26 @@
                     </Grid>
 
                     <!-- The fee plan, behind its button as on the canvas; a plan typed shows its fields. -->
-                    <Button Content="+ Agregar honorarios contractuales" Style="{StaticResource Theme.GhostButton}" HorizontalAlignment="Left"
+                    <Button Content="+ Agregar honorarios contractuales" Style="{StaticResource Theme.LinkButton}" HorizontalAlignment="Left"
                             Margin="0,12,0,0" Command="{Binding AddFeePlanCommand}"
                             Visibility="{Binding HasFeePlan, Converter={StaticResource SetShown}, ConverterParameter=invert}" />
                     <StackPanel Margin="0,12,0,0" Visibility="{Binding HasFeePlan, Converter={StaticResource Shown}}">
                         <!-- One wrapping row as the canvas's: a 300 field, a 200 field and "Quitar" at the bottom, 16 apart. -->
                         <WrapPanel>
                             <StackPanel Width="300" Margin="0,0,16,0" VerticalAlignment="Bottom">
-                                <TextBlock Text="Honorarios contractuales: monto de cada cuota ($)" Style="{StaticResource Theme.Label}" TextWrapping="Wrap" />
-                                <TextBox Style="{StaticResource Theme.Input}" Tag="Por ejemplo 20.000"
-                                         Text="{Binding FeePlanAmountText, UpdateSourceTrigger=LostFocus}" />
+                                <TextBlock Text="Honorarios contractuales: monto de cada cuota" Style="{StaticResource Theme.Label}" TextWrapping="Wrap" />
+                                <Grid>
+                                    <TextBox Style="{StaticResource Theme.Input}" Padding="36,0,16,0" Tag="Por ejemplo 20.000"
+                                             Text="{Binding FeePlanAmountText, UpdateSourceTrigger=LostFocus}" views:FieldError.Text="{Binding Errors[FeePlan]}" />
+                                    <TextBlock Text="$" Style="{StaticResource FieldAffix}" HorizontalAlignment="Left" Margin="18,0,0,0" />
+                                </Grid>
                             </StackPanel>
                             <StackPanel Width="200" Margin="0,0,16,0" VerticalAlignment="Bottom">
                                 <TextBlock Text="Cantidad de cuotas" Style="{StaticResource Theme.Label}" />
-                                <TextBox Style="{StaticResource Theme.Input}" Tag="De 1 a 6" Text="{Binding FeePlanInstalmentsText, UpdateSourceTrigger=LostFocus}" />
+                                <TextBox Style="{StaticResource Theme.Input}" Tag="De 1 a 6" Text="{Binding FeePlanInstalmentsText, UpdateSourceTrigger=LostFocus}" views:FieldError.Text="{Binding Errors[FeePlan]}" />
                             </StackPanel>
-                            <Button Content="Quitar los honorarios contractuales" Style="{StaticResource Theme.GhostButton}"
-                                    VerticalAlignment="Bottom" Command="{Binding RemoveFeePlanCommand}" />
+                            <Button Content="Quitar los honorarios contractuales" Style="{StaticResource Theme.LinkButton}"
+                                    VerticalAlignment="Bottom" Margin="0,8,0,12" Command="{Binding RemoveFeePlanCommand}" />
                         </WrapPanel>
                         <TextBlock Text="{Binding Errors[FeePlan]}" Style="{StaticResource FieldError}" />
                         <TextBlock Style="{StaticResource FieldHint}"
@@ -489,39 +616,45 @@
                         </StackPanel>
                     </Grid>
 
-                    <Border Background="{DynamicResource Theme.Select}" CornerRadius="12" Padding="14,10" Margin="0,12,0,0"
+                    <Border Style="{StaticResource Notice}" Tag="info" Margin="0,12,0,0"
                             Visibility="{Binding ClauseWindowText, Converter={StaticResource SetShown}}">
-                        <TextBlock Text="{Binding ClauseWindowText}" TextWrapping="Wrap" />
+                        <DockPanel>
+                            <Viewbox Width="18" Height="18" VerticalAlignment="Top" Margin="0,2,12,0" DockPanel.Dock="Left">
+                                <Canvas Width="24" Height="24">
+                                    <Path Style="{StaticResource NoticeIcon}" Data="M3,12 A9,9 0 1 1 21,12 A9,9 0 1 1 3,12 Z M12,11 V16 M12,7.5 V8" />
+                                </Canvas>
+                            </Viewbox>
+                            <TextBlock Text="{Binding ClauseWindowText}" TextWrapping="Wrap" />
+                        </DockPanel>
                     </Border>
                 </StackPanel>
                 <TextBlock Text="{Binding Errors[Clause]}" Style="{StaticResource FieldError}" />
             </StackPanel>
         </Border>
 
-        <!-- What to accept before the contract is written. -->
-        <Border Style="{StaticResource Theme.Card}" Margin="0,12,0,0" Visibility="{Binding HasWarnings, Converter={StaticResource Shown}}">
-            <StackPanel>
-                <TextBlock Text="Antes de guardar" Style="{StaticResource Theme.CardTitle}" />
-                <ItemsControl ItemsSource="{Binding Warnings}">
+        <!-- What to accept before the contract is written: a warning band with its two buttons, as Personas' warning. -->
+        <Border Style="{StaticResource Notice}" Tag="warn" Margin="0,12,0,0" Visibility="{Binding HasWarnings, Converter={StaticResource Shown}}">
+            <DockPanel>
+                <Viewbox Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,12,0" DockPanel.Dock="Left">
+                    <Canvas Width="24" Height="24">
+                        <Path Style="{StaticResource NoticeIcon}" Data="M12,3 L22,21 H2 Z M12,10 V15 M12,18 V18.5" />
+                    </Canvas>
+                </Viewbox>
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" Margin="12,0,0,0" VerticalAlignment="Center">
+                    <Button Content="Revisar" Style="{StaticResource Theme.SmallGhostButton}" Command="{Binding CancelCommand}" />
+                    <Button Content="Guardar igual" Style="{StaticResource SmallPrimary}" Margin="10,0,0,0" Command="{Binding AcceptWarningsCommand}" />
+                </StackPanel>
+                <ItemsControl ItemsSource="{Binding Warnings}" VerticalAlignment="Center">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="0,3" />
+                            <TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="0,2" />
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-                    <Button Content="Guardar igual" Style="{StaticResource Theme.PrimaryButton}" Command="{Binding AcceptWarningsCommand}" />
-                    <Button Content="Revisar" Style="{StaticResource Theme.GhostButton}" Margin="12,0,0,0" Command="{Binding CancelCommand}" />
-                </StackPanel>
-            </StackPanel>
+            </DockPanel>
         </Border>
 
         <TextBlock Text="{Binding RefusalMessage}" Style="{StaticResource FieldError}" Margin="0,12,0,0" />
 
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-            <Button Content="Cancelar" Style="{StaticResource Theme.GhostButton}" Height="42" Padding="26,0" FontSize="15"
-                    Command="{Binding DataContext.BackCommand, RelativeSource={RelativeSource AncestorType=views:ContractsView}}" />
-            <Button Content="Guardar contrato" Style="{StaticResource Theme.PrimaryButton}" Margin="12,0,0,0" Height="42" Padding="26,0" FontSize="15" Command="{Binding SaveCommand}" />
-        </StackPanel>
     </StackPanel>
 </UserControl>
