@@ -52,9 +52,6 @@
                                 <Setter Property="Foreground" Value="{DynamicResource Theme.Ink}" />
                                 <Setter TargetName="Rule" Property="BorderBrush" Value="{DynamicResource Theme.NavOn}" />
                             </Trigger>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="Rule" Property="Background" Value="{DynamicResource Theme.Select}" />
-                            </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
