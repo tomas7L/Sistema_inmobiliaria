@@ -41,6 +41,32 @@ public sealed class ShellViewModelTests
         Assert.Equal("Empleado", shell.RoleText);
     }
 
+    /// <summary>The canvas's ".usr", at the top right of every screen: the name and the role in the operator's words.</summary>
+    [Fact]
+    public void TheHeader_NamesTheUserAndTheirRoleInSpanish()
+    {
+        Assert.Equal("Nicolás Demaría, Administrador", ShellFor(UserRole.Admin).HeaderText);
+        Assert.Equal("María Test, Empleado", ShellFor(UserRole.Empleado).HeaderText);
+    }
+
+    /// <summary>The canvas's sidebar groups its entries under "Cobranza", "Alquileres" and "Administración".</summary>
+    [Fact]
+    public void EachEntry_BelongsToItsSidebarGroup()
+    {
+        var groups = ShellFor(UserRole.Admin).Navigation.Select(entry => (entry.Target, entry.Group)).ToArray();
+
+        Assert.Equal(
+            [
+                (NavigationTarget.CashDesk, "Cobranza"), (NavigationTarget.RecentCollections, "Cobranza"),
+                (NavigationTarget.Voiding, "Cobranza"), (NavigationTarget.Notices, "Cobranza"),
+                (NavigationTarget.Contracts, "Alquileres"), (NavigationTarget.Parties, "Alquileres"),
+                (NavigationTarget.Units, "Alquileres"), (NavigationTarget.Indices, "Alquileres"),
+                (NavigationTarget.Adjustments, "Alquileres"),
+                (NavigationTarget.GoLive, "Administración"), (NavigationTarget.Users, "Administración"),
+            ],
+            groups);
+    }
+
     [Fact]
     public void AnEmpleadosNavigation_HasTheDeskTheRecentListVoidingAvisosAndTheRentalScreens_AndNoGoLiveOrUsers()
     {
