@@ -218,6 +218,9 @@
                         <Button Content="Registrar aviso" Style="{StaticResource Theme.GhostButton}"
                                 Command="{Binding OpenDetail.OpenNoticeCommand}"
                                 Visibility="{Binding OpenDetail.IsNoticeOffered, Converter={StaticResource Shown}}" />
+                        <Button Content="Deshacer aviso" Style="{StaticResource Theme.GhostButton}" Margin="10,0,0,0"
+                                Command="{Binding OpenDetail.OpenUndoNoticeCommand}"
+                                Visibility="{Binding OpenDetail.IsUndoNoticeOffered, Converter={StaticResource Shown}}" />
                     </StackPanel>
                     <Button Style="{StaticResource Theme.SmallGhostButton}" Padding="10,0,14,0" HorizontalAlignment="Left"
                             VerticalAlignment="Center" Command="{Binding BackCommand}">
@@ -237,9 +240,9 @@
             <views:ContractDetailView Grid.Row="1" DataContext="{Binding OpenDetail}" />
         </Grid>
 
-        <!-- "Registrar aviso", in place of the detail while it is open. Its DataContext is the open contract, so its own
-             bindings, Visibility included, are read from it: IsActionOpen, not OpenDetail.IsActionOpen. -->
-        <views:ContractNoticeView DataContext="{Binding OpenDetail}"
+        <!-- The action open ("Registrar aviso", "Deshacer aviso"), in place of the detail. Its DataContext is the open contract,
+             so its own bindings, Visibility included, are read from it: IsActionOpen, not OpenDetail.IsActionOpen. -->
+        <views:ContractActionView DataContext="{Binding OpenDetail}"
                                   Visibility="{Binding IsActionOpen, Converter={StaticResource Shown}, FallbackValue=Collapsed}" />
 
         <!-- The form of a new contract, in place of the list. It scrolls only on a screen smaller than the canvas's. -->

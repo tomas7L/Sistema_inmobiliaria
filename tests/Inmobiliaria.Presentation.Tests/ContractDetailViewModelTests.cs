@@ -634,7 +634,10 @@ public class ContractDetailViewModelTests
         Assert.False(viewModel.ConfirmCommand.CanExecute(null));
     }
 
-    /// <summary>Spec Requirement 24: undoing asks for a reason and is preceded by a summary.</summary>
+    /// <summary>
+    /// Spec Requirement 24: undoing asks for a reason and is preceded by a summary. Canvas "Deshacer aviso": a missing reason
+    /// is said under its field, and typing one clears it.
+    /// </summary>
     [Fact]
     public async Task UndoingANotice_NeedsAReason_ThenConfirms_AndReadsAgain()
     {
@@ -645,8 +648,12 @@ public class ContractDetailViewModelTests
 
         viewModel.ReviewUndoNoticeCommand.Execute(null);
 
-        Assert.Equal(ContractRefusal.ReasonMissing.OperatorText(), viewModel.RefusalMessage);
+        Assert.Equal(ContractRefusal.ReasonMissing.OperatorText(), viewModel.ChangeReasonError);
+        Assert.Null(viewModel.RefusalMessage);
         Assert.False(viewModel.IsSummaryOpen);
+
+        viewModel.ChangeReason = "Otro";
+        Assert.Null(viewModel.ChangeReasonError);
 
         viewModel.ChangeReason = "Otro contrato";
         viewModel.ReviewUndoNoticeCommand.Execute(null);
@@ -659,6 +666,39 @@ public class ContractDetailViewModelTests
         Assert.Equal<object?>(["UndoNotice", ContractId, "Otro contrato"], Assert.Single(port.Calls));
         Assert.False(viewModel.IsSummaryOpen);
         Assert.Equal(ContractStatus.Active, viewModel.Detail!.Status);
+    }
+
+    /// <summary>
+    /// Canvas "Deshacer aviso": its own screen, offered only where there is a notice, heading the contract with the notice's
+    /// two dates; it opens with no reason typed, and an undone notice ends on its own notice.
+    /// </summary>
+    [Fact]
+    public async Task TheUndoNoticeScreen_ShowsTheNoticeDates_AndEndsOnItsNotice()
+    {
+        var withNotice = Peopled(ContractStatus.PendingTermination) with { NoticeGivenDate = Notice, PlannedMoveOutDate = MoveOut };
+        var port = new FakeContractRegistry { Detail = withNotice };
+        var viewModel = New(port);
+        await viewModel.LoadCommand.ExecuteAsync(null);
+        viewModel.ChangeReason = "left from before";
+
+        Assert.True(viewModel.OpenUndoNoticeCommand.CanExecute(null));
+        viewModel.OpenUndoNoticeCommand.Execute(null);
+
+        Assert.Equal(ContractAction.UndoNotice, viewModel.OpenAction);
+        Assert.Equal(string.Empty, viewModel.ChangeReason);
+        Assert.Equal(
+            [new DetailLine("Fecha del aviso", "10/10/2026"), new DetailLine("Fecha de desocupación", "31/12/2026")],
+            viewModel.ActionCardLines.TakeLast(2));
+
+        viewModel.ChangeReason = "El inquilino decidió quedarse";
+        viewModel.ReviewUndoNoticeCommand.Execute(null);
+        port.Detail = Peopled(ContractStatus.Active);
+        await viewModel.ConfirmCommand.ExecuteAsync(null);
+
+        Assert.Equal(new ActionDone("Listo", "El aviso se deshizo. El contrato de Ocampo, Martín vuelve a estar Vigente."), viewModel.Done);
+
+        var inForce = await LoadedAsync(Peopled(ContractStatus.Active));
+        Assert.False(inForce.OpenUndoNoticeCommand.CanExecute(null));
     }
 
     /// <summary>Spec Requirement 24: periods between the end and the undo accrue as usual, with the summary naming them.</summary>
