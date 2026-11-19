@@ -71,9 +71,9 @@ public sealed partial class UnitsViewModel : ObservableObject
     /// <summary>The locked type's label while correcting.</summary>
     public string TypeText => UnitRow.TypeName(SelectedType);
 
-    public string FormTitle => Editing is null ? UnitsTexts.NewTitle : UnitsTexts.EditTitle;
+    public string FormTitle => Editing is null && _correctedAddress is null ? UnitsTexts.NewTitle : UnitsTexts.EditTitle;
 
-    public string FormSubtitle => Editing?.AddressText ?? UnitsTexts.NewSubtitle;
+    public string FormSubtitle => Editing?.AddressText ?? _correctedAddress ?? UnitsTexts.NewSubtitle;
 
     public string SaveText => Editing is null ? UnitsTexts.SaveNew : UnitsTexts.SaveCorrection;
 
@@ -152,8 +152,22 @@ public sealed partial class UnitsViewModel : ObservableObject
 
     /// <summary>What the last write that landed saved, shown in place of the form until the operator goes back.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Step))]
+    [NotifyPropertyChangedFor(nameof(Step), nameof(FormTitle), nameof(FormSubtitle))]
     private UnitSaved? _saved;
+
+    /// <summary>
+    /// The address a correction saved, so its notice stays under "Editar propiedad" once the form is cleared; it lives as
+    /// long as that notice.
+    /// </summary>
+    private string? _correctedAddress;
+
+    partial void OnSavedChanged(UnitSaved? value)
+    {
+        if (value is null)
+        {
+            _correctedAddress = null;
+        }
+    }
 
     partial void OnTypeFilterChanged(UnitType? value) => ShowFound();
 
@@ -330,6 +344,7 @@ public sealed partial class UnitsViewModel : ObservableObject
         {
             ClearForm();
             var address = result.Unit!.AddressText;
+            _correctedAddress = correcting is null ? null : address;
             Saved = correcting is null
                 ? new UnitSaved(UnitsTexts.CreatedTitle, UnitsTexts.Created(address))
                 : new UnitSaved(UnitsTexts.CorrectedTitle, UnitsTexts.Corrected(address));

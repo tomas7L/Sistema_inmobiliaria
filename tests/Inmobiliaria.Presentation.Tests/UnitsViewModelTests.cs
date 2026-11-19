@@ -479,6 +479,39 @@ public class UnitsViewModelTests
         Assert.Equal(new UnitSaved("Cambios guardados", "Alem 1258, piso 2, depto B, Sunchales quedó actualizada."), viewModel.Saved);
     }
 
+    /// <summary>
+    /// The canvas "Editar propiedad": the saved notice of a correction stays under that title, with the unit as saved for
+    /// subtitle (Tomás saw "Nueva propiedad" over "Cambios guardados", 2026-11-19). A creation keeps its own title, and the
+    /// way back forgets both.
+    /// </summary>
+    [Fact]
+    public async Task TheSavedNotice_KeepsTheTitleOfWhatWasSaved()
+    {
+        var port = Port();
+        port.OnRelocate = (_, _, _) => UnitResult.Saved(Alem);
+        port.OnCreate = (_, _, _) => UnitResult.Saved(Alem);
+        var viewModel = await LoadedAsync(port);
+        viewModel.EditCommand.Execute(Row(viewModel, CocheraId));
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal(UnitFormStep.Saved, viewModel.Step);
+        Assert.Equal(UnitsTexts.EditTitle, viewModel.FormTitle);
+        Assert.Equal("Alem 1258, piso 2, depto B, Sunchales", viewModel.FormSubtitle);
+
+        viewModel.BackCommand.Execute(null);
+        viewModel.NewCommand.Execute(null);
+
+        Assert.Equal(UnitsTexts.NewTitle, viewModel.FormTitle);
+        Assert.Equal(UnitsTexts.NewSubtitle, viewModel.FormSubtitle);
+
+        Fill(viewModel);
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal(UnitFormStep.Saved, viewModel.Step);
+        Assert.Equal(UnitsTexts.NewTitle, viewModel.FormTitle);
+        Assert.Equal(UnitsTexts.NewSubtitle, viewModel.FormSubtitle);
+    }
+
     /// <summary>"Editar" needs a unit chosen in the list.</summary>
     [Fact]
     public async Task Editing_NeedsAUnitChosen()

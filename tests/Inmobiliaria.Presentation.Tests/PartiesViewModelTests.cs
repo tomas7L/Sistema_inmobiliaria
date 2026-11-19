@@ -613,6 +613,37 @@ public class PartiesViewModelTests
         Assert.Equal(("Cambios guardados", "Se actualizaron los datos de contacto."), (viewModel.Saved!.Title, viewModel.Saved.Text));
     }
 
+    /// <summary>
+    /// The canvas "Editar persona": the saved notice of a correction stays under that title, with the person as saved for
+    /// subtitle (the same defect Tomás saw on Propiedades, 2026-11-19). A creation keeps its own title, and the way back
+    /// forgets both.
+    /// </summary>
+    [Fact]
+    public async Task TheSavedNotice_KeepsTheTitleOfWhatWasSaved()
+    {
+        var viewModel = await LoadedAsync(Port());
+        viewModel.EditCommand.Execute(Row(viewModel, JuanId));
+        viewModel.Email = "nuevo@example.com";
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal(PartyFormStep.Saved, viewModel.Step);
+        Assert.Equal("Editar persona", viewModel.FormTitle);
+        Assert.Equal("Pérez, Juan", viewModel.FormSubtitle);
+
+        viewModel.BackCommand.Execute(null);
+        viewModel.NewCommand.Execute(null);
+
+        Assert.Equal("Nueva persona", viewModel.FormTitle);
+        Assert.Equal(PartiesTexts.NewSubtitle, viewModel.FormSubtitle);
+
+        Fill(viewModel, "Lía", "Sosa", "28111222");
+        await viewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal(PartyFormStep.Saved, viewModel.Step);
+        Assert.Equal("Nueva persona", viewModel.FormTitle);
+        Assert.Equal(PartiesTexts.NewSubtitle, viewModel.FormSubtitle);
+    }
+
     /// <summary>Removing the last identifier is a correction of identity too, once its warning is accepted.</summary>
     [Fact]
     public async Task RemovingTheLastIdentifier_IsSavedAsACorrection()
