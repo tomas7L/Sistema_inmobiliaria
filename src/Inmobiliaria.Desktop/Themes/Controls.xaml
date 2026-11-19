@@ -289,6 +289,11 @@
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.55" />
                         </Trigger>
+                        <!-- The canvas's .inp-err, as Theme.Input's. Set only by views:FieldError. -->
+                        <Trigger Property="views:FieldError.HasError" Value="True">
+                            <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource Theme.Bad}" />
+                            <Setter TargetName="Box" Property="BorderThickness" Value="2" />
+                        </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>

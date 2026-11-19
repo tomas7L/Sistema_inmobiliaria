@@ -86,14 +86,28 @@ public sealed partial class PartiesViewModel : ObservableObject
 
     /// <summary>What the last write that landed saved, shown in place of the form until the operator goes back.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Step))]
+    [NotifyPropertyChangedFor(nameof(Step), nameof(FormTitle), nameof(FormSubtitle))]
     private PartySaved? _saved;
+
+    /// <summary>
+    /// The person a correction saved, as the list names them, so its notice stays under "Editar persona" once the form is
+    /// cleared; it lives as long as that notice.
+    /// </summary>
+    private string? _correctedName;
+
+    partial void OnSavedChanged(PartySaved? value)
+    {
+        if (value is null)
+        {
+            _correctedName = null;
+        }
+    }
 
     /// <summary>The person selected in the list, which "Editar" opens.</summary>
     [ObservableProperty]
     private PartyRow? _selectedPerson;
 
-    public string FormTitle => Editing is null ? PartiesTexts.NewTitle : PartiesTexts.EditTitle;
+    public string FormTitle => Editing is null && _correctedName is null ? PartiesTexts.NewTitle : PartiesTexts.EditTitle;
 
     /// <summary>Which part of the form is shown: one at a time, in the order the operator meets them.</summary>
     public PartyFormStep Step =>
@@ -108,7 +122,7 @@ public sealed partial class PartiesViewModel : ObservableObject
     /// <summary>True when the search and the filter leave no one to show.</summary>
     public bool IsEmpty => Persons.Count == 0;
 
-    public string FormSubtitle => Editing?.ListName ?? PartiesTexts.NewSubtitle;
+    public string FormSubtitle => Editing?.ListName ?? _correctedName ?? PartiesTexts.NewSubtitle;
 
     public string SaveText => Editing is null ? PartiesTexts.SaveNew : PartiesTexts.SaveCorrection;
 
@@ -400,6 +414,7 @@ public sealed partial class PartiesViewModel : ObservableObject
         if (result.Succeeded)
         {
             ClearForm();
+            _correctedName = correcting is null ? null : new PartyRow(result.Party!).ListName;
             Saved = correcting is null
                 ? new PartySaved(PartiesTexts.CreatedTitle, PartiesTexts.Created(new PartyRow(result.Party!).ListName))
                 : _identityConfirmed
