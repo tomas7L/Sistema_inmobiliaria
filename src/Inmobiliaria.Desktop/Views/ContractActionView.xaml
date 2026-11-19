@@ -17,6 +17,7 @@
     -->
     <UserControl.Resources>
         <views:SetToVisibleConverter x:Key="Set" />
+        <views:EqualsConverter x:Key="Equals" />
         <BooleanToVisibilityConverter x:Key="Shown" />
 
         <!-- One line of a card, the canvas's "kv": what it is, muted, and its value, bold. -->
@@ -98,6 +99,33 @@
             </Style.Triggers>
         </Style>
 
+        <Style x:Key="EndForm" TargetType="StackPanel">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding OpenAction}" Value="{x:Static contracts:ContractAction.End}" />
+                        <Condition Binding="{Binding IsSummaryOpen}" Value="False" />
+                        <Condition Binding="{Binding Done}" Value="{x:Null}" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Visibility" Value="Visible" />
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="EndSummary" TargetType="StackPanel">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding OpenAction}" Value="{x:Static contracts:ContractAction.End}" />
+                        <Condition Binding="{Binding IsSummaryOpen}" Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Visibility" Value="Visible" />
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+
         <!-- The canvas's textarea: the input's box, taller, the text from the top. -->
         <Style x:Key="TextArea" TargetType="TextBox" BasedOn="{StaticResource Theme.Input}">
             <Setter Property="Height" Value="96" />
@@ -152,6 +180,9 @@
                             <DataTrigger Binding="{Binding OpenAction}" Value="{x:Static contracts:ContractAction.UndoNotice}">
                                 <Setter Property="Text" Value="Deshacer aviso" />
                             </DataTrigger>
+                            <DataTrigger Binding="{Binding OpenAction}" Value="{x:Static contracts:ContractAction.End}">
+                                <Setter Property="Text" Value="Terminar contrato" />
+                            </DataTrigger>
                         </Style.Triggers>
                     </Style>
                 </TextBlock.Style>
@@ -163,6 +194,9 @@
                         <Style.Triggers>
                             <DataTrigger Binding="{Binding OpenAction}" Value="{x:Static contracts:ContractAction.UndoNotice}">
                                 <Setter Property="Text" Value="Saca el aviso de rescisión y el contrato vuelve a estar activo. Queda anotado quién lo hizo y por qué." />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding OpenAction}" Value="{x:Static contracts:ContractAction.End}">
+                                <Setter Property="Text" Value="El contrato deja de generar períodos desde la fecha de fin. Lo que se debe queda en la cuenta." />
                             </DataTrigger>
                         </Style.Triggers>
                     </Style>
@@ -303,6 +337,91 @@
                 </Border>
                 <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                     <Button Content="Deshacer" Style="{StaticResource LargePrimary}" Command="{Binding ConfirmCommand}" />
+                    <Button Content="Volver y corregir" Style="{StaticResource LargeGhost}" Margin="12,0,0,0" Command="{Binding CancelCommand}" />
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Terminar, step 1: the reason and the date, each with its error under it. -->
+            <StackPanel Style="{StaticResource EndForm}">
+                <Border Style="{StaticResource Theme.Card}" Width="900" HorizontalAlignment="Left" Margin="0,12,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Motivo y fecha" Style="{StaticResource Theme.CardTitle}" />
+                        <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Motivo del fin " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
+                        <Border Style="{StaticResource Theme.SegmentGroup}" HorizontalAlignment="Left">
+                            <StackPanel Orientation="Horizontal">
+                                <RadioButton Content="Vencimiento del contrato" GroupName="EndReason" Style="{StaticResource Theme.Segment}"
+                                             IsChecked="{Binding EndReason, Converter={StaticResource Equals}, ConverterParameter={x:Static leasing:EndReason.Expiry}}" />
+                                <RadioButton Content="Rescisión anticipada del inquilino" GroupName="EndReason" Style="{StaticResource Theme.Segment}"
+                                             IsChecked="{Binding EndReason, Converter={StaticResource Equals}, ConverterParameter={x:Static leasing:EndReason.EarlyTerminationByTenant}}" />
+                                <RadioButton Content="Rescisión por incumplimiento" GroupName="EndReason" Style="{StaticResource Theme.Segment}"
+                                             IsChecked="{Binding EndReason, Converter={StaticResource Equals}, ConverterParameter={x:Static leasing:EndReason.TerminationForCause}}" />
+                                <RadioButton Content="Acuerdo de partes" GroupName="EndReason" Style="{StaticResource Theme.Segment}"
+                                             IsChecked="{Binding EndReason, Converter={StaticResource Equals}, ConverterParameter={x:Static leasing:EndReason.MutualAgreement}}" />
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="{Binding EndReasonError}" Style="{StaticResource Theme.ErrorText}" Margin="0,6,0,0" />
+                        <StackPanel Width="220" HorizontalAlignment="Left" Margin="0,12,0,0">
+                            <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Fecha de fin " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
+                            <TextBox Style="{StaticResource Theme.Input}" Tag="dd/mm/aaaa"
+                                     Text="{Binding EndDateText, UpdateSourceTrigger=PropertyChanged}"
+                                     views:FieldError.Text="{Binding EndDateError}" />
+                            <TextBlock Text="{Binding EndDateError}" Style="{StaticResource Theme.ErrorText}" Margin="0,6,0,0" />
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource Theme.Hint}" Margin="0,12,0,0"
+                                   Text="La fecha de fin no puede ser posterior a hoy ni anterior al inicio del contrato. La deuda no impide terminarlo." />
+                    </StackPanel>
+                </Border>
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                    <Button Content="Continuar" Style="{StaticResource LargePrimary}" Command="{Binding ReviewEndCommand}" />
+                    <Button Content="Cancelar" Style="{StaticResource LargeGhost}" Margin="12,0,0,0" Command="{Binding CloseActionCommand}" />
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Terminar, step 2: the summary with what is owed; nothing is written before "Terminar contrato". -->
+            <StackPanel Style="{StaticResource EndSummary}">
+                <Border Style="{StaticResource Theme.Card}" Width="900" HorizontalAlignment="Left" Margin="0,12,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Revise antes de terminar" Style="{StaticResource Theme.CardTitle}" />
+                        <DockPanel Margin="0,6">
+                            <TextBlock DockPanel.Dock="Right" Text="{Binding PendingChange.ReasonText}" FontWeight="Bold" />
+                            <TextBlock Text="Motivo" Foreground="{DynamicResource Theme.Muted}" />
+                        </DockPanel>
+                        <DockPanel Margin="0,6">
+                            <TextBlock DockPanel.Dock="Right" Text="{Binding PendingChange.EndDate, StringFormat=dd/MM/yyyy}" FontWeight="Bold" />
+                            <TextBlock Text="Fecha de fin" Foreground="{DynamicResource Theme.Muted}" />
+                        </DockPanel>
+                        <Separator Margin="0,8" Background="{DynamicResource Theme.Line}" />
+                        <TextBlock Text="{Binding PendingChange.OwedLine}" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+                <Border CornerRadius="14" Padding="14,10" Margin="0,12,0,0" BorderThickness="1" Width="900" HorizontalAlignment="Left"
+                        Background="{DynamicResource Theme.WarnBack}" BorderBrush="{DynamicResource Theme.Warn}"
+                        Visibility="{Binding PendingChange.AlreadyWrittenLine, Converter={StaticResource Set}}">
+                    <DockPanel>
+                        <Viewbox Width="18" Height="18" Margin="0,2,12,0" VerticalAlignment="Top" DockPanel.Dock="Left">
+                            <Canvas Width="24" Height="24">
+                                <Path Data="M12,3 L22,21 H2 Z M12,10 V15 M12,18 V18.5" Stroke="{DynamicResource Theme.Warn}" StrokeThickness="1.9"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                            </Canvas>
+                        </Viewbox>
+                        <TextBlock Text="{Binding PendingChange.AlreadyWrittenLine}" TextWrapping="Wrap" Foreground="{DynamicResource Theme.Warn}" />
+                    </DockPanel>
+                </Border>
+                <Border CornerRadius="14" Padding="14,10" Margin="0,12,0,0" BorderThickness="1" Width="900" HorizontalAlignment="Left"
+                        Background="{DynamicResource Theme.Surface}" BorderBrush="{DynamicResource Theme.Line}"
+                        Visibility="{Binding PendingChange.UnchargedMonthLine, Converter={StaticResource Set}}">
+                    <DockPanel>
+                        <Viewbox Width="18" Height="18" Margin="0,2,12,0" VerticalAlignment="Top" DockPanel.Dock="Left">
+                            <Canvas Width="24" Height="24">
+                                <Path Data="M3,12 A9,9 0 1 1 21,12 A9,9 0 1 1 3,12 Z M12,11 V16 M12,7.5 V8" Stroke="{DynamicResource Theme.Ink2}" StrokeThickness="1.9"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                            </Canvas>
+                        </Viewbox>
+                        <TextBlock Text="{Binding PendingChange.UnchargedMonthLine}" TextWrapping="Wrap" Foreground="{DynamicResource Theme.Ink2}" />
+                    </DockPanel>
+                </Border>
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                    <Button Content="Terminar contrato" Style="{StaticResource LargePrimary}" Command="{Binding ConfirmCommand}" />
                     <Button Content="Volver y corregir" Style="{StaticResource LargeGhost}" Margin="12,0,0,0" Command="{Binding CancelCommand}" />
                 </StackPanel>
             </StackPanel>

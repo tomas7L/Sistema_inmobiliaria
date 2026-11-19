@@ -418,21 +418,98 @@ public class ContractDetailViewModelTests
         Assert.Equal(PendingEnd.NothingOwed, Assert.IsType<PendingEnd>(viewModel.PendingChange).OwedLine);
     }
 
-    /// <summary>Spec scenario: ending with no reason is refused, and no summary opens.</summary>
+    /// <summary>A refusal the port finds on reviewing (the contract ended meanwhile) shows its text, and no summary opens.</summary>
     [Fact]
     public async Task ReviewingAnEnd_RefusedByThePort_ShowsItsText_AndOpensNoSummary()
     {
-        var port = new FakeContractRegistry { EndSummary = ContractEndSummary.Refused(ContractRefusal.EndReasonMissing) };
+        var port = new FakeContractRegistry { EndSummary = ContractEndSummary.Refused(ContractRefusal.ContractEnded) };
         var viewModel = New(port);
+        viewModel.EndReason = EndReason.Expiry;
         viewModel.EndDate = EndOn;
 
         await viewModel.ReviewEndCommand.ExecuteAsync(null);
 
-        Assert.Equal(ContractRefusal.EndReasonMissing.OperatorText(), viewModel.RefusalMessage);
+        Assert.Equal(ContractRefusal.ContractEnded.OperatorText(), viewModel.RefusalMessage);
         Assert.False(viewModel.IsSummaryOpen);
         Assert.False(viewModel.ConfirmCommand.CanExecute(null));
     }
 
+    /// <summary>
+    /// Spec scenario "ending with no reason is refused", on the screen (canvas "Terminar contrato"): a missing reason and a
+    /// missing date are each said under their field, both at once, and the port is not asked.
+    /// </summary>
+    [Fact]
+    public async Task ReviewingAnEnd_SaysEachMissingFieldUnderIt_WithoutAskingThePort()
+    {
+        var port = new FakeContractRegistry();
+        var viewModel = New(port);
+
+        await viewModel.ReviewEndCommand.ExecuteAsync(null);
+
+        Assert.Equal(ContractRefusal.EndReasonMissing.OperatorText(), viewModel.EndReasonError);
+        Assert.Equal(ContractDetailViewModel.MissingEndDate, viewModel.EndDateError);
+        Assert.Null(viewModel.RefusalMessage);
+        Assert.False(viewModel.IsSummaryOpen);
+        Assert.Empty(port.Calls);
+
+        viewModel.EndReason = EndReason.Expiry;
+        viewModel.EndDateText = "05/11/2026";
+        Assert.Null(viewModel.EndReasonError);
+        Assert.Null(viewModel.EndDateError);
+    }
+
+    /// <summary>Canvas "Terminar contrato": an end after today or before the start is said under the date, before the port.</summary>
+    [Theory]
+    [InlineData("20/11/2026", ContractRefusal.EndAfterToday)]
+    [InlineData("31/12/2025", ContractRefusal.EndBeforeContractStart)]
+    public async Task ReviewingAnEnd_SaysTheDateRulesUnderTheDate(string typed, ContractRefusal expected)
+    {
+        var port = new FakeContractRegistry { Detail = Peopled(ContractStatus.Active) };
+        var viewModel = New(port);
+        await viewModel.LoadCommand.ExecuteAsync(null);
+        viewModel.EndReason = EndReason.Expiry;
+        viewModel.EndDateText = typed;
+
+        await viewModel.ReviewEndCommand.ExecuteAsync(null);
+
+        Assert.Equal(expected.OperatorText(), viewModel.EndDateError);
+        Assert.False(viewModel.IsSummaryOpen);
+        Assert.Empty(port.Calls);
+    }
+
+    /// <summary>
+    /// Canvas "Terminar contrato": its own screen, offered where ending is, opening with nothing chosen; an end that lands ends
+    /// on its own notice, saying it can be undone.
+    /// </summary>
+    [Fact]
+    public async Task TheEndScreen_OpensEmpty_AndEndsOnItsNotice()
+    {
+        var port = new FakeContractRegistry { Detail = Peopled(ContractStatus.Active) };
+        var viewModel = New(port);
+        await viewModel.LoadCommand.ExecuteAsync(null);
+        viewModel.EndReason = EndReason.Expiry;
+
+        Assert.True(viewModel.OpenEndCommand.CanExecute(null));
+        viewModel.OpenEndCommand.Execute(null);
+
+        Assert.Equal(ContractAction.End, viewModel.OpenAction);
+        Assert.Null(viewModel.EndReason);
+        Assert.Equal(string.Empty, viewModel.EndDateText);
+
+        viewModel.EndReason = EndReason.MutualAgreement;
+        viewModel.EndDateText = "05/11/2026";
+        await viewModel.ReviewEndCommand.ExecuteAsync(null);
+        Assert.Equal("Acuerdo de partes", Assert.IsType<PendingEnd>(viewModel.PendingChange).ReasonText);
+        port.Detail = Peopled(ContractStatus.Ended);
+        await viewModel.ConfirmCommand.ExecuteAsync(null);
+
+        Assert.Equal(
+            new ActionDone("Contrato terminado", "El contrato de Ocampo, Martín terminó el 05/11/2026. Si fue un error, se puede deshacer."),
+            viewModel.Done);
+        Assert.False(viewModel.OpenEndCommand.CanExecute(null));
+    }
+
+    /// <summary>Canvas "Terminar contrato": a missing date is said under the date, not over the screen.</summary>
     [Fact]
     public async Task ReviewingAnEnd_WithNoDate_SaysSo_WithoutAskingThePort()
     {
@@ -442,7 +519,8 @@ public class ContractDetailViewModelTests
 
         await viewModel.ReviewEndCommand.ExecuteAsync(null);
 
-        Assert.Equal(ContractDetailViewModel.MissingEndDate, viewModel.RefusalMessage);
+        Assert.Equal(ContractDetailViewModel.MissingEndDate, viewModel.EndDateError);
+        Assert.Null(viewModel.RefusalMessage);
         Assert.Empty(port.Calls);
     }
 

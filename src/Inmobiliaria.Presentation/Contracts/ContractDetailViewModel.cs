@@ -41,6 +41,7 @@ public sealed partial class ContractDetailViewModel : ObservableObject
         CancelCommand = new RelayCommand(CloseSummary, CanAct);
         OpenNoticeCommand = new RelayCommand(() => OpenActionScreen(ContractAction.Notice), () => CanAct() && IsNoticeOffered);
         OpenUndoNoticeCommand = new RelayCommand(() => OpenActionScreen(ContractAction.UndoNotice), () => CanAct() && IsUndoNoticeOffered);
+        OpenEndCommand = new RelayCommand(() => OpenActionScreen(ContractAction.End), () => CanAct() && IsEndOffered);
         CloseActionCommand = new RelayCommand(() => OpenActionScreen(null), CanAct);
         Runner.PropertyChanged += OnRunnerChanged;
     }
@@ -72,6 +73,9 @@ public sealed partial class ContractDetailViewModel : ObservableObject
     /// <summary>The canvas's "Deshacer aviso" button: its own screen, in place of the detail.</summary>
     public IRelayCommand OpenUndoNoticeCommand { get; }
 
+    /// <summary>The canvas's "Terminar" button: its own screen, in place of the detail.</summary>
+    public IRelayCommand OpenEndCommand { get; }
+
     /// <summary>"Volver al contrato": back to the detail, forgetting what the action's screen held.</summary>
     public IRelayCommand CloseActionCommand { get; }
 
@@ -99,6 +103,23 @@ public sealed partial class ContractDetailViewModel : ObservableObject
 
     [ObservableProperty]
     private string? _moveOutDateError;
+
+    /// <summary>The end date as typed, read as the contract form reads dates; it sets <see cref="EndDate"/>.</summary>
+    [ObservableProperty]
+    private string _endDateText = string.Empty;
+
+    /// <summary>The end's reason and date errors, each under its field (canvas "Terminar contrato"); null while none.</summary>
+    [ObservableProperty]
+    private string? _endReasonError;
+
+    [ObservableProperty]
+    private string? _endDateError;
+
+    partial void OnEndDateTextChanged(string value)
+    {
+        EndDate = DateEntry.Parse(value, DateEntryKind.Day);
+        EndDateError = null;
+    }
 
     /// <summary>The reason's error, under its field (canvas "Deshacer aviso"); null while it has none.</summary>
     [ObservableProperty]
@@ -150,6 +171,11 @@ public sealed partial class ContractDetailViewModel : ObservableObject
         MoveOutDateError = null;
         ChangeReason = string.Empty;
         ChangeReasonError = null;
+        EndReason = null;
+        EndDateText = string.Empty;
+        EndDate = null;
+        EndReasonError = null;
+        EndDateError = null;
         OpenAction = action;
         OnPropertyChanged(nameof(ActionCardLines));
     }
@@ -294,6 +320,7 @@ public sealed partial class ContractDetailViewModel : ObservableObject
         OnPropertyChanged(nameof(ActionCardLines));
         OpenNoticeCommand.NotifyCanExecuteChanged();
         OpenUndoNoticeCommand.NotifyCanExecuteChanged();
+        OpenEndCommand.NotifyCanExecuteChanged();
     }
 
     [ObservableProperty]
@@ -328,7 +355,11 @@ public sealed partial class ContractDetailViewModel : ObservableObject
 
     partial void OnMoveOutDateChanged(DateOnly? value) => CloseSummary();
 
-    partial void OnEndReasonChanged(EndReason? value) => CloseSummary();
+    partial void OnEndReasonChanged(EndReason? value)
+    {
+        CloseSummary();
+        EndReasonError = null;
+    }
 
     partial void OnEndDateChanged(DateOnly? value) => CloseSummary();
 
@@ -397,9 +428,22 @@ public sealed partial class ContractDetailViewModel : ObservableObject
         RefusalMessage = null;
         CloseSummary();
 
-        if (EndDate is not { } endDate)
+        // Each field's own errors, both at once and before the port is asked (canvas "Terminar contrato"): the reason, then
+        // the date against the port's own rules (ContractLifecycleRules.CheckEnd), asked with a reason so only the date speaks.
+        EndReasonError = EndReason is null ? ContractRefusal.EndReasonMissing.OperatorText() : null;
+        EndDateError = EndDate is null ? MissingEndDate : null;
+        if (EndDate is { } typed && Detail is { } detail)
         {
-            RefusalMessage = MissingEndDate;
+            var dateRefusal = ContractLifecycleRules.CheckEnd(
+                detail.Status, detail.StartDate, EndReason ?? Domain.Leasing.EndReason.Expiry, typed, _clock.Today);
+            if (dateRefusal is ContractRefusal.EndAfterToday or ContractRefusal.EndBeforeContractStart)
+            {
+                EndDateError = dateRefusal.Value.OperatorText();
+            }
+        }
+
+        if (EndReasonError is not null || EndDateError is not null || EndDate is not { } endDate)
+        {
             return;
         }
 
@@ -517,6 +561,12 @@ public sealed partial class ContractDetailViewModel : ObservableObject
                 "Aviso registrado",
                 $"El contrato de {Names(before, PartyRole.Tenant)} quedó En rescisión. La desocupación está prevista para el {Formats.Date(landed.MoveOutDate)}.");
         }
+        else if (pending is PendingEnd ended && Detail is { } closing)
+        {
+            Done = new ActionDone(
+                "Contrato terminado",
+                $"El contrato de {Names(closing, PartyRole.Tenant)} terminó el {Formats.Date(ended.EndDate)}. Si fue un error, se puede deshacer.");
+        }
         else if (pending is PendingUndoNotice && Detail is { } undone)
         {
             Done = new ActionDone("Listo", $"El aviso se deshizo. El contrato de {Names(undone, PartyRole.Tenant)} vuelve a estar Vigente.");
@@ -539,6 +589,7 @@ public sealed partial class ContractDetailViewModel : ObservableObject
             CancelCommand.NotifyCanExecuteChanged();
             OpenNoticeCommand.NotifyCanExecuteChanged();
             OpenUndoNoticeCommand.NotifyCanExecuteChanged();
+            OpenEndCommand.NotifyCanExecuteChanged();
             CloseActionCommand.NotifyCanExecuteChanged();
         }
     }
@@ -558,6 +609,7 @@ public enum ContractAction
 {
     Notice,
     UndoNotice,
+    End,
 }
 
 /// <summary>The notice an action ends on when it lands: its title and its sentence.</summary>
@@ -653,6 +705,9 @@ public sealed record PendingEnd(EndReason Reason, DateOnly EndDate, ContractEndS
 {
     /// <summary>What the summary says when ending leaves no debt.</summary>
     public const string NothingOwed = "No queda nada adeudado.";
+
+    /// <summary>The reason in the operator's words, as the summary names it.</summary>
+    public string ReasonText => Formats.EndReason(Reason);
 
     /// <summary>The amount owed; with invalid recargo settings, the ledger's balance, saying so. Debt never stops the end (spec Requirement 10).</summary>
     public string OwedLine => (Figures.AmountOwed ?? Figures.LedgerBalance) == 0m
