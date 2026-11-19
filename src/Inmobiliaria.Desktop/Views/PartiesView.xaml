@@ -15,6 +15,7 @@
     -->
     <UserControl.Resources>
         <views:EqualsConverter x:Key="Equals" />
+        <views:SetToVisibleConverter x:Key="Set" />
         <BooleanToVisibilityConverter x:Key="Shown" />
 
         <!-- Shown only while the form is closed. -->
@@ -36,17 +37,74 @@
             </Style.Triggers>
         </Style>
 
-        <!-- Each part of the form below is shown while the view-model's Step is that part. -->
+        <!-- The canvas's .alert: a coloured band with an icon and its text. Tag picks the colour: "bad", "warn", "ok" or "info". -->
+        <Style x:Key="Notice" TargetType="Border">
+            <Setter Property="CornerRadius" Value="14" />
+            <Setter Property="Padding" Value="14,10" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Background" Value="{DynamicResource Theme.Surface}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Theme.Line}" />
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource Theme.Ink2}" />
+            <Setter Property="TextElement.FontSize" Value="14" />
+            <Style.Triggers>
+                <Trigger Property="Tag" Value="bad">
+                    <Setter Property="Background" Value="{DynamicResource Theme.BadBack}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource Theme.Bad}" />
+                    <Setter Property="TextElement.Foreground" Value="{DynamicResource Theme.Bad}" />
+                </Trigger>
+                <Trigger Property="Tag" Value="warn">
+                    <Setter Property="Background" Value="{DynamicResource Theme.WarnBack}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource Theme.Warn}" />
+                    <Setter Property="TextElement.Foreground" Value="{DynamicResource Theme.Warn}" />
+                </Trigger>
+                <Trigger Property="Tag" Value="ok">
+                    <Setter Property="Background" Value="{DynamicResource Theme.OkBack}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource Theme.Ok}" />
+                    <Setter Property="TextElement.Foreground" Value="{DynamicResource Theme.Ok}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- A notice's icon, drawn on the canvas's 24 x 24 grid in the notice's own colour. -->
+        <Style x:Key="NoticeIcon" TargetType="Path">
+            <Setter Property="Stroke" Value="{Binding (TextElement.Foreground), RelativeSource={RelativeSource Self}}" />
+            <Setter Property="StrokeThickness" Value="1.9" />
+            <Setter Property="StrokeStartLineCap" Value="Round" />
+            <Setter Property="StrokeEndLineCap" Value="Round" />
+            <Setter Property="StrokeLineJoin" Value="Round" />
+        </Style>
+
+        <!-- The canvas's .btn-lg, for the form's last buttons. -->
+        <Style x:Key="LargeGhost" TargetType="Button" BasedOn="{StaticResource Theme.GhostButton}">
+            <Setter Property="Height" Value="42" />
+            <Setter Property="Padding" Value="26,0" />
+            <Setter Property="FontSize" Value="15" />
+        </Style>
+
+        <Style x:Key="LargePrimary" TargetType="Button" BasedOn="{StaticResource Theme.PrimaryButton}">
+            <Setter Property="Height" Value="42" />
+            <Setter Property="Padding" Value="26,0" />
+            <Setter Property="FontSize" Value="15" />
+        </Style>
+
+        <!-- Each part of the form below is shown while the view-model's Step is that part. The fields stay in view under a
+             warning, as on the canvas: editing one withdraws the warning (PartiesViewModel.WithdrawConfirmations). -->
         <Style x:Key="FieldsStep" TargetType="StackPanel">
             <Setter Property="Visibility" Value="Collapsed" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding Step}" Value="{x:Static parties:PartyFormStep.Fields}">
                     <Setter Property="Visibility" Value="Visible" />
                 </DataTrigger>
+                <DataTrigger Binding="{Binding Step}" Value="{x:Static parties:PartyFormStep.Warning}">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
             </Style.Triggers>
         </Style>
 
+        <!-- A card asking for a decision: outlined in the accent colour, as on the canvas. -->
         <Style x:Key="ConfirmStep" TargetType="Border" BasedOn="{StaticResource Theme.Card}">
+            <Setter Property="BorderBrush" Value="{DynamicResource Theme.Button}" />
+            <Setter Property="BorderThickness" Value="2" />
             <Setter Property="Visibility" Value="Collapsed" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding Step}" Value="{x:Static parties:PartyFormStep.Confirm}">
@@ -55,16 +113,7 @@
             </Style.Triggers>
         </Style>
 
-        <Style x:Key="WarningStep" TargetType="Border" BasedOn="{StaticResource Theme.Card}">
-            <Setter Property="Visibility" Value="Collapsed" />
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding Step}" Value="{x:Static parties:PartyFormStep.Warning}">
-                    <Setter Property="Visibility" Value="Visible" />
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-
-        <Style x:Key="SavedStep" TargetType="Border" BasedOn="{StaticResource Theme.Card}">
+        <Style x:Key="SavedStep" TargetType="Border" BasedOn="{StaticResource Notice}">
             <Setter Property="Visibility" Value="Collapsed" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding Step}" Value="{x:Static parties:PartyFormStep.Saved}">
@@ -78,7 +127,7 @@
         </Style>
     </UserControl.Resources>
 
-    <!-- The canvas's 1920 x 950 fit: the page never scrolls, the table scrolls inside its card. -->
+    <!-- The canvas's 1536 x 785 fit: the page never scrolls, the table scrolls inside its card. -->
     <Grid Margin="32,20,32,16">
 
             <!-- The list. -->
@@ -147,7 +196,7 @@
                                             <StackPanel>
                                                 <TextBlock Text="{Binding ListName}" FontWeight="Bold" TextAlignment="Center" />
                                                 <TextBlock Text="{Binding IdentifierWarning}" Style="{StaticResource Theme.ErrorText}"
-                                                           Foreground="{DynamicResource Theme.Muted}" FontWeight="Normal" FontSize="13"
+                                                           Foreground="{DynamicResource Theme.Muted}" FontWeight="Normal" FontSize="12"
                                                            TextAlignment="Center" Margin="0,2,0,0" />
                                             </StackPanel>
                                         </DataTemplate>
@@ -200,19 +249,37 @@
             <!-- The form, in place of the list. It scrolls only on a screen smaller than the canvas's. -->
             <ScrollViewer VerticalScrollBarVisibility="Auto" Visibility="{Binding IsFormOpen, Converter={StaticResource Shown}}">
             <StackPanel>
-                <DockPanel>
-                    <Button Content="Volver a personas" Style="{StaticResource Theme.GhostButton}" DockPanel.Dock="Right"
-                            VerticalAlignment="Top" Command="{Binding BackCommand}" />
-                    <StackPanel>
-                        <TextBlock Text="{Binding FormTitle}" Style="{StaticResource Theme.Title}" />
-                        <TextBlock Text="{Binding FormSubtitle}" Style="{StaticResource Theme.Subtitle}" />
+                <TextBlock Text="{Binding FormTitle}" Style="{StaticResource Theme.Title}" />
+                <TextBlock Text="{Binding FormSubtitle}" Style="{StaticResource Theme.Subtitle}" />
+                <!-- The canvas's back link: a small ghost button with its chevron, under the title on the left. -->
+                <Button Style="{StaticResource Theme.SmallGhostButton}" Padding="10,0,14,0" HorizontalAlignment="Left"
+                        Margin="0,12,0,0" Command="{Binding BackCommand}">
+                    <StackPanel Orientation="Horizontal">
+                        <Viewbox Width="16" Height="16" Margin="0,0,6,0">
+                            <Canvas Width="24" Height="24">
+                                <Path Data="M15,6 L9,12 L15,18" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                      StrokeLineJoin="Round"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                            </Canvas>
+                        </Viewbox>
+                        <TextBlock Text="Volver a personas" VerticalAlignment="Center" />
                     </StackPanel>
-                </DockPanel>
+                </Button>
                 <TextBlock Text="{Binding Runner.ErrorMessage}" Style="{StaticResource Theme.ErrorText}" Margin="0,12,0,0" />
 
                 <!-- The fields, each with its own error beside it, under one summary (spec Requirement 26). -->
                 <StackPanel Style="{StaticResource FieldsStep}">
-                    <TextBlock Text="{Binding Errors.Summary}" Style="{StaticResource Theme.ErrorText}" Margin="0,12,0,0" />
+                    <Border Style="{StaticResource Notice}" Tag="bad" Margin="0,12,0,0"
+                            Visibility="{Binding Errors.Summary, Converter={StaticResource Set}}">
+                        <DockPanel>
+                            <Viewbox Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
+                                <Canvas Width="24" Height="24">
+                                    <Path Style="{StaticResource NoticeIcon}" Data="M3,12 A9,9 0 1 1 21,12 A9,9 0 1 1 3,12 Z M12,7.5 V12.5 M12,16 V16.5" />
+                                </Canvas>
+                            </Viewbox>
+                            <TextBlock Text="{Binding Errors.Summary}" FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center" />
+                        </DockPanel>
+                    </Border>
                     <!-- The two cards side by side, as the canvas's "pgrid". -->
                     <Grid Margin="0,12,0,0">
                         <Grid.ColumnDefinitions>
@@ -237,26 +304,30 @@
                                 <StackPanel Grid.Column="0" Grid.Row="0">
                                     <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Nombre " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
                                     <TextBox Style="{StaticResource Theme.Input}" Tag="Por ejemplo: Tomás"
-                                             Text="{Binding FirstName, UpdateSourceTrigger=PropertyChanged}" />
+                                             Text="{Binding FirstName, UpdateSourceTrigger=PropertyChanged}"
+                                             views:FieldError.Text="{Binding Errors[FirstName]}" />
                                     <TextBlock Text="{Binding Errors[FirstName]}" Style="{StaticResource Theme.ErrorText}" Margin="0,6,0,0" />
                                 </StackPanel>
                                 <StackPanel Grid.Column="2" Grid.Row="0">
                                     <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Apellido " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
                                     <TextBox Style="{StaticResource Theme.Input}" Tag="Por ejemplo: Ríos"
-                                             Text="{Binding LastName, UpdateSourceTrigger=PropertyChanged}" />
+                                             Text="{Binding LastName, UpdateSourceTrigger=PropertyChanged}"
+                                             views:FieldError.Text="{Binding Errors[LastName]}" />
                                     <TextBlock Text="{Binding Errors[LastName]}" Style="{StaticResource Theme.ErrorText}" Margin="0,6,0,0" />
                                 </StackPanel>
                                 <StackPanel Grid.Column="0" Grid.Row="2">
                                     <TextBlock Text="DNI" Style="{StaticResource Theme.Label}" />
                                     <TextBox Style="{StaticResource Theme.Input}" Tag="Solo números"
-                                             Text="{Binding Dni, UpdateSourceTrigger=PropertyChanged}" />
+                                             Text="{Binding Dni, UpdateSourceTrigger=PropertyChanged}"
+                                             views:FieldError.Text="{Binding Errors[Dni]}" />
                                     <TextBlock Text="{Binding Errors[Dni]}" Style="{StaticResource Theme.ErrorText}" Margin="0,6,0,0" />
                                     <TextBlock Text="No puede repetirse." Style="{StaticResource Theme.Hint}" Margin="0,6,0,0" />
                                 </StackPanel>
                                 <StackPanel Grid.Column="2" Grid.Row="2">
                                     <TextBlock Text="CUIL o CUIT" Style="{StaticResource Theme.Label}" />
                                     <TextBox Style="{StaticResource Theme.Input}" Tag="XX-XXXXXXXX-X"
-                                             Text="{Binding Cuil, UpdateSourceTrigger=PropertyChanged}" />
+                                             Text="{Binding Cuil, UpdateSourceTrigger=PropertyChanged}"
+                                             views:FieldError.Text="{Binding Errors[Cuil]}" />
                                     <TextBlock Text="{Binding Errors[Cuil]}" Style="{StaticResource Theme.ErrorText}" Margin="0,6,0,0" />
                                     <TextBlock Text="No puede repetirse." Style="{StaticResource Theme.Hint}" Margin="0,6,0,0" />
                                 </StackPanel>
@@ -264,7 +335,17 @@
                             <TextBlock Text="{Binding RefusalMessage}" Style="{StaticResource Theme.ErrorText}" Margin="0,12,0,0" />
                             <Button Content="Usar esa persona" Style="{StaticResource OfferPart}" HorizontalAlignment="Left"
                                     Margin="0,6,0,0" Command="{Binding UseHolderCommand}" />
-                            <TextBlock Text="{Binding IdentityHint}" Style="{StaticResource Theme.Hint}" Margin="0,12,0,0" />
+                            <Border Style="{StaticResource Notice}" Tag="info" Margin="0,12,0,0">
+                                <DockPanel>
+                                    <Viewbox Width="18" Height="18" Margin="0,2,12,0" VerticalAlignment="Top">
+                                        <Canvas Width="24" Height="24">
+                                            <Path Style="{StaticResource NoticeIcon}" StrokeThickness="1.8"
+                                                  Data="M3,12 A9,9 0 1 1 21,12 A9,9 0 1 1 3,12 Z M12,11 V16 M12,7.5 V8" />
+                                        </Canvas>
+                                    </Viewbox>
+                                    <TextBlock Text="{Binding IdentityHint}" TextWrapping="Wrap" />
+                                </DockPanel>
+                            </Border>
                         </StackPanel>
                     </Border>
 
@@ -285,19 +366,24 @@
                                 <StackPanel Grid.Column="0" Grid.Row="0">
                                     <TextBlock Text="Teléfono" Style="{StaticResource Theme.Label}" />
                                     <TextBox Style="{StaticResource Theme.Input}" Tag="Por ejemplo: 03493 15-0000"
-                                             Text="{Binding PhoneNumber, UpdateSourceTrigger=PropertyChanged}" />
+                                             Text="{Binding PhoneNumber, UpdateSourceTrigger=PropertyChanged}"
+                                             views:FieldError.Text="{Binding Errors[Phone]}"
+                                             views:FieldError.Shared="{Binding Errors[Contact]}" />
                                     <TextBlock Text="{Binding Errors[Phone]}" Style="{StaticResource Theme.ErrorText}" Margin="0,6,0,0" />
                                 </StackPanel>
                                 <StackPanel Grid.Column="2" Grid.Row="0">
                                     <TextBlock Text="Email" Style="{StaticResource Theme.Label}" />
                                     <TextBox Style="{StaticResource Theme.Input}" Tag="nombre@ejemplo.test"
-                                             Text="{Binding Email, UpdateSourceTrigger=PropertyChanged}" />
+                                             Text="{Binding Email, UpdateSourceTrigger=PropertyChanged}"
+                                             views:FieldError.Text="{Binding Errors[Email]}"
+                                             views:FieldError.Shared="{Binding Errors[Contact]}" />
                                     <TextBlock Text="{Binding Errors[Email]}" Style="{StaticResource Theme.ErrorText}" Margin="0,6,0,0" />
                                 </StackPanel>
                                 <StackPanel Grid.Column="0" Grid.ColumnSpan="3" Grid.Row="2">
                                     <TextBlock Text="Domicilio" Style="{StaticResource Theme.Label}" />
                                     <TextBox Style="{StaticResource Theme.Input}" Tag="Calle, número y localidad"
-                                             Text="{Binding Domicile, UpdateSourceTrigger=PropertyChanged}" />
+                                             Text="{Binding Domicile, UpdateSourceTrigger=PropertyChanged}"
+                                             views:FieldError.Text="{Binding Errors[Domicile]}" />
                                     <TextBlock Text="{Binding Errors[Domicile]}" Style="{StaticResource Theme.ErrorText}" Margin="0,6,0,0" />
                                 </StackPanel>
                             </Grid>
@@ -308,11 +394,28 @@
                     </Border>
                     </Grid>
 
+                    <!-- A warning to accept: identifiers that look mistyped, or none at all. -->
+                    <Border Style="{StaticResource Notice}" Tag="warn" Margin="0,12,0,0"
+                            Visibility="{Binding Warning, Converter={StaticResource Set}}">
+                        <DockPanel>
+                            <Viewbox Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center" DockPanel.Dock="Left">
+                                <Canvas Width="24" Height="24">
+                                    <Path Style="{StaticResource NoticeIcon}" Data="M12,3 L22,21 H2 Z M12,10 V15 M12,18 V18.5" />
+                                </Canvas>
+                            </Viewbox>
+                            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" Margin="12,0,0,0" VerticalAlignment="Center">
+                                <Button Content="Volver a completar" Style="{StaticResource Theme.GhostButton}" Command="{Binding CancelCommand}" />
+                                <Button Content="Guardarla igual" Style="{StaticResource Theme.PrimaryButton}" Margin="10,0,0,0"
+                                        Command="{Binding AcceptWarningCommand}" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding Warning}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                        </DockPanel>
+                    </Border>
+
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-                        <Button Content="Cancelar" Style="{StaticResource Theme.GhostButton}" Command="{Binding BackCommand}"
-                                Height="42" Padding="26,0" FontSize="15" />
-                        <Button Content="{Binding SaveText}" Style="{StaticResource Theme.PrimaryButton}" Margin="12,0,0,0"
-                                Height="42" Padding="26,0" FontSize="15" Command="{Binding SaveCommand}" />
+                        <Button Content="Cancelar" Style="{StaticResource LargeGhost}" Command="{Binding BackCommand}" />
+                        <Button Content="{Binding SaveText}" Style="{StaticResource LargePrimary}" Margin="12,0,0,0"
+                                Command="{Binding SaveCommand}" />
                     </StackPanel>
                 </StackPanel>
 
@@ -320,43 +423,49 @@
                 <Border Style="{StaticResource ConfirmStep}" Margin="0,12,0,0">
                     <StackPanel>
                         <TextBlock Text="Confirme la corrección" Style="{StaticResource Theme.CardTitle}" />
-                        <TextBlock Text="{Binding Pending.Text}" TextWrapping="Wrap" FontSize="15" />
+                        <Border Style="{StaticResource Notice}" Tag="warn">
+                            <DockPanel>
+                                <Viewbox Width="18" Height="18" Margin="0,2,12,0" VerticalAlignment="Top">
+                                    <Canvas Width="24" Height="24">
+                                        <Path Style="{StaticResource NoticeIcon}" Data="M12,3 L22,21 H2 Z M12,10 V15 M12,18 V18.5" />
+                                    </Canvas>
+                                </Viewbox>
+                                <TextBlock Text="{Binding Pending.Text}" TextWrapping="Wrap" />
+                            </DockPanel>
+                        </Border>
                         <DataGrid Style="{StaticResource Theme.Table}" ItemsSource="{Binding Pending.Changes}" Margin="0,12,0,0">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="DATO" Binding="{Binding Field}" />
-                                <DataGridTextColumn Header="VALOR ANTERIOR" Binding="{Binding Old}" Width="*" />
-                                <DataGridTextColumn Header="VALOR NUEVO" Binding="{Binding New}" Width="*" FontWeight="Bold" />
+                                <DataGridTextColumn Header="DATO" Binding="{Binding Field}" Width="*" MinWidth="120" FontWeight="Bold" />
+                                <DataGridTextColumn Header="VALOR ANTERIOR" Binding="{Binding Old}" Width="1.5*" MinWidth="140"
+                                                    Foreground="{DynamicResource Theme.Muted}" />
+                                <DataGridTextColumn Header="VALOR NUEVO" Binding="{Binding New}" Width="1.5*" MinWidth="140" FontWeight="Bold" />
                             </DataGrid.Columns>
                         </DataGrid>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-                            <Button Content="Volver a editar" Style="{StaticResource Theme.GhostButton}" Command="{Binding CancelCommand}" />
-                            <Button Content="Confirmar corrección" Style="{StaticResource Theme.PrimaryButton}" Margin="12,0,0,0"
+                            <Button Content="Volver a editar" Style="{StaticResource LargeGhost}" Command="{Binding CancelCommand}" />
+                            <Button Content="Confirmar corrección" Style="{StaticResource LargePrimary}" Margin="12,0,0,0"
                                     Command="{Binding ConfirmCommand}" />
                         </StackPanel>
                     </StackPanel>
                 </Border>
 
-                <!-- A warning to accept: identifiers that look mistyped, or none at all. -->
-                <Border Style="{StaticResource WarningStep}" Margin="0,12,0,0">
-                    <StackPanel>
-                        <TextBlock Text="{Binding Warning}" TextWrapping="Wrap" FontSize="15" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource Theme.Warn}" />
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-                            <Button Content="Volver a completar" Style="{StaticResource Theme.GhostButton}" Command="{Binding CancelCommand}" />
-                            <Button Content="Guardarla igual" Style="{StaticResource Theme.PrimaryButton}" Margin="12,0,0,0"
-                                    Command="{Binding AcceptWarningCommand}" />
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
-
                 <!-- What was saved, with the way back. -->
-                <Border Style="{StaticResource SavedStep}" Margin="0,12,0,0">
-                    <StackPanel>
-                        <TextBlock Text="{Binding Saved.Title}" Style="{StaticResource Theme.CardTitle}" Foreground="{DynamicResource Theme.Ok}" />
-                        <TextBlock Text="{Binding Saved.Text}" TextWrapping="Wrap" FontSize="15" />
-                        <Button Content="Volver a personas" Style="{StaticResource Theme.PrimaryButton}" HorizontalAlignment="Right"
-                                Margin="0,12,0,0" Command="{Binding BackCommand}" />
-                    </StackPanel>
+                <Border Style="{StaticResource SavedStep}" Tag="ok" Padding="20,16" Margin="0,12,0,0">
+                    <DockPanel>
+                        <Viewbox Width="26" Height="26" Margin="0,0,14,0" VerticalAlignment="Center" DockPanel.Dock="Left">
+                            <Canvas Width="24" Height="24">
+                                <Path Style="{StaticResource NoticeIcon}" StrokeThickness="1.8"
+                                      Data="M3,12 A9,9 0 1 1 21,12 A9,9 0 1 1 3,12 Z M8,12.5 L11,15.5 L16,9.5" />
+                            </Canvas>
+                        </Viewbox>
+                        <Button Content="Volver a personas" Style="{StaticResource Theme.PrimaryButton}" DockPanel.Dock="Right"
+                                VerticalAlignment="Center" Margin="14,0,0,0" Command="{Binding BackCommand}" />
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Saved.Title}" FontSize="17" FontWeight="Bold" Foreground="{DynamicResource Theme.Ink}"
+                                       Margin="0,0,0,2" />
+                            <TextBlock Text="{Binding Saved.Text}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </DockPanel>
                 </Border>
             </StackPanel>
             </ScrollViewer>

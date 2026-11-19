@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-18, con el arreglo del Test60 mergeado (#156) e Índices a 1536 x 785 aprobada, sin mergear_
+_Última actualización: 2026-11-18 (cierre), con el arreglo del Test60 (#156) e Índices a 1536 x 785 (#157) mergeados_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -9,16 +9,15 @@ _Última actualización: 2026-11-18, con el arreglo del Test60 mergeado (#156) e
 ## En qué estamos
 
 **Change activo: `gestion-de-alquileres`, Phase 12 (Pantallas).** Llegó el rediseño de Mateo a **1536 x 785** (las 80
-pantallas). Se pasa **una pantalla por vez**: **Índices está hecha y aprobada por Tomás en PRUEBA**, sin commitear. Detalle:
+pantallas). Se pasa **una pantalla por vez**: **Índices está hecha, aprobada en PRUEBA y mergeada (#157).** Detalle:
 `gestion-de-alquileres/tasks.md`, 12.3d (entrada del 2026-11-18), y Engram `decisions/s12-indices-1536`.
 
 ## Próximos pasos
 
-1. **Tomás:** el PR de Índices (`IndicesView.xaml`, `Controls.xaml`, `IndicesViewModel.cs` y su test, `tasks.md`) y este archivo.
-   El arreglo del Test60 ya está en `develop` (#156, el 2026-11-18), pero su commit `599d37e` quedó con el título y la descripción
-   de Índices: el código es solo `AdjustmentDeskTests.cs` (Engram `bug/test60-received-on-bound-time-bomb`).
+1. **Nota de historia:** el commit `599d37e` (#156) se llama "fit the Índices screen" pero es solo el arreglo del Test60
+   (`AdjustmentDeskTests.cs`; Engram `bug/test60-received-on-bound-time-bomb`). Índices es `8d30879` (#157).
 2. **La siguiente pantalla ya hecha**, igual que Índices: leer su `.dc.html` y el `caja.css`, contarle a Tomás qué cambia, cambiar
-   solo esa y que la revise en pantalla. Quedan Personas, Propiedades y, de Contratos, el listado, el detalle y el formulario. El menú
+   solo esa y que la revise en pantalla. Quedan Personas, Propiedades y, de Contratos, el listado, el detalle y el formulario; **sugerida la siguiente: Personas** (Tomás elige). El menú
    lateral (`MainWindow`) todavía no tiene el estilo del lienzo: va como pantalla propia, con el nombre del usuario en el encabezado.
    Antes de mostrar cada una, revisar `memory/wpf-screen-lessons.md`. En las pruebas en pantalla, dar períodos **posteriores** al
    último cargado: el aviso de nivel lejano compara con el mes anterior.
@@ -103,7 +102,7 @@ dotnet test Inmobiliaria.Core.slnf --configuration Release
 dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure
 ```
 
-Esperado con el PR de Índices mergeado: **2574 pasados (Domain 857, Presentation 761, Infrastructure 956), 0 fallas, 0 omitidos**, build
+Esperado en `develop` (#157): **2574 pasados (Domain 857, Presentation 761, Infrastructure 956), 0 fallas, 0 omitidos**, build
 sin advertencias y el modelo en sintonía con `20261113165451_RevokeSupabaseApiRoles`. Si el build de Desktop falla con MSB3027,
 la aplicación está abierta y tiene tomadas sus DLL: cerrarla. La app la abre siempre el asistente (Tomás, 2026-11-13).
 
