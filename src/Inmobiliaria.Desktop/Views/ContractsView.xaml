@@ -197,6 +197,7 @@
                                 <Condition Binding="{Binding IsDetailOpen}" Value="True" />
                                 <Condition Binding="{Binding OpenDetail.IsActionOpen}" Value="False" />
                                 <Condition Binding="{Binding IsFormOpen}" Value="False" />
+                                <Condition Binding="{Binding OpenDetail.Adjustments.IsCorrectionOpen}" Value="False" />
                             </MultiDataTrigger.Conditions>
                             <Setter Property="Visibility" Value="Visible" />
                         </MultiDataTrigger>
@@ -260,6 +261,10 @@
              so its own bindings, Visibility included, are read from it: IsActionOpen, not OpenDetail.IsActionOpen. -->
         <views:ContractActionView DataContext="{Binding OpenDetail}"
                                   Visibility="{Binding IsActionOpen, Converter={StaticResource Shown}, FallbackValue=Collapsed}" />
+
+        <!-- The correction of the latest adjustment ("Corregir ajuste"), in place of the detail; bound to the open contract too. -->
+        <views:ContractAdjustmentCorrectionView DataContext="{Binding OpenDetail}"
+                                                Visibility="{Binding Adjustments.IsCorrectionOpen, Converter={StaticResource Shown}, FallbackValue=Collapsed}" />
 
         <!-- The form, in place of the list for a new contract and in place of the detail to correct one (canvas "Editar
              contrato"). It scrolls only on a screen smaller than the canvas's. -->

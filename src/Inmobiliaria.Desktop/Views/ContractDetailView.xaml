@@ -17,6 +17,7 @@
     <UserControl.Resources>
         <views:EqualsConverter x:Key="Equals" />
         <BooleanToVisibilityConverter x:Key="Shown" />
+        <views:SetToVisibleConverter x:Key="Set" />
 
         <!-- One line of a card, the canvas's "kv": what it is, muted, and its value, bold, on the same row. -->
         <DataTemplate x:Key="DetailLineRow" DataType="{x:Type contracts:DetailLine}">
@@ -257,11 +258,42 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
+                        <!-- "Corregir", live only on the latest adjustment; every other row says why under it (canvas). -->
+                        <DataGridTemplateColumn Header="" Width="1.6*" MinWidth="200">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel HorizontalAlignment="Center" Margin="0,6">
+                                        <Button Content="Corregir" Style="{StaticResource Theme.SmallGhostButton}" HorizontalAlignment="Center"
+                                                IsEnabled="{Binding CanCorrect}"
+                                                Command="{Binding DataContext.Adjustments.CorrectCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}" />
+                                        <TextBlock Text="{Binding CorrectNote}" Foreground="{DynamicResource Theme.Muted}" FontSize="13"
+                                                   TextAlignment="Center" TextWrapping="Wrap" Margin="0,4,0,0" MaxWidth="240"
+                                                   Visibility="{Binding CorrectNote, Converter={StaticResource Set}}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
                     </DataGrid.Columns>
                 </DataGrid>
-                <TextBlock Grid.Row="2" Text="Este contrato todavía no tiene ajustes confirmados." Style="{StaticResource Theme.Hint}"
-                           FontSize="15" Margin="14,18"
-                           Visibility="{Binding Adjustments.HasNoAdjustments, Converter={StaticResource Shown}}" />
+                <StackPanel Grid.Row="2">
+                    <TextBlock Text="Este contrato todavía no tiene ajustes confirmados." Style="{StaticResource Theme.Hint}"
+                               FontSize="15" Margin="14,18"
+                               Visibility="{Binding Adjustments.HasNoAdjustments, Converter={StaticResource Shown}}" />
+                    <TextBlock Text="La corrección de un ajuste se hace desde acá y solo para el último ajuste del contrato." Margin="14,10,14,14">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource Theme.Hint}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Adjustments.HasNoAdjustments}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <!-- A correction refused before its screen opened. -->
+                    <TextBlock Text="{Binding Adjustments.RefusalMessage}" Style="{StaticResource Theme.ErrorText}" Margin="14,0,14,14" TextWrapping="Wrap" />
+                </StackPanel>
             </Grid>
         </Border>
 
