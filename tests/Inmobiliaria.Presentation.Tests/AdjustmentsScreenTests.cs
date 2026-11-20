@@ -58,8 +58,9 @@ public class AdjustmentsScreenTests
         return new World(viewModel, desk);
     }
 
+    /// <summary>The summary names the tenant first name first, as the port reads it; the screen heads it as the list does.</summary>
     private static AdjustmentPreview SingleIcl() =>
-        new(Ready, "Vera, Marta", new DateOnly(2026, 5, 1), 280_000m,
+        new(Ready, "Marta Vera", new DateOnly(2026, 5, 1), 280_000m,
             [new AdjustmentIndexLine("ICL", new IndexPeriod(2026, 2), 20.1561m, new IndexPeriod(2026, 5), 21.2194m, 5.275326m)],
             CombinationRule.Single, 5.275326m, 294_770.91m, 294_770m, new DateOnly(2026, 8, 1));
 
@@ -78,6 +79,30 @@ public class AdjustmentsScreenTests
         world.ViewModel.SelectedRow = world.ViewModel.Worklist.Single(r => r.ContractId == Ready);
         await world.ViewModel.OpenCommand.ExecuteAsync(null);
         return world;
+    }
+
+    /// <summary>Canvas "Ajustes": a ready row's "Revisar" opens its summary; a waiting row's "Ir a Índices" goes to Índices.</summary>
+    [Fact]
+    public async Task EachRowsButton_DoesWhatItSays()
+    {
+        var wentToIndices = 0;
+        var worklist = new FakeDueAdjustmentQuery { Due = [DueReady(), DueWaiting(Waiting)] };
+        var desk = new FakeAdjustmentDesk();
+        var viewModel = new AdjustmentsViewModel(
+            worklist, desk, new FakeContractRegistry { Contracts = [Listing(Ready, "Vera, Marta", "Av. Independencia 90", ContractStatus.Active)] },
+            new FakeClock(Today), () => wentToIndices++);
+        await viewModel.LoadCommand.ExecuteAsync(null);
+        desk.Previews.Enqueue(AdjustmentPreviewResult.Ready(SingleIcl()));
+
+        await viewModel.ActCommand.ExecuteAsync(viewModel.Worklist.Single(r => r.ContractId == Waiting));
+
+        Assert.Equal(1, wentToIndices);
+        Assert.False(viewModel.IsConfirmOpen);
+
+        await viewModel.ActCommand.ExecuteAsync(viewModel.Worklist.Single(r => r.ContractId == Ready));
+
+        Assert.True(viewModel.IsConfirmOpen);
+        Assert.Equal(1, wentToIndices);
     }
 
     [Fact]
@@ -147,7 +172,7 @@ public class AdjustmentsScreenTests
         var world = await OpenedAsync(SingleIcl());
 
         Assert.True(world.ViewModel.IsConfirmOpen);
-        Assert.Equal("Vera, Marta", world.ViewModel.TenantText);
+        Assert.Equal("Vera, Marta", world.ViewModel.OpenTenantsText);
         Assert.Equal("Vigente", world.ViewModel.OpenStatusText);
         Assert.Equal("Atrasado 2 meses", world.ViewModel.OpenLateText);
         Assert.Equal($"Av. Independencia 90 · Contrato {Ready.ToString("N")[..8]} · ICL, cada 3 meses", world.ViewModel.OpenHeaderText);
@@ -186,6 +211,7 @@ public class AdjustmentsScreenTests
 
         Assert.True(world.ViewModel.IsConfirmOpen);
         Assert.NotNull(world.ViewModel.ConfirmedMessage);
+        Assert.Equal("Avise a Vera, Marta del nuevo canon. El sistema no le envía nada.", world.ViewModel.NoticeReminder);
 
         world.ViewModel.BackCommand.Execute(null);
 

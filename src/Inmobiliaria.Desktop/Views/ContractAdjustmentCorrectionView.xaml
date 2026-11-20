@@ -114,7 +114,7 @@
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
-                                <DataGridTextColumn Header="VARIACIÓN" Binding="{Binding VariationText}" Width="1*" MinWidth="100" />
+                                <DataGridTextColumn Header="VARIACIÓN" Binding="{Binding VariationPercentText}" Width="1*" MinWidth="100" />
                             </DataGrid.Columns>
                         </DataGrid>
                         <TextBlock Text="{Binding Adjustments.CorrectionText}" Style="{StaticResource Theme.Hint}" TextWrapping="Wrap" Margin="0,12,0,0" />
@@ -150,7 +150,7 @@
                             <TextBlock Text="Alquiler antes del ajuste" Foreground="{DynamicResource Theme.Muted}" />
                         </DockPanel>
                         <DockPanel Style="{StaticResource Figure}">
-                            <TextBlock DockPanel.Dock="Right" Text="{Binding Adjustments.CoefficientText}" FontWeight="Bold" />
+                            <TextBlock DockPanel.Dock="Right" Text="{Binding Adjustments.CoefficientPercentText}" FontWeight="Bold" />
                             <TextBlock Text="Coeficiente" Foreground="{DynamicResource Theme.Muted}" />
                         </DockPanel>
                         <DockPanel Style="{StaticResource Figure}">

@@ -1,0 +1,392 @@
+<UserControl x:Class="Inmobiliaria.Desktop.Views.AdjustmentsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:adjustments="clr-namespace:Inmobiliaria.Presentation.Adjustments;assembly=Inmobiliaria.Presentation"
+             xmlns:views="clr-namespace:Inmobiliaria.Desktop.Views"
+             mc:Ignorable="d"
+             d:DesignHeight="785" d:DesignWidth="1268">
+    <!--
+        The Ajustes screen as the designer drew it (canvas "Ajustes" and "Confirmar ajuste", 1536 x 785): the contracts whose
+        adjustment is due, filtered by state, with the indices still missing said over them; then, in its place, the summary of
+        the one chosen to confirm, and the notice once confirmed. Bound to AdjustmentsViewModel; no logic lives here.
+    -->
+    <UserControl.Resources>
+        <views:SetToVisibleConverter x:Key="Set" />
+        <views:EqualsConverter x:Key="Equals" />
+        <BooleanToVisibilityConverter x:Key="Shown" />
+
+        <Style x:Key="LargeGhost" TargetType="Button" BasedOn="{StaticResource Theme.GhostButton}">
+            <Setter Property="Height" Value="42" />
+            <Setter Property="Padding" Value="26,0" />
+            <Setter Property="FontSize" Value="15" />
+        </Style>
+
+        <Style x:Key="LargePrimary" TargetType="Button" BasedOn="{StaticResource Theme.PrimaryButton}">
+            <Setter Property="Height" Value="42" />
+            <Setter Property="Padding" Value="26,0" />
+            <Setter Property="FontSize" Value="15" />
+        </Style>
+
+        <Style x:Key="SmallPrimary" TargetType="Button" BasedOn="{StaticResource Theme.PrimaryButton}">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="14,0" />
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+
+        <!-- One figure: what it is, muted, and its value, bold. -->
+        <Style x:Key="Figure" TargetType="DockPanel">
+            <Setter Property="Margin" Value="0,6" />
+        </Style>
+
+        <!-- A note under a cell's main value, small and muted. -->
+        <Style x:Key="CellNote" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource Theme.Muted}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="TextAlignment" Value="Center" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+    </UserControl.Resources>
+
+    <!-- The page's margins, as every screen drawn to the 1536 x 785 canvas. -->
+    <Grid Margin="32,20,32,16">
+        <!-- ===== The list ===================================================================================================== -->
+        <Grid Visibility="{Binding IsConfirmOpen, Converter={StaticResource Set}, ConverterParameter=invert}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <StackPanel>
+                <TextBlock Text="Ajustes de alquiler" Style="{StaticResource Theme.Title}" />
+                <TextBlock Text="Contratos cuyo ajuste toca confirmar. El alquiler no cambia hasta que usted confirme." Style="{StaticResource Theme.Subtitle}" />
+                <TextBlock Text="{Binding Runner.ErrorMessage}" Style="{StaticResource Theme.ErrorText}" Margin="0,12,0,0" />
+                <TextBlock Text="{Binding RefusalMessage}" Style="{StaticResource Theme.ErrorText}" Margin="0,12,0,0" TextWrapping="Wrap" />
+
+                <!-- The indices still missing, with the way to load them. -->
+                <Border CornerRadius="14" Padding="14,10" Margin="0,12,0,0" BorderThickness="1"
+                        Background="{DynamicResource Theme.WarnBack}" BorderBrush="{DynamicResource Theme.Warn}"
+                        Visibility="{Binding MissingBannerText, Converter={StaticResource Set}}">
+                    <DockPanel>
+                        <Viewbox Width="18" Height="18" Margin="0,2,12,0" VerticalAlignment="Top" DockPanel.Dock="Left">
+                            <Canvas Width="24" Height="24">
+                                <Path Data="M12,3 L22,21 H2 Z M12,10 V15 M12,18 V18.5" Stroke="{DynamicResource Theme.Warn}" StrokeThickness="1.9"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                            </Canvas>
+                        </Viewbox>
+                        <Button Content="Cargar en Índices" Style="{StaticResource Theme.GhostButton}" DockPanel.Dock="Right"
+                                VerticalAlignment="Center" Margin="12,0,0,0" Command="{Binding OpenIndicesCommand}" />
+                        <StackPanel>
+                            <TextBlock Text="Faltan valores de índices" FontWeight="Bold" Foreground="{DynamicResource Theme.Warn}" />
+                            <TextBlock Text="{Binding MissingBannerText}" Foreground="{DynamicResource Theme.Warn}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <!-- The filters, with how many rows they show. -->
+                <DockPanel Margin="0,12,0,0">
+                    <TextBlock Text="{Binding CountText}" Foreground="{DynamicResource Theme.Muted}" DockPanel.Dock="Right" VerticalAlignment="Center" />
+                    <Border Style="{StaticResource Theme.SegmentGroup}" HorizontalAlignment="Left">
+                        <StackPanel Orientation="Horizontal">
+                            <RadioButton Content="Por confirmar" GroupName="AdjustmentFilter" Style="{StaticResource Theme.Segment}"
+                                         IsChecked="{Binding Filter, Converter={StaticResource Equals}, ConverterParameter={x:Static adjustments:AdjustmentFilter.All}}" />
+                            <RadioButton Content="Listos" GroupName="AdjustmentFilter" Style="{StaticResource Theme.Segment}"
+                                         IsChecked="{Binding Filter, Converter={StaticResource Equals}, ConverterParameter={x:Static adjustments:AdjustmentFilter.Ready}}" />
+                            <RadioButton Content="Esperando un índice" GroupName="AdjustmentFilter" Style="{StaticResource Theme.Segment}"
+                                         IsChecked="{Binding Filter, Converter={StaticResource Equals}, ConverterParameter={x:Static adjustments:AdjustmentFilter.Waiting}}" />
+                        </StackPanel>
+                    </Border>
+                </DockPanel>
+            </StackPanel>
+
+            <!-- The rows, in a card whose table scrolls inside it. -->
+            <Border Grid.Row="1" Style="{StaticResource Theme.Card}" Padding="8,8,8,4" Margin="0,12,0,0" VerticalAlignment="Top">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <DataGrid Style="{StaticResource Theme.Table}" ItemsSource="{Binding Worklist}" VerticalScrollBarVisibility="Auto">
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="INQUILINO" Width="1.5*" MinWidth="170">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel HorizontalAlignment="Center" Margin="0,6">
+                                            <TextBlock Text="{Binding Tenants}" FontWeight="Bold" TextAlignment="Center" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding UnitsText}" Style="{StaticResource CellNote}" />
+                                            <Border Style="{StaticResource Theme.Chip}" Tag="warn" HorizontalAlignment="Center" Margin="0,4,0,0"
+                                                    Visibility="{Binding IsPendingTermination, Converter={StaticResource Shown}}">
+                                                <TextBlock Text="En rescisión" />
+                                            </Border>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="CLÁUSULA" Width="1.3*" MinWidth="150">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <TextBlock Text="{Binding ClauseText}" TextAlignment="Center" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding EveryText}" Style="{StaticResource CellNote}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="VENCIMIENTO" Width="1.1*" MinWidth="130">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <TextBlock Text="{Binding DueDateText}" TextAlignment="Center" />
+                                            <TextBlock Text="{Binding LateText}" Style="{StaticResource CellNote}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="ALQUILER ACTUAL" Width="1.4*" MinWidth="170">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <TextBlock Text="{Binding CurrentCanonText}" FontWeight="Bold" TextAlignment="Center" />
+                                            <TextBlock Text="{Binding ProposalText}" Style="{StaticResource CellNote}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="ESTADO" Width="1.3*" MinWidth="160">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <Border HorizontalAlignment="Center">
+                                                <Border.Style>
+                                                    <Style TargetType="Border" BasedOn="{StaticResource Theme.Chip}">
+                                                        <Setter Property="Tag" Value="warn" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsReady}" Value="True">
+                                                                <Setter Property="Tag" Value="ok" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <TextBlock Text="{Binding ChipText}" />
+                                            </Border>
+                                            <TextBlock Text="{Binding StatusText}" Style="{StaticResource CellNote}" Margin="0,4,0,0"
+                                                       Visibility="{Binding IsReady, Converter={StaticResource Set}, ConverterParameter=invert}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="" Width="1*" MinWidth="130">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Button Content="{Binding ActionText}" HorizontalAlignment="Center" Margin="0,6"
+                                                Command="{Binding DataContext.ActCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource Theme.SmallGhostButton}">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsReady}" Value="True">
+                                                            <Setter Property="Background" Value="{DynamicResource Theme.Button}" />
+                                                            <Setter Property="Foreground" Value="{DynamicResource Theme.OnAccent}" />
+                                                            <Setter Property="BorderBrush" Value="{DynamicResource Theme.Button}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                    <StackPanel Grid.Row="1">
+                        <TextBlock Text="No hay contratos con un ajuste por confirmar." Style="{StaticResource Theme.Hint}" FontSize="15" Margin="14,18"
+                                   Visibility="{Binding Worklist.Count, Converter={StaticResource Set}, ConverterParameter=invert}" />
+                        <TextBlock Style="{StaticResource Theme.Hint}" TextWrapping="Wrap" Margin="14,10,14,14"
+                                   Text="Primero va el ajuste más atrasado. Un contrato sale de esta lista solo cuando se confirma su ajuste, no por abrirlo. Entran los contratos vigentes y los que están en terminación; los de alquiler fijo, sin cláusula, no aparecen. El historial de cada contrato es de solo lectura: se corrige desde el detalle del contrato." />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- ===== Confirming one ================================================================================================ -->
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Visibility="{Binding IsConfirmOpen, Converter={StaticResource Shown}}">
+            <StackPanel>
+                <TextBlock Text="Confirmar ajuste" Style="{StaticResource Theme.Title}" />
+                <TextBlock Text="Revise el resumen. El alquiler no cambia hasta que confirme." Style="{StaticResource Theme.Subtitle}" />
+                <!-- The back link of every screen: a small ghost button with its chevron, under the title on the left. -->
+                <Button Style="{StaticResource Theme.SmallGhostButton}" Padding="10,0,14,0" HorizontalAlignment="Left"
+                        Margin="0,12,0,0" Command="{Binding BackCommand}">
+                    <StackPanel Orientation="Horizontal">
+                        <Viewbox Width="16" Height="16" Margin="0,0,6,0">
+                            <Canvas Width="24" Height="24">
+                                <Path Data="M15,6 L9,12 L15,18" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                      StrokeLineJoin="Round"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                            </Canvas>
+                        </Viewbox>
+                        <TextBlock Text="Volver a Ajustes" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+
+                <TextBlock Text="{Binding Runner.ErrorMessage}" Style="{StaticResource Theme.ErrorText}" Margin="0,12,0,0" />
+                <TextBlock Text="{Binding RefusalMessage}" Style="{StaticResource Theme.ErrorText}" Margin="0,12,0,0" TextWrapping="Wrap" />
+
+                <!-- The contract it is for: its name, state and lateness, then unit, short id and clause. -->
+                <Border Style="{StaticResource Theme.Card}" Margin="0,12,0,0">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding OpenTenantsText}" Style="{StaticResource Theme.CardTitle}" Margin="0" VerticalAlignment="Center" />
+                            <Border Style="{StaticResource Theme.Chip}" Tag="ok" Margin="12,0,0,0" VerticalAlignment="Center"
+                                    Visibility="{Binding OpenStatusText, Converter={StaticResource Set}}">
+                                <TextBlock Text="{Binding OpenStatusText}" />
+                            </Border>
+                            <Border Style="{StaticResource Theme.Chip}" Tag="warn" Margin="8,0,0,0" VerticalAlignment="Center"
+                                    Visibility="{Binding OpenLateText, Converter={StaticResource Set}}">
+                                <TextBlock Text="{Binding OpenLateText}" />
+                            </Border>
+                        </StackPanel>
+                        <TextBlock Text="{Binding OpenHeaderText}" Foreground="{DynamicResource Theme.Muted}" Margin="0,6,0,0" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <!-- The summary to confirm, in the canvas's two columns: what the figures come from on the left, the figures and the
+                     buttons on the right. Nothing is written before "Confirmar ajuste". -->
+                <Grid Visibility="{Binding IsSummaryOpen, Converter={StaticResource Shown}}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" MinWidth="480" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="430" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                    <Border Style="{StaticResource Theme.Card}" Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Valores de los índices que se usaron" Style="{StaticResource Theme.CardTitle}" />
+                            <DataGrid Style="{StaticResource Theme.Table}" ItemsSource="{Binding SummaryLines}">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="ÍNDICE" Binding="{Binding IndexName}" Width="1*" MinWidth="90" />
+                                    <DataGridTemplateColumn Header="VALOR BASE" Width="1.3*" MinWidth="150">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock TextAlignment="Center">
+                                                    <Run Text="{Binding BaseLevelText, Mode=OneWay}" FontWeight="Bold" /><Run Text="  " /><Run Text="{Binding BasePeriodText, Mode=OneWay}" Foreground="{DynamicResource Theme.Muted}" />
+                                                </TextBlock>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTemplateColumn Header="VALOR FINAL" Width="1.3*" MinWidth="150">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock TextAlignment="Center">
+                                                    <Run Text="{Binding EndLevelText, Mode=OneWay}" FontWeight="Bold" /><Run Text="  " /><Run Text="{Binding EndPeriodText, Mode=OneWay}" Foreground="{DynamicResource Theme.Muted}" />
+                                                </TextBlock>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTextColumn Header="VARIACIÓN" Binding="{Binding VariationPercentText}" Width="1*" MinWidth="100" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                            <TextBlock Text="{Binding CoefficientExplanation}" Style="{StaticResource Theme.Hint}" TextWrapping="Wrap" Margin="0,12,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- The two dates, which are not the same thing. -->
+                    <Border Style="{StaticResource Theme.Card}" Margin="0,12,0,0">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock><Run Text="Venció el " Foreground="{DynamicResource Theme.Muted}" /><Run Text="{Binding DueDateText, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
+                                <TextBlock Margin="32,0,0,0"><Run Text="Se aplica desde el período " Foreground="{DynamicResource Theme.Muted}" /><Run Text="{Binding AppliesFromText, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
+                            </StackPanel>
+                            <TextBlock Text="Son dos fechas distintas: el vencimiento es cuando tocaba ajustar; el período es desde cuándo rige el nuevo alquiler."
+                                       Style="{StaticResource Theme.Hint}" TextWrapping="Wrap" Margin="0,8,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Confirmed late: the new canon applies from a later period. -->
+                    <Border CornerRadius="14" Padding="14,10" Margin="0,12,0,0" BorderThickness="1"
+                            Background="{DynamicResource Theme.WarnBack}" BorderBrush="{DynamicResource Theme.Warn}"
+                            Visibility="{Binding LateText, Converter={StaticResource Set}}">
+                        <DockPanel>
+                            <Viewbox Width="18" Height="18" Margin="0,2,12,0" VerticalAlignment="Top" DockPanel.Dock="Left">
+                                <Canvas Width="24" Height="24">
+                                    <Path Data="M12,3 L22,21 H2 Z M12,10 V15 M12,18 V18.5" Stroke="{DynamicResource Theme.Warn}" StrokeThickness="1.9"
+                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                                </Canvas>
+                            </Viewbox>
+                            <TextBlock Text="{Binding LateText}" TextWrapping="Wrap" Foreground="{DynamicResource Theme.Warn}" />
+                        </DockPanel>
+                    </Border>
+
+                    <!-- The difference it offers, unmarked until the operator marks it. -->
+                    <Border Style="{StaticResource Theme.Card}" Margin="0,12,0,0"
+                            Visibility="{Binding HasDifference, Converter={StaticResource Shown}}">
+                        <StackPanel>
+                            <TextBlock Text="Diferencia de ajuste" Style="{StaticResource Theme.CardTitle}" />
+                            <TextBlock Text="{Binding DifferenceText}" TextWrapping="Wrap" />
+                            <Border Style="{StaticResource Theme.SegmentGroup}" HorizontalAlignment="Left" Margin="0,12,0,0">
+                                <ToggleButton Content="Cobrar la diferencia" Style="{StaticResource Theme.Segment}" IsChecked="{Binding ChargeDifference}" />
+                            </Border>
+                            <TextBlock Text="Viene sin marcar: por defecto no se cobra. Si la marca, se agrega como un cargo aparte al confirmar."
+                                       Style="{StaticResource Theme.Hint}" TextWrapping="Wrap" Margin="0,8,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2">
+                    <!-- The figures: the rent before, the coefficient, the exact result and the canon it truncates to. -->
+                    <Border Style="{StaticResource Theme.Card}" Margin="0,12,0,0">
+                        <StackPanel>
+                            <DockPanel Style="{StaticResource Figure}">
+                                <TextBlock DockPanel.Dock="Right" Text="{Binding PreviousCanonText}" FontWeight="Bold" />
+                                <TextBlock Text="Alquiler anterior" Foreground="{DynamicResource Theme.Muted}" />
+                            </DockPanel>
+                            <DockPanel Style="{StaticResource Figure}">
+                                <TextBlock DockPanel.Dock="Right" Text="{Binding CoefficientPercentText}" FontWeight="Bold" />
+                                <TextBlock Text="Coeficiente" Foreground="{DynamicResource Theme.Muted}" />
+                            </DockPanel>
+                            <DockPanel Style="{StaticResource Figure}">
+                                <TextBlock DockPanel.Dock="Right" Text="{Binding ExactCanonText}" FontWeight="Bold" />
+                                <TextBlock Text="Resultado exacto" Foreground="{DynamicResource Theme.Muted}" />
+                            </DockPanel>
+                            <Separator Margin="0,8" Background="{DynamicResource Theme.Line}" />
+                            <DockPanel Style="{StaticResource Figure}">
+                                <TextBlock DockPanel.Dock="Right" Text="{Binding NewCanonText}" FontWeight="Bold" FontSize="18" />
+                                <TextBlock Text="Alquiler nuevo" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            </DockPanel>
+                            <TextBlock Style="{StaticResource Theme.Hint}" TextWrapping="Wrap" Margin="0,6,0,0">
+                                <Run Text="Se trunca al peso entero: no se cobran centavos ni se redondea. Rige desde el período " /><Run Text="{Binding AppliesFromText, Mode=OneWay}" /><Run Text="." />
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0" HorizontalAlignment="Right">
+                        <Button Content="Cancelar" Style="{StaticResource LargeGhost}" Command="{Binding BackCommand}" />
+                        <Button Content="Confirmar ajuste" Style="{StaticResource LargePrimary}" Margin="12,0,0,0" Command="{Binding ConfirmCommand}" />
+                    </StackPanel>
+                    </StackPanel>
+                </Grid>
+
+                <!-- What the confirmation did, with the reminder to tell the tenant and the way back. -->
+                <Border CornerRadius="14" Padding="20,16" Margin="0,12,0,0" BorderThickness="1"
+                        Background="{DynamicResource Theme.OkBack}" BorderBrush="{DynamicResource Theme.Ok}"
+                        Visibility="{Binding ConfirmedMessage, Converter={StaticResource Set}}">
+                    <DockPanel>
+                        <Viewbox Width="26" Height="26" Margin="0,0,14,0" VerticalAlignment="Center" DockPanel.Dock="Left">
+                            <Canvas Width="24" Height="24">
+                                <Path Data="M3,12 A9,9 0 1 1 21,12 A9,9 0 1 1 3,12 Z M8,12.5 L11,15.5 L16,9.5" Stroke="{DynamicResource Theme.Ok}"
+                                      StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                            </Canvas>
+                        </Viewbox>
+                        <Button Content="Volver a Ajustes" Style="{StaticResource Theme.PrimaryButton}" DockPanel.Dock="Right"
+                                VerticalAlignment="Center" Margin="14,0,0,0" Command="{Binding BackCommand}" />
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{Binding ConfirmedMessage}" FontSize="17" FontWeight="Bold" Foreground="{DynamicResource Theme.Ink}"
+                                       TextWrapping="Wrap" Margin="0,0,0,2" />
+                            <TextBlock Text="{Binding NoticeReminder}" Foreground="{DynamicResource Theme.Ok}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

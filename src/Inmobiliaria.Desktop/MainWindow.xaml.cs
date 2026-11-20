@@ -1,4 +1,5 @@
 ﻿using System.Windows;
+using Inmobiliaria.Presentation.Adjustments;
 using Inmobiliaria.Presentation.CashDesk;
 using Inmobiliaria.Presentation.Contracts;
 using Inmobiliaria.Presentation.GoLive;
@@ -31,7 +32,8 @@ public partial class MainWindow : Window
         ContractsViewModel contracts,
         PartiesViewModel parties,
         UnitsViewModel units,
-        IndicesViewModel indices)
+        IndicesViewModel indices,
+        AdjustmentsViewModel adjustments)
     {
         ArgumentNullException.ThrowIfNull(viewModel);
         ArgumentNullException.ThrowIfNull(recentCollections);
@@ -39,6 +41,7 @@ public partial class MainWindow : Window
         ArgumentNullException.ThrowIfNull(parties);
         ArgumentNullException.ThrowIfNull(units);
         ArgumentNullException.ThrowIfNull(indices);
+        ArgumentNullException.ThrowIfNull(adjustments);
         InitializeComponent();
 
         DataContext = viewModel;
@@ -52,6 +55,7 @@ public partial class MainWindow : Window
         PartiesScreen.DataContext = parties;
         UnitsScreen.DataContext = units;
         IndicesScreen.DataContext = indices;
+        AdjustmentsScreen.DataContext = adjustments;
     }
 
     /// <summary>Selects a screen's navigation entry, when it is offered and available.</summary>

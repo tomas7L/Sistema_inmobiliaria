@@ -21,8 +21,11 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
     private readonly IAdjustmentDesk _desk;
     private readonly IContractRegistry _contracts;
     private readonly IAgencyClock _clock;
+    private readonly Action? _openIndices;
 
-    public AdjustmentsViewModel(IDueAdjustmentQuery worklist, IAdjustmentDesk desk, IContractRegistry contracts, IAgencyClock clock)
+    /// <param name="openIndices">Shows the Índices screen, where a missing value is loaded; null where there is none to show.</param>
+    public AdjustmentsViewModel(
+        IDueAdjustmentQuery worklist, IAdjustmentDesk desk, IContractRegistry contracts, IAgencyClock clock, Action? openIndices = null)
     {
         ArgumentNullException.ThrowIfNull(worklist);
         ArgumentNullException.ThrowIfNull(desk);
@@ -33,7 +36,10 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
         _desk = desk;
         _contracts = contracts;
         _clock = clock;
+        _openIndices = openIndices;
         LoadCommand = new AsyncRelayCommand(LoadAsync, CanAct);
+        ActCommand = new AsyncRelayCommand<DueAdjustmentRow>(ActAsync, row => CanAct() && row is not null && (row.IsReady || _openIndices is not null));
+        OpenIndicesCommand = new RelayCommand(() => _openIndices?.Invoke(), () => _openIndices is not null);
         OpenCommand = new AsyncRelayCommand(OpenAsync, () => CanAct() && SelectedRow is not null);
         ConfirmCommand = new AsyncRelayCommand(ConfirmAsync, () => CanAct() && Summary is not null);
         BackCommand = new RelayCommand(Back, CanAct);
@@ -42,6 +48,29 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
 
     /// <summary>"Cancelar" and "Volver a Ajustes" on the confirming screen: the list again, forgetting what the screen showed.</summary>
     public IRelayCommand BackCommand { get; }
+
+    /// <summary>A row's button (canvas "Ajustes"): "Revisar" opens a ready row's summary; "Ir a Índices" goes where its value is loaded.</summary>
+    public IAsyncRelayCommand<DueAdjustmentRow> ActCommand { get; }
+
+    /// <summary>"Cargar en Índices", in the missing values' notice.</summary>
+    public IRelayCommand OpenIndicesCommand { get; }
+
+    private async Task ActAsync(DueAdjustmentRow? row)
+    {
+        if (row is null)
+        {
+            return;
+        }
+
+        if (!row.IsReady)
+        {
+            _openIndices?.Invoke();
+            return;
+        }
+
+        SelectedRow = row;
+        await OpenAsync();
+    }
 
     /// <summary>Every row read, whatever the filter: the list shows the ones the filter lets through.</summary>
     private IReadOnlyList<DueAdjustmentRow> _rows = [];
@@ -70,6 +99,9 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
     private bool _isConfirmOpen;
 
     public bool IsSummaryOpen => Summary is not null;
+
+    /// <summary>The open contract's tenant as the list names them, "Vera, Marta", heading the confirming screen.</summary>
+    public string? OpenTenantsText => _openRow?.Tenants;
 
     /// <summary>The open contract's state, beside its name.</summary>
     public string? OpenStatusText => _openRow?.ContractStatusText;
@@ -170,6 +202,7 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
             OpenCommand.NotifyCanExecuteChanged();
             ConfirmCommand.NotifyCanExecuteChanged();
             BackCommand.NotifyCanExecuteChanged();
+            ActCommand.NotifyCanExecuteChanged();
         }
     }
 
@@ -181,6 +214,7 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
         NoticeReminder = null;
         IsConfirmOpen = false;
         _openRow = null;
+        OnPropertyChanged(nameof(OpenTenantsText));
         OnPropertyChanged(nameof(OpenStatusText));
         OnPropertyChanged(nameof(OpenLateText));
         OnPropertyChanged(nameof(OpenHeaderText));
@@ -282,6 +316,7 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
 
         // A refusal on opening stays on the list; only a summary opens the confirming screen.
         IsConfirmOpen = Summary is not null;
+        OnPropertyChanged(nameof(OpenTenantsText));
         OnPropertyChanged(nameof(OpenStatusText));
         OnPropertyChanged(nameof(OpenLateText));
         OnPropertyChanged(nameof(OpenHeaderText));
@@ -339,7 +374,8 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
         {
             SetSummary(null);
             ConfirmedMessage = AdjustmentTexts.Confirmed(confirmed, "Ajuste confirmado");
-            NoticeReminder = AdjustmentTexts.Reminder(preview.TenantName);
+            // Named as the list names them, "Vera, Marta"; the summary reads the name first name first.
+            NoticeReminder = AdjustmentTexts.Reminder(_openRow?.Tenants is { Length: > 0 } tenants ? tenants : preview.TenantName);
             await ReloadAsync();
             return;
         }

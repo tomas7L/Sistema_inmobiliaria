@@ -247,6 +247,10 @@
                                          Value="{x:Static shell:NavigationTarget.Contracts}">
                                 <Setter Property="Visibility" Value="Collapsed" />
                             </DataTrigger>
+                            <DataTrigger Binding="{Binding SelectedItem.Target, ElementName=NavigationList}"
+                                         Value="{x:Static shell:NavigationTarget.Adjustments}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
                         </Style.Triggers>
                     </Style>
                 </TextBlock.Style>
@@ -379,6 +383,20 @@
                 </views:IndicesView.Style>
             </views:IndicesView>
 
+            <views:AdjustmentsView x:Name="AdjustmentsScreen">
+                <views:AdjustmentsView.Style>
+                    <Style TargetType="views:AdjustmentsView" BasedOn="{StaticResource Theme.Page}">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding SelectedItem.Target, ElementName=NavigationList}"
+                                         Value="{x:Static shell:NavigationTarget.Adjustments}">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </views:AdjustmentsView.Style>
+            </views:AdjustmentsView>
+
             <views:UsersView x:Name="UsersScreen">
                 <views:UsersView.Style>
                     <Style TargetType="views:UsersView">
@@ -417,6 +435,10 @@
                         </DataTrigger>
                         <DataTrigger Binding="{Binding SelectedItem.Target, ElementName=NavigationList}"
                                      Value="{x:Static shell:NavigationTarget.Indices}">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding SelectedItem.Target, ElementName=NavigationList}"
+                                     Value="{x:Static shell:NavigationTarget.Adjustments}">
                             <Setter Property="Visibility" Value="Visible" />
                         </DataTrigger>
                         </Style.Triggers>

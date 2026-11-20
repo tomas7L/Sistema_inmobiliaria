@@ -12,6 +12,7 @@ using Inmobiliaria.Domain.Parties;
 using Inmobiliaria.Domain.Units;
 using Inmobiliaria.Infrastructure.Access;
 using Inmobiliaria.Infrastructure.IndexSources;
+using Inmobiliaria.Presentation.Adjustments;
 using Inmobiliaria.Presentation.CashDesk;
 using Inmobiliaria.Presentation.Common;
 using Inmobiliaria.Desktop.Printing;
@@ -266,6 +267,14 @@ public partial class App : Application
                 _sessionProvider.GetRequiredService<IAgencyClock>(),
                 _sessionProvider.GetRequiredService<IDueAdjustmentQuery>());
 
+            // Ajustes is for both roles (gestion-de-alquileres spec Requirement 14); a missing index value is loaded in Índices.
+            var adjustmentsViewModel = new AdjustmentsViewModel(
+                _sessionProvider.GetRequiredService<IDueAdjustmentQuery>(),
+                adjustmentDesk,
+                contractRegistry,
+                _sessionProvider.GetRequiredService<IAgencyClock>(),
+                () => mainWindow?.ShowScreen(NavigationTarget.Indices));
+
             // What each screen would lose if the session closed now, so Cerrar sesión asks first (12.3d, Tomás 2026-11-16):
             // the desk and voiding name a summary not confirmed; every other screen, an operation still running.
             IPendingWork?[] pendingWork =
@@ -279,12 +288,13 @@ public partial class App : Application
                 new RunningWork(partiesViewModel.Runner),
                 new RunningWork(unitsViewModel.Runner),
                 new RunningWork(indicesViewModel.Runner),
+                new RunningWork(adjustmentsViewModel.Runner),
             ];
             var shellViewModel = new ShellViewModel(session, settingsProblems, pendingWork.OfType<IPendingWork>().ToList());
 
             mainWindow = new MainWindow(
                 shellViewModel, cashDeskViewModel, recentViewModel, voidingViewModel, goLiveViewModel, usersViewModel,
-                noticesViewModel, contractsViewModel, partiesViewModel, unitsViewModel, indicesViewModel);
+                noticesViewModel, contractsViewModel, partiesViewModel, unitsViewModel, indicesViewModel, adjustmentsViewModel);
             MainWindow = mainWindow;
             // ShutdownMode is OnExplicitShutdown (App.xaml) precisely so that closing
             // LoginWindow or ChangePasswordWindow mid-bootstrap never ends the process before

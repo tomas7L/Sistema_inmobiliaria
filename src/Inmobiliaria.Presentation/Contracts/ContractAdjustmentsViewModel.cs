@@ -21,12 +21,14 @@ public sealed partial class ContractAdjustmentsViewModel : ObservableObject
 
     private readonly IAdjustmentDesk _desk;
     private readonly Func<Task> _readContractAgain;
+    private readonly Func<string?>? _tenants;
     private Guid? _contractId;
 
     /// <param name="desk">Where adjustments are read and corrected.</param>
     /// <param name="runner">The detail's, so one action runs at a time on the whole screen.</param>
     /// <param name="readContractAgain">Reads the contract and this history again after a correction.</param>
-    public ContractAdjustmentsViewModel(IAdjustmentDesk desk, OperationRunner runner, Func<Task> readContractAgain)
+    /// <param name="tenants">The contract's tenants as it names them, "Vera, Marta", for the reminder.</param>
+    public ContractAdjustmentsViewModel(IAdjustmentDesk desk, OperationRunner runner, Func<Task> readContractAgain, Func<string?>? tenants = null)
     {
         ArgumentNullException.ThrowIfNull(desk);
         ArgumentNullException.ThrowIfNull(runner);
@@ -35,6 +37,7 @@ public sealed partial class ContractAdjustmentsViewModel : ObservableObject
         _desk = desk;
         Runner = runner;
         _readContractAgain = readContractAgain;
+        _tenants = tenants;
         CorrectCommand = new AsyncRelayCommand<AdjustmentHistoryRow>(CorrectAsync, row => CanAct() && row is { CanCorrect: true });
         ConfirmCommand = new AsyncRelayCommand(ConfirmAsync, () => CanAct() && Summary is not null);
         CloseCommand = new RelayCommand(() => SetSummary(null), CanAct);
@@ -73,7 +76,7 @@ public sealed partial class ContractAdjustmentsViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
     [NotifyPropertyChangedFor(nameof(IsSummaryOpen), nameof(PreviousCanonText), nameof(NewCanonText), nameof(CoefficientText))]
     [NotifyPropertyChangedFor(nameof(DueDateText), nameof(AppliesFromText), nameof(HasDifference), nameof(DifferenceText))]
-    [NotifyPropertyChangedFor(nameof(CorrectionText), nameof(DifferenceOutcomeText), nameof(ExactCanonText))]
+    [NotifyPropertyChangedFor(nameof(CorrectionText), nameof(DifferenceOutcomeText), nameof(ExactCanonText), nameof(CoefficientPercentText))]
     private AdjustmentPreview? _summary;
 
     /// <summary>The operator's choice on the difference offered: no until they say yes, and no again for every new summary.</summary>
@@ -102,6 +105,9 @@ public sealed partial class ContractAdjustmentsViewModel : ObservableObject
     public string? ExactCanonText => Summary is { } s ? $"$ {s.UntruncatedNewCanon.ToString("#,##0.00", Formats.Agency)}" : null;
 
     public string? CoefficientText => Summary is { } s ? Formats.Level(s.Coefficient) : null;
+
+    /// <summary>The coefficient as a percentage, "12,00 %", as Ajustes and the canvas show it.</summary>
+    public string? CoefficientPercentText => Summary is { } s ? AdjustmentTexts.Percent(s.Coefficient) : null;
 
     public string? DueDateText => Summary is { } s ? Formats.Date(s.DueDate) : null;
 
@@ -213,7 +219,7 @@ public sealed partial class ContractAdjustmentsViewModel : ObservableObject
         {
             SetSummary(null);
             ConfirmedMessage = AdjustmentTexts.Confirmed(confirmed, "Ajuste corregido");
-            NoticeReminder = AdjustmentTexts.Reminder(preview.TenantName);
+            NoticeReminder = AdjustmentTexts.Reminder(_tenants?.Invoke() is { Length: > 0 } tenants ? tenants : preview.TenantName);
             await _readContractAgain();
             return;
         }
