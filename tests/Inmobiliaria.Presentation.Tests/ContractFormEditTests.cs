@@ -113,7 +113,7 @@ public class ContractFormEditTests
 
         Assert.Equal(core, form.IsCoreLocked);
         Assert.Equal(clause, form.IsClauseLocked);
-        Assert.Equal(locked?.OperatorText(), form.LockText);
+        Assert.Equal(locked == ContractRefusal.ContractEnded ? ContractFormViewModel.EndedLockText : locked?.OperatorText(), form.LockText);
         Assert.Equal(
             locked switch
             {
@@ -122,6 +122,31 @@ public class ContractFormEditTests
                 _ => null,
             },
             form.ClauseLockText);
+    }
+
+    /// <summary>
+    /// Canvas "Editar contrato": a unit is replaced, never added, so the unit picker shows only once one was taken away; locked,
+    /// no unit is taken away or picked. A new contract adds and removes freely.
+    /// </summary>
+    [Fact]
+    public async Task TheUnitPicker_ShowsOnlyToReplaceAUnit()
+    {
+        var (form, _) = await EditingAsync();
+
+        Assert.True(form.CanRemoveUnits);
+        Assert.False(form.IsUnitPickerShown);
+
+        form.RemoveUnitCommand.Execute(form.Units[0]);
+
+        Assert.True(form.IsUnitPickerShown);
+
+        var (locked, _) = await EditingAsync(Standing(ContractRefusal.AccountHasMovements));
+        Assert.False(locked.CanRemoveUnits);
+        Assert.False(locked.IsUnitPickerShown);
+
+        var fresh = new ContractFormViewModel(new FakeContractRegistry(), false, new FakeClock(Today), new FakeIndexRegistry());
+        Assert.True(fresh.CanRemoveUnits);
+        Assert.True(fresh.IsUnitPickerShown);
     }
 
     [Fact]

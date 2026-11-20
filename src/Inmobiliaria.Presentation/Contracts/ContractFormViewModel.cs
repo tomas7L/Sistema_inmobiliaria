@@ -33,6 +33,10 @@ public sealed partial class ContractFormViewModel : ObservableObject
     /// <summary>Under the clause of an ended contract, as its detail says it.</summary>
     public const string ClauseLockedByEnd = "El contrato terminó: su canon ya no se ajusta ni se corrige.";
 
+    /// <summary>The banner over an ended contract's form, naming what is left to change (Tomás, 2026-11-19).</summary>
+    public const string EndedLockText =
+        "Este contrato ya está terminado: solo se pueden cambiar los honorarios de administración y los codeudores.";
+
     /// <summary>What a save of an unchanged contract says: nothing is sent.</summary>
     public const string NothingChanged = "No hay cambios para guardar.";
 
@@ -141,8 +145,22 @@ public sealed partial class ContractFormViewModel : ObservableObject
     /// <summary>The clause cannot change either: an adjustment is confirmed (spec Decision 32), or the contract ended.</summary>
     public bool IsClauseLocked => _editing?.CorrectionLock is ContractRefusal.AdjustmentConfirmed or ContractRefusal.ContractEnded;
 
+    /// <summary>"Quitar" beside each unit: never on a locked contract.</summary>
+    public bool CanRemoveUnits => !IsCoreLocked;
+
+    /// <summary>
+    /// The unit picker. A correction replaces a unit and never adds one (canvas "Editar contrato"), so it shows only once a unit
+    /// was taken away; a new contract always has it.
+    /// </summary>
+    public bool IsUnitPickerShown => _editing is not { } standing || (!IsCoreLocked && Units.Count < standing.Units.Count);
+
     /// <summary>The banner over a locked form, saying why; null while nothing is locked.</summary>
-    public string? LockText => _editing?.CorrectionLock?.OperatorText();
+    public string? LockText => _editing?.CorrectionLock switch
+    {
+        null => null,
+        ContractRefusal.ContractEnded => EndedLockText,
+        { } refusal => refusal.OperatorText(),
+    };
 
     /// <summary>Why the clause is locked, under it; null while it is not.</summary>
     public string? ClauseLockText => _editing?.CorrectionLock switch
@@ -1049,6 +1067,7 @@ public sealed partial class ContractFormViewModel : ObservableObject
             removed.PropertyChanged -= OnUnitLineChanged;
         }
 
+        OnPropertyChanged(nameof(IsUnitPickerShown));
         WithdrawWarnings();
     }
 

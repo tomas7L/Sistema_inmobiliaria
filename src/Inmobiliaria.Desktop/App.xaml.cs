@@ -224,7 +224,16 @@ public partial class App : Application
                     _sessionProvider.GetRequiredService<IAgencyClock>(),
                     _sessionProvider.GetRequiredService<IIndexRegistry>(),
                     _sessionProvider.GetRequiredService<IPartyRegistry>(),
-                    _sessionProvider.GetRequiredService<IUnitRegistry>()));
+                    _sessionProvider.GetRequiredService<IUnitRegistry>()),
+                // The same form corrects a contract from its detail (canvas "Editar contrato"); the cutover is never touched there.
+                detail => new ContractFormViewModel(
+                    contractRegistry,
+                    session.Role == UserRole.Admin,
+                    _sessionProvider.GetRequiredService<IAgencyClock>(),
+                    _sessionProvider.GetRequiredService<IIndexRegistry>(),
+                    _sessionProvider.GetRequiredService<IPartyRegistry>(),
+                    _sessionProvider.GetRequiredService<IUnitRegistry>(),
+                    detail));
 
             // Personas is for both roles (gestion-de-alquileres spec Requirement 22).
             var partiesViewModel = new PartiesViewModel(_sessionProvider.GetRequiredService<IPartyRegistry>());

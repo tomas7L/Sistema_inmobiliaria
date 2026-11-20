@@ -45,6 +45,7 @@ public sealed partial class ContractsViewModel : ObservableObject
         _buildEdit = editForm;
         EditCommand = new AsyncRelayCommand(EditAsync, () => _buildEdit is not null && OpenDetail is { IsEditOffered: true } && !Runner.IsBusy);
         CloseEditCommand = new AsyncRelayCommand(CloseEditAsync, () => !Runner.IsBusy);
+        CancelInsteadCommand = new AsyncRelayCommand(CancelInsteadAsync, () => OpenDetail is { IsCancelOffered: true } && !Runner.IsBusy);
         NewCommand = new AsyncRelayCommand(NewAsync, () => _buildForm is not null && !Runner.IsBusy);
         LoadCommand = new AsyncRelayCommand(LoadAsync, () => !Runner.IsBusy);
         OpenCommand = new AsyncRelayCommand<ContractRow>(OpenAsync, row => _buildDetail is not null && row is not null && !Runner.IsBusy);
@@ -73,6 +74,9 @@ public sealed partial class ContractsViewModel : ObservableObject
 
     /// <summary>"Volver al contrato" from the form: the detail again, read anew so what was saved shows.</summary>
     public IAsyncRelayCommand CloseEditCommand { get; }
+
+    /// <summary>"Cancelar contrato" in the lock's banner (canvas "Editar contrato"): the form closes and the cancelling screen opens.</summary>
+    public IAsyncRelayCommand CancelInsteadCommand { get; }
 
     /// <summary>The form of a new contract, open in place of the list, or null.</summary>
     [ObservableProperty]
@@ -169,6 +173,13 @@ public sealed partial class ContractsViewModel : ObservableObject
         }
     }
 
+    private Task CancelInsteadAsync()
+    {
+        OpenForm = null;
+        OpenDetail?.OpenCancelCommand.Execute(null);
+        return Task.CompletedTask;
+    }
+
     /// <summary>"Editar" follows the contract open: offered once it is read, and only where its state offers it.</summary>
     partial void OnOpenDetailChanged(ContractDetailViewModel? oldValue, ContractDetailViewModel? newValue)
     {
@@ -183,6 +194,7 @@ public sealed partial class ContractsViewModel : ObservableObject
         }
 
         EditCommand.NotifyCanExecuteChanged();
+        CancelInsteadCommand.NotifyCanExecuteChanged();
     }
 
     private void OnDetailChanged(object? sender, PropertyChangedEventArgs e)
@@ -190,6 +202,11 @@ public sealed partial class ContractsViewModel : ObservableObject
         if (e.PropertyName == nameof(ContractDetailViewModel.IsEditOffered))
         {
             EditCommand.NotifyCanExecuteChanged();
+        }
+
+        if (e.PropertyName == nameof(ContractDetailViewModel.IsCancelOffered))
+        {
+            CancelInsteadCommand.NotifyCanExecuteChanged();
         }
     }
 
@@ -259,6 +276,7 @@ public sealed partial class ContractsViewModel : ObservableObject
             NewCommand.NotifyCanExecuteChanged();
             EditCommand.NotifyCanExecuteChanged();
             CloseEditCommand.NotifyCanExecuteChanged();
+            CancelInsteadCommand.NotifyCanExecuteChanged();
         }
     }
 }
