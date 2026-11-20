@@ -621,7 +621,6 @@ public class ContractDetailViewModelTests
         Assert.Contains("Pérez, Juan", pending.Summary, StringComparison.Ordinal);
         Assert.Contains("Alem 1258", pending.Summary, StringComparison.Ordinal);
         Assert.Contains("900.000", pending.Summary, StringComparison.Ordinal);
-        Assert.EndsWith("Esto es definitivo. Una vez cancelado, el contrato no se puede recuperar.", pending.Summary, StringComparison.Ordinal);
         Assert.Null(pending.RetainedLine);
         Assert.Equal("SummarizeCancel", Assert.Single(port.Calls)[0]);
     }
@@ -657,7 +656,7 @@ public class ContractDetailViewModelTests
 
         await viewModel.ReviewCancelCommand.ExecuteAsync(null);
 
-        Assert.Contains("31001, 31002", viewModel.RefusalMessage, StringComparison.Ordinal);
+        Assert.Contains("31001 y 31002", viewModel.RefusalMessage, StringComparison.Ordinal);
         Assert.Equal(admin, viewModel.RefusalMessage!.Contains("Admin", StringComparison.Ordinal));
         Assert.False(viewModel.IsSummaryOpen);
     }
@@ -693,9 +692,98 @@ public class ContractDetailViewModelTests
         await viewModel.ReviewCancelCommand.ExecuteAsync(null);
 
         var line = Assert.IsType<PendingCancel>(viewModel.PendingChange).RetainedLine;
-        Assert.Contains("31001, 31002", line, StringComparison.Ordinal);
+        Assert.Contains("31001 y 31002", line, StringComparison.Ordinal);
         Assert.Contains("300.000", line, StringComparison.Ordinal);
         Assert.Contains("a mano", line, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Canvas "Cancelar por error": the summary heads with who, where and how much, then says what cancelling does, word for
+    /// word, and that it is final. The compensation is said only when something stops being owed.
+    /// </summary>
+    [Fact]
+    public async Task TheCancelSummary_ReadsAsTheCanvas()
+    {
+        var port = new FakeContractRegistry
+        {
+            CancelSummary = new ContractCancellationSummary(null, "Ocampo, Martín", "Pellegrini 722", 428_025m, [], false, 0m, [], "plan"),
+        };
+        var viewModel = New(port);
+        viewModel.ChangeReason = "Se cargó dos veces";
+
+        await viewModel.ReviewCancelCommand.ExecuteAsync(null);
+
+        var pending = Assert.IsType<PendingCancel>(viewModel.PendingChange);
+        Assert.Equal("Se cancela el contrato de Ocampo, Martín, sobre Pellegrini 722. Deja de deberse $ 428.025.", pending.Summary);
+        Assert.Equal("$ 428.025", pending.AmountText);
+        Assert.Equal("Se compensa con una corrección, sin recargo. Los movimientos anteriores no se tocan.", pending.CompensationLine);
+        Assert.Equal(
+            "El contrato deja de generar períodos, también los que todavía no se cargaron. La propiedad queda disponible. Las personas y la propiedad no se borran. El contrato sigue visible, marcado como cancelado y con su motivo.",
+            PendingCancel.EffectsLine);
+        Assert.Equal("Una vez cancelado, el contrato no se puede recuperar.", PendingCancel.FinalityLine);
+
+        port.CancelSummary = port.CancelSummary with { AmountStoppedBeingOwed = 0m };
+        viewModel.ChangeReason = "Otro motivo";
+        await viewModel.ReviewCancelCommand.ExecuteAsync(null);
+
+        Assert.Null(Assert.IsType<PendingCancel>(viewModel.PendingChange).CompensationLine);
+    }
+
+    /// <summary>
+    /// Canvas "Cancelar por error": its own screen, offered on any contract not cancelled yet, heading the contract with the
+    /// shared card; it opens with no reason typed, and a cancelled contract ends on its own notice.
+    /// </summary>
+    [Theory]
+    [InlineData(ContractStatus.Active)]
+    [InlineData(ContractStatus.PendingTermination)]
+    [InlineData(ContractStatus.Ended)]
+    public async Task TheCancelScreen_IsOfferedUntilCancelled_AndEndsOnItsNotice(ContractStatus status)
+    {
+        var port = new FakeContractRegistry { Detail = Peopled(status) with { EndReason = status == ContractStatus.Ended ? EndReason.Expiry : null } };
+        var viewModel = New(port);
+        await viewModel.LoadCommand.ExecuteAsync(null);
+        viewModel.ChangeReason = "left from before";
+
+        Assert.True(viewModel.OpenCancelCommand.CanExecute(null));
+        viewModel.OpenCancelCommand.Execute(null);
+
+        Assert.Equal(ContractAction.Cancel, viewModel.OpenAction);
+        Assert.Equal(string.Empty, viewModel.ChangeReason);
+        Assert.Equal(["Inquilino", "Propiedad", "Vigencia", "Alquiler actual"], viewModel.ActionCardLines.Select(l => l.Label));
+
+        viewModel.ChangeReason = "Se cargó dos veces";
+        await viewModel.ReviewCancelCommand.ExecuteAsync(null);
+        var cancelled = Peopled(ContractStatus.Ended) with { EndReason = EndReason.LoadedByMistake };
+        port.Detail = cancelled;
+        await viewModel.ConfirmCommand.ExecuteAsync(null);
+
+        Assert.Equal(
+            new ActionDone("Contrato cancelado", "El contrato de Ocampo, Martín quedó cancelado por error. Sigue visible en la lista, con su motivo."),
+            viewModel.Done);
+
+        var gone = await LoadedAsync(cancelled);
+        Assert.False(gone.OpenCancelCommand.CanExecute(null));
+    }
+
+    /// <summary>Canvas "Cancelar por error": a missing reason is said under its field before the port is asked, and typing one clears it.</summary>
+    [Fact]
+    public async Task CancellingWithNoReason_SaysItUnderTheField_AndAsksNothing()
+    {
+        var port = new FakeContractRegistry { Detail = Detail(ContractStatus.Active) };
+        var viewModel = New(port);
+        await viewModel.LoadCommand.ExecuteAsync(null);
+        port.Calls.Clear();
+        viewModel.ChangeReason = "  ";
+
+        await viewModel.ReviewCancelCommand.ExecuteAsync(null);
+
+        Assert.Equal(ContractRefusal.ReasonMissing.OperatorText(), viewModel.ChangeReasonError);
+        Assert.Null(viewModel.RefusalMessage);
+        Assert.False(viewModel.IsSummaryOpen);
+        Assert.Empty(port.Calls);
+
+        viewModel.ChangeReason = "Otro";
+        Assert.Null(viewModel.ChangeReasonError);
     }
 
     [Fact]

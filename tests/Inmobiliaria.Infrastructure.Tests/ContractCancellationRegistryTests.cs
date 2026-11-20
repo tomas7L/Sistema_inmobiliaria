@@ -516,7 +516,7 @@ public sealed class ContractCancellationRegistryTests
         var result = await Registry(world).CancelAsync(seeded.Contract, Reason, summary);
 
         Assert.Equal(ContractRefusal.PaymentMustBeVoidedFirst, result.Refusal);
-        Assert.Contains($"{DeskWorld.StartingNumber}, {DeskWorld.StartingNumber + 1}", result.RefusalText, StringComparison.Ordinal);
+        Assert.Contains($"{DeskWorld.StartingNumber} y {DeskWorld.StartingNumber + 1}", result.RefusalText, StringComparison.Ordinal);
         Assert.Equal(before, await HashAsync(world));
     }
 
