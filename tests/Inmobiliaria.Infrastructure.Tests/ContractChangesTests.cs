@@ -214,6 +214,21 @@ public sealed class ContractChangesTests
         AssertHolds((await Registry(world).DetailAsync(seeded.Contract))!, correction, field);
     }
 
+    /// <summary>The detail says what would stop a correction, so the form can lock it before anything is typed (canvas "Editar contrato").</summary>
+    [SkippableFact]
+    public async Task TheDetail_SaysWhyItsDataCannotBeCorrected()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+        await using var world = await WorldAsync();
+        var seeded = await SeedAsync(world);
+
+        Assert.Null((await Registry(world).DetailAsync(seeded.Contract))!.CorrectionLock);
+
+        await WriteFirstAccrualAsync(world, seeded);
+
+        Assert.Equal(ContractRefusal.AccountHasMovements, (await Registry(world).DetailAsync(seeded.Contract))!.CorrectionLock);
+    }
+
     [SkippableTheory]
     [MemberData(nameof(LockedFields))]
     public async Task EachLockedField_IsRefusedAfterAMovement_NamingWhy_AndWritesNothing(string field)
@@ -348,6 +363,7 @@ public sealed class ContractChangesTests
 
         Assert.Equal(ContractRefusal.ContractEnded, result.Refusal);
         Assert.Equal(before, await HashAsync(world));
+        Assert.Equal(ContractRefusal.ContractEnded, (await Registry(world).DetailAsync(seeded.Contract))!.CorrectionLock);
     }
 
     /// <summary>An adjustment prices from the canon, so its history would stop adding up even with an empty ledger.</summary>
@@ -374,6 +390,7 @@ public sealed class ContractChangesTests
 
         Assert.Equal(ContractRefusal.AdjustmentConfirmed, result.Refusal);
         Assert.Equal(before, await HashAsync(world));
+        Assert.Equal(ContractRefusal.AdjustmentConfirmed, (await Registry(world).DetailAsync(contract.Id))!.CorrectionLock);
     }
 
     // ---- Units (Finding F1, design D14) -------------------------------------------------------------------------------

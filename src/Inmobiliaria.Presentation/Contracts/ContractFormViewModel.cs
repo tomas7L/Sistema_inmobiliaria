@@ -25,6 +25,26 @@ public sealed partial class ContractFormViewModel : ObservableObject
     /// <summary>What the form says when warnings came back for values it no longer holds.</summary>
     public const string FormChangedWhileSaving = "El formulario cambió mientras se guardaba. Revíselo y guarde de nuevo.";
 
+    /// <summary>Under the clause, once an adjustment is confirmed (canvas "Editar contrato").</summary>
+    public const string ClauseLockedByAdjustment =
+        "La cláusula ya no se puede cambiar: hay un ajuste confirmado. Un cambio vale desde el próximo ajuste y nunca toca uno ya " +
+        "confirmado, pero a partir del primero confirmado queda cerrada.";
+
+    /// <summary>Under the clause of an ended contract, as its detail says it.</summary>
+    public const string ClauseLockedByEnd = "El contrato terminó: su canon ya no se ajusta ni se corrige.";
+
+    /// <summary>What a save of an unchanged contract says: nothing is sent.</summary>
+    public const string NothingChanged = "No hay cambios para guardar.";
+
+    /// <summary>The saved notice's text after a correction (canvas "Editar contrato", under "Cambios guardados").</summary>
+    public const string CorrectedText = "El contrato quedó con los datos corregidos.";
+
+    /// <summary>The contract being corrected, or null for a new one.</summary>
+    private readonly ContractDetail? _editing;
+
+    /// <summary>What the contract holds as far as this form knows: what a save compares against, moved on as each part lands.</summary>
+    private EditBaseline? _baseline;
+
     private readonly IContractRegistry _contracts;
     private readonly IAgencyClock _clock;
     private readonly IIndexRegistry _indices;
@@ -41,7 +61,7 @@ public sealed partial class ContractFormViewModel : ObservableObject
     /// <param name="units">The units the unit picker offers; without it, none.</param>
     public ContractFormViewModel(
         IContractRegistry contracts, bool canSetCutover, IAgencyClock clock, IIndexRegistry indices, IPartyRegistry? parties = null,
-        IUnitRegistry? units = null)
+        IUnitRegistry? units = null, ContractDetail? editing = null)
     {
         ArgumentNullException.ThrowIfNull(contracts);
         ArgumentNullException.ThrowIfNull(clock);
@@ -52,6 +72,7 @@ public sealed partial class ContractFormViewModel : ObservableObject
         _indices = indices;
         _parties = parties;
         _units = units;
+        _editing = editing;
         IsCutoverOffered = canSetCutover;
         LoadCommand = new AsyncRelayCommand(LoadAsync, CanAct);
         SaveCommand = new AsyncRelayCommand(SaveAsync, CanAct);
@@ -106,7 +127,30 @@ public sealed partial class ContractFormViewModel : ObservableObject
     /// The cutover shows only where it serves, as on the canvas: an Administrador's contract that started before this month.
     /// </summary>
     public bool IsCutoverShown =>
-        IsCutoverOffered && StartDate is { } start && start < new DateOnly(_clock.Today.Year, _clock.Today.Month, 1);
+        !IsEditing && IsCutoverOffered && StartDate is { } start && start < new DateOnly(_clock.Today.Year, _clock.Today.Month, 1);
+
+    /// <summary>Opened on a contract that exists (canvas "Editar contrato"): it corrects it rather than creating one.</summary>
+    public bool IsEditing => _editing is not null;
+
+    /// <summary>
+    /// The contract's own data, everything but the honorarios, the codeudores and the clause, can no longer be corrected: it has
+    /// movements, a confirmed adjustment, or it ended (spec Requirement 9).
+    /// </summary>
+    public bool IsCoreLocked => _editing?.CorrectionLock is not null;
+
+    /// <summary>The clause cannot change either: an adjustment is confirmed (spec Decision 32), or the contract ended.</summary>
+    public bool IsClauseLocked => _editing?.CorrectionLock is ContractRefusal.AdjustmentConfirmed or ContractRefusal.ContractEnded;
+
+    /// <summary>The banner over a locked form, saying why; null while nothing is locked.</summary>
+    public string? LockText => _editing?.CorrectionLock?.OperatorText();
+
+    /// <summary>Why the clause is locked, under it; null while it is not.</summary>
+    public string? ClauseLockText => _editing?.CorrectionLock switch
+    {
+        ContractRefusal.AdjustmentConfirmed => ClauseLockedByAdjustment,
+        ContractRefusal.ContractEnded => ClauseLockedByEnd,
+        _ => null,
+    };
 
     public ObservableCollection<PartyListing> Lessors { get; } = [];
 
@@ -316,6 +360,10 @@ public sealed partial class ContractFormViewModel : ObservableObject
     [ObservableProperty]
     private ContractListing? _created;
 
+    /// <summary>The contract just corrected, every part of the save landed; or null.</summary>
+    [ObservableProperty]
+    private ContractListing? _corrected;
+
     partial void OnTenantChanged(PartyListing? value) => WithdrawWarnings();
 
     partial void OnStartDateChanged(DateOnly? value)
@@ -498,8 +546,15 @@ public sealed partial class ContractFormViewModel : ObservableObject
     {
         RefusalMessage = null;
         Created = null;
+        Corrected = null;
         SavedText = null;
         Errors = ContractFieldErrors.None;
+
+        if (_editing is { } standing)
+        {
+            await SubmitCorrectionAsync(standing, acceptWarnings);
+            return;
+        }
 
         var draft = BuildDraft(out var problems);
         if (problems.Count > 0)
@@ -548,6 +603,200 @@ public sealed partial class ContractFormViewModel : ObservableObject
             SetWarnings(result.Warnings.Select(w => w.OperatorText()));
         }
     }
+
+    /// <summary>
+    /// A correction sends only what changed, each part through its own call (spec Requirement 9, Decisions 32 and 33): the
+    /// contract's data first, since it is the part warned about and most often refused, then the codeudores, the rate and the
+    /// clause. What is locked is never sent. A part refused after another landed says what already saved, and the next save sends
+    /// only what is left.
+    /// </summary>
+    private async Task SubmitCorrectionAsync(ContractDetail standing, bool acceptWarnings)
+    {
+        var baseline = _baseline ??= EditBaseline.Of(standing);
+        var draft = BuildDraft(out var found);
+
+        var problems = found.Where(p => IsEditable(p.Field)).ToList();
+        if (!IsCoreLocked && Units.Count != standing.Units.Count)
+        {
+            problems.Add(new ContractProblem(ContractField.Units, ContractRefusal.UnitCountChanged));
+        }
+
+        if (draft.HonorariosPercentage is null && baseline.Rate is not null && problems.All(p => p.Field != ContractField.Honorarios))
+        {
+            problems.Add(new ContractProblem(ContractField.Honorarios, ContractRefusal.HonorariosCannotBeCleared));
+        }
+
+        if (!IsClauseLocked && draft.Clause is null && baseline.Clause is not null && problems.All(p => p.Field != ContractField.Clause))
+        {
+            problems.Add(new ContractProblem(ContractField.Clause, ContractRefusal.ClauseCannotBeRemoved));
+        }
+
+        if (problems.Count > 0)
+        {
+            Errors = new ContractFieldErrors(problems.OrderBy(p => p.Field));
+            return;
+        }
+
+        var id = standing.Id;
+        var parts = new List<(string Name, Func<Task<ContractResult>> Send, Action Landed)>();
+        if (!IsCoreLocked && baseline.CoreDiffers(draft))
+        {
+            parts.Add(("los datos del contrato", () => _contracts.CorrectAsync(id, CorrectionOf(draft), acceptWarnings), () => _baseline = _baseline!.WithCore(draft)));
+        }
+
+        if (baseline.CodebtorsDiffer(draft.CodebtorIds))
+        {
+            parts.Add(("los codeudores", () => _contracts.SetCodebtorsAsync(id, draft.CodebtorIds), () => _baseline = _baseline! with { CodebtorIds = draft.CodebtorIds }));
+        }
+
+        if (draft.HonorariosPercentage is { } rate && rate != baseline.Rate)
+        {
+            parts.Add(("los honorarios", () => _contracts.SetRateAsync(id, rate), () => _baseline = _baseline! with { Rate = rate }));
+        }
+
+        if (!IsClauseLocked && draft.Clause is { } clause && baseline.ClauseDiffers(clause))
+        {
+            parts.Add(("la cláusula", () => _contracts.SetClauseAsync(id, clause), () => _baseline = _baseline! with { Clause = clause }));
+        }
+
+        if (parts.Count == 0)
+        {
+            RefusalMessage = NothingChanged;
+            return;
+        }
+
+        var editsWhenSent = _edits;
+        var landed = new List<string>();
+        ContractListing? last = null;
+        foreach (var part in parts)
+        {
+            var outcome = await Runner.RunAsync(part.Send);
+            if (!outcome.Completed)
+            {
+                RefusalMessage = AlreadySaved(landed);
+                return;
+            }
+
+            var result = outcome.Value!;
+            if (result.Succeeded)
+            {
+                part.Landed();
+                landed.Add(part.Name);
+                last = result.Contract;
+                continue;
+            }
+
+            if (result.Refusal is { } refusal && UnitRow(result.UnitId) is { } row)
+            {
+                Errors = ContractFieldErrors.OnRow(ContractField.Units, row, refusal.OperatorText(result.CurrentTenant));
+                RefusalMessage = AlreadySaved(landed);
+            }
+            else if (result.Refusal is { } other)
+            {
+                RefusalMessage = AlreadySaved(landed) is { } saved
+                    ? $"{other.OperatorText(result.CurrentTenant)} {saved}"
+                    : other.OperatorText(result.CurrentTenant);
+            }
+            else if (_edits != editsWhenSent)
+            {
+                RefusalMessage = FormChangedWhileSaving;
+            }
+            else
+            {
+                SetWarnings(result.Warnings.Select(w => w.OperatorText()));
+            }
+
+            return;
+        }
+
+        SavedText = CorrectedText;
+        Corrected = last;
+    }
+
+    /// <summary>What a stopped correction had already written, or null when nothing was.</summary>
+    private static string? AlreadySaved(IReadOnlyList<string> landed) => landed.Count switch
+    {
+        0 => null,
+        1 => $"Quedó guardado: {landed[0]}.",
+        _ => $"Quedó guardado: {string.Join(", ", landed.Take(landed.Count - 1))} y {landed[^1]}.",
+    };
+
+    /// <summary>Whether a field's problem stops a correction: a locked field is never sent, so its problems are not the operator's.</summary>
+    private bool IsEditable(ContractField field) =>
+        !IsCoreLocked
+        || field is ContractField.Honorarios or ContractField.Codebtors
+        || (field == ContractField.Clause && !IsClauseLocked);
+
+    private static ContractCorrection CorrectionOf(ContractDraft draft) => new()
+    {
+        TenantId = draft.TenantId,
+        LessorIds = draft.LessorIds,
+        Shares = draft.Shares,
+        StartDate = draft.StartDate,
+        NominalEndDate = draft.NominalEndDate,
+        MonthlyRent = draft.MonthlyRent,
+        DueDay = draft.DueDay,
+        FeePlanAmount = draft.FeePlanAmount,
+        FeePlanInstalments = draft.FeePlanInstalments,
+    };
+
+    /// <summary>The contract as it stands, shown on the form so it is corrected rather than typed again (canvas "Editar contrato").</summary>
+    private void Fill(ContractDetail standing, IReadOnlyList<PartyListing> people, IReadOnlyList<UnitListing> units)
+    {
+        // A person the list no longer offers still shows, by the name the contract gives them.
+        PartyListing Person(ContractPartyLine line) =>
+            people.FirstOrDefault(p => p.Id == line.PartyId) ?? new PartyListing(line.PartyId, string.Empty, line.Name, null, null, null, null, null);
+
+        IEnumerable<PartyListing> InRole(PartyRole role) => standing.Parties.Where(p => p.Role == role).Select(Person);
+
+        Tenant = InRole(PartyRole.Tenant).FirstOrDefault();
+        foreach (var lessor in InRole(PartyRole.Lessor))
+        {
+            Lessors.Add(lessor);
+        }
+
+        foreach (var codebtor in InRole(PartyRole.Codebtor))
+        {
+            Codebtors.Add(codebtor);
+        }
+
+        foreach (var line in standing.Units)
+        {
+            if (units.FirstOrDefault(u => u.Id == line.UnitId) is { } unit)
+            {
+                Units.Add(new ContractFormUnit(unit) { ShareText = standing.Units.Count > 1 ? Formats.Number(line.Percentage) : string.Empty });
+            }
+        }
+
+        StartDate = standing.StartDate;
+        NominalEndDate = standing.NominalEndDate;
+        MonthlyRentText = Whole(standing.MonthlyRent);
+        DueDayText = standing.DueDay.ToString(CultureInfo.InvariantCulture);
+        HonorariosText = standing.HonorariosPercentage is { } rate ? Formats.Number(rate) : string.Empty;
+        if (standing.FeePlan is { } plan)
+        {
+            FeePlanAmountText = Whole(plan.Amount);
+            FeePlanInstalmentsText = plan.Instalments.ToString(CultureInfo.InvariantCulture);
+        }
+
+        if (standing.Clause is { } clause)
+        {
+            HasClause = true;
+            foreach (var indexId in clause.IndexIds)
+            {
+                ClauseIndexIds.Add(indexId);
+            }
+
+            ClauseIntervalText = clause.IntervalMonths.ToString(CultureInfo.InvariantCulture);
+            ClauseOffsetText = clause.WindowOffsetMonths.ToString(CultureInfo.InvariantCulture);
+        }
+
+        _baseline = EditBaseline.Of(standing);
+        Errors = ContractFieldErrors.None;
+        WithdrawWarnings();
+    }
+
+    private static string Whole(decimal amount) => amount.ToString("0", CultureInfo.InvariantCulture);
 
     /// <summary>
     /// What was typed, with every problem the form can find on its own (spec Decision 44): text that is not even a number,
@@ -612,6 +861,7 @@ public sealed partial class ContractFormViewModel : ObservableObject
             shares = RentSplit.Equal(Units.Select(u => u.Unit.Id).ToList());
         }
 
+        // A correction keeps the contract's cutover, and its start may be one that has already passed (ContractDraftRules.Check).
         var draft = new ContractDraft
         {
             TenantId = Tenant?.Id,
@@ -623,7 +873,7 @@ public sealed partial class ContractFormViewModel : ObservableObject
             MonthlyRent = rentRead ? rent : null,
             DueDay = dueDay,
             HonorariosPercentage = rate,
-            CutoverDate = IsCutoverOffered ? CutoverDate : null,
+            CutoverDate = _editing is { } standing ? standing.CutoverDate : IsCutoverOffered ? CutoverDate : null,
             FeePlanAmount = feeAmount,
             FeePlanInstalments = feeInstalments,
             Clause = clause,
@@ -631,7 +881,7 @@ public sealed partial class ContractFormViewModel : ObservableObject
 
         var unreadFields = unread.Select(p => p.Field).ToHashSet();
         problems = unread
-            .Concat(ContractDraftRules.Problems(draft, _clock.Today).Where(p => !unreadFields.Contains(p.Field)))
+            .Concat(ContractDraftRules.Problems(draft, _clock.Today, _editing?.StartDate).Where(p => !unreadFields.Contains(p.Field)))
             .OrderBy(p => p.Field)
             .ToList();
 
@@ -834,17 +1084,89 @@ public sealed partial class ContractFormViewModel : ObservableObject
         OnPropertyChanged(nameof(SuggestedClauseOffset));
         OnPropertyChanged(nameof(ClauseWindowText));
 
-        if (_parties is not null && await Runner.RunAsync(() => _parties.SearchAsync(null)) is { Completed: true, Value: { } people })
+        IReadOnlyList<PartyListing> people = [];
+        if (_parties is not null && await Runner.RunAsync(() => _parties.SearchAsync(null)) is { Completed: true, Value: { } found })
         {
+            people = found;
             TenantPicker.SetOptions(people);
             LessorPicker.SetOptions(people);
             CodebtorPicker.SetOptions(people);
         }
 
-        if (_units is not null && await Runner.RunAsync(() => _units.ListAsync()) is { Completed: true, Value: { } units })
+        IReadOnlyList<UnitListing> units = [];
+        if (_units is not null && await Runner.RunAsync(() => _units.ListAsync()) is { Completed: true, Value: { } listed })
         {
+            units = listed;
             UnitPicker.SetOptions(units);
         }
+
+        // Filled once, after the lists, so each person and unit is the one the pickers offer.
+        if (_editing is { } standing && _baseline is null)
+        {
+            Fill(standing, people, units);
+        }
+    }
+
+    /// <summary>The contract's parts as last known, so a save sends only what differs from them.</summary>
+    private sealed record EditBaseline(
+        Guid? TenantId,
+        IReadOnlyList<Guid> LessorIds,
+        IReadOnlyList<UnitShare> Shares,
+        DateOnly? StartDate,
+        DateOnly? NominalEndDate,
+        decimal? MonthlyRent,
+        int DueDay,
+        decimal? FeePlanAmount,
+        int? FeePlanInstalments,
+        decimal? Rate,
+        IReadOnlyList<Guid> CodebtorIds,
+        ClauseDraft? Clause)
+    {
+        public static EditBaseline Of(ContractDetail standing) => new(
+            standing.Parties.FirstOrDefault(p => p.Role == PartyRole.Tenant)?.PartyId,
+            standing.Parties.Where(p => p.Role == PartyRole.Lessor).Select(p => p.PartyId).ToList(),
+            standing.Units.Select(u => new UnitShare(u.UnitId, u.Percentage)).ToList(),
+            standing.StartDate,
+            standing.NominalEndDate,
+            standing.MonthlyRent,
+            standing.DueDay,
+            standing.FeePlan?.Amount,
+            standing.FeePlan?.Instalments,
+            standing.HonorariosPercentage,
+            standing.Parties.Where(p => p.Role == PartyRole.Codebtor).Select(p => p.PartyId).ToList(),
+            standing.Clause is { } clause ? new ClauseDraft(clause.IndexIds, clause.IntervalMonths, clause.WindowOffsetMonths) : null);
+
+        public bool CoreDiffers(ContractDraft draft) =>
+            draft.TenantId != TenantId
+            || !draft.LessorIds.Order().SequenceEqual(LessorIds.Order())
+            || !draft.Shares.OrderBy(s => s.UnitId).SequenceEqual(Shares.OrderBy(s => s.UnitId))
+            || draft.StartDate != StartDate
+            || draft.NominalEndDate != NominalEndDate
+            || draft.MonthlyRent != MonthlyRent
+            || draft.DueDay != DueDay
+            || draft.FeePlanAmount != FeePlanAmount
+            || draft.FeePlanInstalments != FeePlanInstalments;
+
+        public EditBaseline WithCore(ContractDraft draft) => this with
+        {
+            TenantId = draft.TenantId,
+            LessorIds = draft.LessorIds,
+            Shares = draft.Shares,
+            StartDate = draft.StartDate,
+            NominalEndDate = draft.NominalEndDate,
+            MonthlyRent = draft.MonthlyRent,
+            DueDay = draft.DueDay,
+            FeePlanAmount = draft.FeePlanAmount,
+            FeePlanInstalments = draft.FeePlanInstalments,
+        };
+
+        public bool CodebtorsDiffer(IReadOnlyList<Guid> codebtorIds) => !codebtorIds.Order().SequenceEqual(CodebtorIds.Order());
+
+        public bool ClauseDiffers(ClauseDraft clause) =>
+            Clause is null
+            || !clause.IndexIds.Order().SequenceEqual(Clause.IndexIds.Order())
+            || clause.IntervalMonths != Clause.IntervalMonths
+            || clause.WindowOffsetMonths != Clause.WindowOffsetMonths;
     }
 }
 

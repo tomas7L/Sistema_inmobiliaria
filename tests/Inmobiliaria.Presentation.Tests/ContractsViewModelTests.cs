@@ -245,4 +245,57 @@ public class ContractsViewModelTests
 
         Assert.Null(viewModel.SavedMessage);
     }
+
+    private static ContractsViewModel Editable(FakeContractRegistry port) => new(
+        port,
+        id => new ContractDetailViewModel(port, new FakeAdjustmentDesk(), id, new FakeClock(new DateOnly(2026, 11, 19))),
+        editForm: detail => new ContractFormViewModel(port, false, new FakeClock(new DateOnly(2026, 11, 19)), new FakeIndexRegistry(), editing: detail));
+
+    /// <summary>
+    /// The detail's "Editar" opens the form on that contract, over the detail rather than the list; going back closes it and reads
+    /// the contract again, so what was saved shows.
+    /// </summary>
+    [Fact]
+    public async Task Editing_OpensTheFormOnTheContract_AndClosingReadsItAgain()
+    {
+        var port = new FakeContractRegistry { Detail = DetailOf(Vigente) };
+        port.Contracts.Add(Vigente);
+        var viewModel = Editable(port);
+        await viewModel.LoadCommand.ExecuteAsync(null);
+        await viewModel.OpenCommand.ExecuteAsync(viewModel.Contracts[0]);
+
+        Assert.True(viewModel.EditCommand.CanExecute(null));
+        await viewModel.EditCommand.ExecuteAsync(null);
+
+        Assert.True(viewModel.OpenForm!.IsEditing);
+        Assert.True(viewModel.IsDetailOpen);
+        Assert.False(viewModel.IsListShown);
+
+        port.Detail = DetailOf(Vigente) with { MonthlyRent = 999_000m };
+        await viewModel.CloseEditCommand.ExecuteAsync(null);
+
+        Assert.Null(viewModel.OpenForm);
+        Assert.Equal(999_000m, viewModel.OpenDetail!.Detail!.MonthlyRent);
+    }
+
+    /// <summary>A cancelled contract offers no "Editar" (task 12.3d), and without a way to build the form nothing is offered.</summary>
+    [Fact]
+    public async Task Editing_IsNotOffered_OnACancelledContract_OrWithoutAForm()
+    {
+        var port = new FakeContractRegistry { Detail = DetailOf(Cancelado) with { EndReason = EndReason.LoadedByMistake } };
+        port.Contracts.Add(Cancelado);
+        var viewModel = Editable(port);
+        await viewModel.LoadCommand.ExecuteAsync(null);
+        await viewModel.OpenCommand.ExecuteAsync(viewModel.Contracts[0]);
+
+        Assert.False(viewModel.EditCommand.CanExecute(null));
+
+        port.Detail = DetailOf(Vigente);
+        var formless = new ContractsViewModel(port, id => new ContractDetailViewModel(port, new FakeAdjustmentDesk(), id, new FakeClock(new DateOnly(2026, 11, 19))));
+        port.Contracts.Add(Vigente);
+        await formless.LoadCommand.ExecuteAsync(null);
+        await formless.OpenCommand.ExecuteAsync(formless.Contracts[0]);
+
+        Assert.False(formless.EditCommand.CanExecute(null));
+    }
 }

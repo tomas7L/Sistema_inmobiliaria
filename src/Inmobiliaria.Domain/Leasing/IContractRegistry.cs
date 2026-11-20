@@ -223,6 +223,9 @@ public sealed record ContractDetail(
     /// <summary>The reason, who and when of what was cancelled, undone or removed, oldest first.</summary>
     public IReadOnlyList<ContractEventLine> Events { get; init; } = [];
 
+    /// <summary>What stops its data being corrected, or null (<see cref="ContractLifecycleRules.WhyNotCorrectable"/>).</summary>
+    public ContractRefusal? CorrectionLock { get; init; }
+
     public bool IsCancelled => EndReason == Leasing.EndReason.LoadedByMistake;
 }
 
@@ -308,6 +311,12 @@ public enum ContractRefusal
 
     /// <summary>The same unit twice on one contract, refused in its own words rather than as shares (same origin).</summary>
     UnitRepeated,
+
+    /// <summary>A rate emptied on a contract that has one: a rate can be changed, never taken away (canvas "Editar contrato").</summary>
+    HonorariosCannotBeCleared,
+
+    /// <summary>A clause dropped from a contract that has one: a clause can be changed, never taken away (same).</summary>
+    ClauseCannotBeRemoved,
 }
 
 public enum ContractWarningKind
@@ -415,6 +424,8 @@ public static class ContractRefusalText
         ContractRefusal.LessorRepeated => "Esa persona ya está como propietaria.",
         ContractRefusal.DateNotUnderstood => "No se entiende la fecha: escríbala con día, mes y año, por ejemplo 1/12/26.",
         ContractRefusal.UnitRepeated => "Esa unidad ya está elegida.",
+        ContractRefusal.HonorariosCannotBeCleared => "Los honorarios de administración se pueden cambiar, pero no dejar vacíos.",
+        ContractRefusal.ClauseCannotBeRemoved => "La cláusula de ajuste se puede cambiar, pero no quitar: el contrato no puede pasar a alquiler fijo.",
         ContractRefusal.UnitCoveredByAnotherContract => $"Una de sus unidades ya está en otro contrato, de {currentTenant ?? "otra persona"}.",
         _ => throw new ArgumentOutOfRangeException(nameof(refusal), refusal, "A refusal without operator text."),
     };
