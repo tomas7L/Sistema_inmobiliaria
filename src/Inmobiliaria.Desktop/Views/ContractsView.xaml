@@ -234,6 +234,9 @@
                         <Button Content="Cancelar por error" Style="{StaticResource Theme.GhostButton}" Margin="10,0,0,0"
                                 Command="{Binding OpenDetail.OpenCancelCommand}"
                                 Visibility="{Binding OpenDetail.IsCancelOffered, Converter={StaticResource Shown}}" />
+                        <Button Content="Ver cuenta" Style="{StaticResource Theme.GhostButton}" Margin="10,0,0,0"
+                                Command="{Binding OpenDetail.OpenAccountCommand}"
+                                Visibility="{Binding OpenDetail.IsAccountOffered, Converter={StaticResource Shown}}" />
                     </StackPanel>
                     <Button Style="{StaticResource Theme.SmallGhostButton}" Padding="10,0,14,0" HorizontalAlignment="Left"
                             VerticalAlignment="Center" Command="{Binding BackCommand}">

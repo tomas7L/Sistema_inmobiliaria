@@ -71,7 +71,11 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
-        <TextBlock Text="{Binding Runner.ErrorMessage}" Style="{StaticResource Theme.ErrorText}" Margin="0,12,0,0" />
+        <!-- A failure, and what "Ver cuenta" could not find; each collapsed while empty. -->
+        <StackPanel>
+            <TextBlock Text="{Binding Runner.ErrorMessage}" Style="{StaticResource Theme.ErrorText}" Margin="0,12,0,0" />
+            <TextBlock Text="{Binding RefusalMessage}" Style="{StaticResource Theme.ErrorText}" Margin="0,12,0,0" />
+        </StackPanel>
 
         <!-- The state, and what it means for the operator. -->
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,12,0,0">

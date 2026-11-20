@@ -38,6 +38,7 @@ public sealed record DeskSummary(CollectionPreview Preview, CollectionRequest Re
 public sealed partial class CashDeskViewModel : ObservableObject, IPendingWork
 {
     private readonly ICollectionDesk _desk;
+    private readonly IAccountDirectory _directory;
     private readonly IDueAdjustmentQuery _adjustments;
     private readonly IReciboReader _reader;
     private readonly IAgencyClock _clock;
@@ -68,6 +69,7 @@ public sealed partial class CashDeskViewModel : ObservableObject, IPendingWork
         ArgumentNullException.ThrowIfNull(clock);
 
         _desk = desk;
+        _directory = directory;
         _adjustments = adjustments;
         _reader = reader;
         _clock = clock;
@@ -194,6 +196,17 @@ public sealed partial class CashDeskViewModel : ObservableObject, IPendingWork
     public string PropietarioTotalText => Preview?.Propietario is { } d ? Formats.Money(d.Total) : string.Empty;
 
     private bool HandedTyped => !string.IsNullOrWhiteSpace(HandedAmountText);
+
+    /// <summary>
+    /// The account of one contract, as the desk's search shows it, or null when the desk shows none (a contract loaded by
+    /// mistake). Found by the contract's short id, the handle the search already reads, keeping only that very contract. How the
+    /// contract detail's "Ver cuenta" opens the desk (canvas "Detalle del contrato").
+    /// </summary>
+    public async Task<AccountListing?> FindContractAsync(Guid contractId)
+    {
+        var listings = await _directory.SearchAsync(contractId.ToString("N")[..8]);
+        return listings.FirstOrDefault(l => l.ContractId == contractId);
+    }
 
     /// <summary>Called by the picker. Starts over on the new account: inputs cleared, adjustments read once, then the owed step.</summary>
     public async Task ChooseAccountAsync(AccountListing listing)

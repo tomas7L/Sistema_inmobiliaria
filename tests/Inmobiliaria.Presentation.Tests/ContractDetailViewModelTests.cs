@@ -17,8 +17,9 @@ public class ContractDetailViewModelTests
     private static ContractDetail Detail(ContractStatus status) => new(
         ContractId, status, new DateOnly(2026, 1, 1), new DateOnly(2027, 12, 31), false, null, null, null, null, null, 450_000m, 10, 8m, null, [], [], null, []);
 
+    /// <summary>With the desk open, as on a session whose recargo settings are valid: "Ver cuenta" always finds the account.</summary>
     private static ContractDetailViewModel New(FakeContractRegistry port) =>
-        new(port, new FakeAdjustmentDesk(), ContractId, new FakeClock(Today));
+        new(port, new FakeAdjustmentDesk(), ContractId, new FakeClock(Today), _ => Task.FromResult(true));
 
     /// <summary>A contract in force with its tenant, lessor and unit, as the canvas's "Registrar aviso" shows it.</summary>
     private static ContractDetail Peopled(ContractStatus status) => Detail(status) with
@@ -47,17 +48,67 @@ public class ContractDetailViewModelTests
             (v.IsAccountOffered, "Ver cuenta"),
         }.Where(b => b.Item1).Select(b => b.Item2));
 
-    /// <summary>Task 12.3d: the buttons each state offers, and a cancelled contract only its account.</summary>
+    /// <summary>
+    /// Task 12.3d: the buttons each state offers. A cancelled contract offers none: the desk hides a contract loaded by mistake,
+    /// so "Ver cuenta" would find nothing (Tomás, 2026-11-20).
+    /// </summary>
     [Theory]
     [InlineData(ContractStatus.Active, null, "Editar,Registrar aviso,Terminar,Cancelar por error,Ver cuenta")]
     [InlineData(ContractStatus.PendingTermination, null, "Editar,Deshacer aviso,Terminar,Cancelar por error,Ver cuenta")]
     [InlineData(ContractStatus.Ended, EndReason.Expiry, "Editar,Deshacer fin,Cancelar por error,Ver cuenta")]
-    [InlineData(ContractStatus.Ended, EndReason.LoadedByMistake, "Ver cuenta")]
+    [InlineData(ContractStatus.Ended, EndReason.LoadedByMistake, "")]
     public async Task EachState_OffersItsButtons(ContractStatus status, EndReason? reason, string expected)
     {
         var viewModel = await LoadedAsync(Detail(status) with { EndReason = reason });
 
         Assert.Equal(expected, Offered(viewModel));
+    }
+
+    /// <summary>Canvas "Detalle del contrato": "Ver cuenta" hands the contract to the desk, which opens its account.</summary>
+    [Fact]
+    public async Task VerCuenta_HandsTheContractToTheDesk()
+    {
+        var opened = new List<Guid>();
+        var viewModel = new ContractDetailViewModel(
+            new FakeContractRegistry { Detail = Detail(ContractStatus.Active) }, new FakeAdjustmentDesk(), ContractId, new FakeClock(Today),
+            id =>
+            {
+                opened.Add(id);
+                return Task.FromResult(true);
+            });
+        await viewModel.LoadCommand.ExecuteAsync(null);
+
+        Assert.True(viewModel.OpenAccountCommand.CanExecute(null));
+        await viewModel.OpenAccountCommand.ExecuteAsync(null);
+
+        Assert.Equal([ContractId], opened);
+        Assert.Null(viewModel.RefusalMessage);
+    }
+
+    /// <summary>When the desk finds no account for the contract, the detail says so and stays where it is.</summary>
+    [Fact]
+    public async Task VerCuenta_WithNoAccountAtTheDesk_SaysSo()
+    {
+        var viewModel = new ContractDetailViewModel(
+            new FakeContractRegistry { Detail = Detail(ContractStatus.Active) }, new FakeAdjustmentDesk(), ContractId, new FakeClock(Today),
+            _ => Task.FromResult(false));
+        await viewModel.LoadCommand.ExecuteAsync(null);
+
+        await viewModel.OpenAccountCommand.ExecuteAsync(null);
+
+        Assert.Equal(ContractDetailViewModel.AccountNotAtDesk, viewModel.RefusalMessage);
+    }
+
+    /// <summary>Without the desk (recargo settings invalid), "Ver cuenta" is not offered.</summary>
+    [Fact]
+    public async Task WithoutTheDesk_VerCuentaIsNotOffered()
+    {
+        var viewModel = new ContractDetailViewModel(
+            new FakeContractRegistry { Detail = Detail(ContractStatus.Active) }, new FakeAdjustmentDesk(), ContractId, new FakeClock(Today));
+        await viewModel.LoadCommand.ExecuteAsync(null);
+
+        Assert.False(viewModel.IsAccountOffered);
+        Assert.False(viewModel.OpenAccountCommand.CanExecute(null));
     }
 
     [Fact]
