@@ -42,6 +42,7 @@ public sealed partial class ContractDetailViewModel : ObservableObject
         OpenNoticeCommand = new RelayCommand(() => OpenActionScreen(ContractAction.Notice), () => CanAct() && IsNoticeOffered);
         OpenUndoNoticeCommand = new RelayCommand(() => OpenActionScreen(ContractAction.UndoNotice), () => CanAct() && IsUndoNoticeOffered);
         OpenEndCommand = new RelayCommand(() => OpenActionScreen(ContractAction.End), () => CanAct() && IsEndOffered);
+        OpenUndoEndCommand = new RelayCommand(() => OpenActionScreen(ContractAction.UndoEnd), () => CanAct() && IsUndoEndOffered);
         CloseActionCommand = new RelayCommand(() => OpenActionScreen(null), CanAct);
         Runner.PropertyChanged += OnRunnerChanged;
     }
@@ -75,6 +76,9 @@ public sealed partial class ContractDetailViewModel : ObservableObject
 
     /// <summary>The canvas's "Terminar" button: its own screen, in place of the detail.</summary>
     public IRelayCommand OpenEndCommand { get; }
+
+    /// <summary>The canvas's "Deshacer fin" button: its own screen, in place of the detail.</summary>
+    public IRelayCommand OpenUndoEndCommand { get; }
 
     /// <summary>"Volver al contrato": back to the detail, forgetting what the action's screen held.</summary>
     public IRelayCommand CloseActionCommand { get; }
@@ -149,6 +153,7 @@ public sealed partial class ContractDetailViewModel : ObservableObject
             new DetailLine("Vigencia", $"{Formats.Date(d.StartDate)} al {Formats.Date(d.NominalEndDate)}"),
             new DetailLine("Alquiler actual", Formats.Money(d.MonthlyRent)),
             .. NoticeLines(d),
+            .. EndLines(d),
         ]
         : [];
 
@@ -156,6 +161,12 @@ public sealed partial class ContractDetailViewModel : ObservableObject
     private IReadOnlyList<DetailLine> NoticeLines(ContractDetail detail) =>
         OpenAction == ContractAction.UndoNotice && detail is { NoticeGivenDate: { } notice, PlannedMoveOutDate: { } moveOut }
             ? [new DetailLine("Fecha del aviso", Formats.Date(notice)), new DetailLine("Fecha de desocupación", Formats.Date(moveOut))]
+            : [];
+
+    /// <summary>The end being undone, as the canvas's "Deshacer fin" heads the contract: its date and its reason.</summary>
+    private IReadOnlyList<DetailLine> EndLines(ContractDetail detail) =>
+        OpenAction == ContractAction.UndoEnd && detail is { ActualEndDate: { } ended, EndReason: { } reason }
+            ? [new DetailLine("Fecha de fin", Formats.Date(ended)), new DetailLine("Motivo del fin", Formats.EndReason(reason))]
             : [];
 
     private void OpenActionScreen(ContractAction? action)
@@ -321,6 +332,7 @@ public sealed partial class ContractDetailViewModel : ObservableObject
         OpenNoticeCommand.NotifyCanExecuteChanged();
         OpenUndoNoticeCommand.NotifyCanExecuteChanged();
         OpenEndCommand.NotifyCanExecuteChanged();
+        OpenUndoEndCommand.NotifyCanExecuteChanged();
     }
 
     [ObservableProperty]
@@ -488,6 +500,13 @@ public sealed partial class ContractDetailViewModel : ObservableObject
         RefusalMessage = null;
         CloseSummary();
 
+        // Canvas "Deshacer fin": a missing reason is said under its field, before the port is asked.
+        if (string.IsNullOrWhiteSpace(ChangeReason))
+        {
+            ChangeReasonError = ContractRefusal.ReasonMissing.OperatorText();
+            return;
+        }
+
         var reason = ChangeReason;
         var outcome = await Runner.RunAsync(() => _contracts.SummarizeUndoEndAsync(_contractId, reason));
         if (!outcome.Completed)
@@ -571,6 +590,10 @@ public sealed partial class ContractDetailViewModel : ObservableObject
         {
             Done = new ActionDone("Listo", $"El aviso se deshizo. El contrato de {Names(undone, PartyRole.Tenant)} vuelve a estar Vigente.");
         }
+        else if (pending is PendingUndoEnd && Detail is { } reopened)
+        {
+            Done = new ActionDone("Listo", $"El fin se deshizo. El contrato de {Names(reopened, PartyRole.Tenant)} vuelve a estar Vigente.");
+        }
 
         await LoadAsync();
     }
@@ -590,6 +613,7 @@ public sealed partial class ContractDetailViewModel : ObservableObject
             OpenNoticeCommand.NotifyCanExecuteChanged();
             OpenUndoNoticeCommand.NotifyCanExecuteChanged();
             OpenEndCommand.NotifyCanExecuteChanged();
+            OpenUndoEndCommand.NotifyCanExecuteChanged();
             CloseActionCommand.NotifyCanExecuteChanged();
         }
     }
@@ -610,6 +634,7 @@ public enum ContractAction
     Notice,
     UndoNotice,
     End,
+    UndoEnd,
 }
 
 /// <summary>The notice an action ends on when it lands: its title and its sentence.</summary>
