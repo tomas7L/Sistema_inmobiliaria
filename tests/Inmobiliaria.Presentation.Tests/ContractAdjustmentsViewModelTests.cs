@@ -1,4 +1,5 @@
 ﻿using Inmobiliaria.Domain.Leasing;
+using Inmobiliaria.Domain.Parties;
 using Inmobiliaria.Presentation.Contracts;
 using Inmobiliaria.Presentation.Tests.Fakes;
 
@@ -311,9 +312,15 @@ public class ContractAdjustmentsViewModelTests
 
         Assert.Equal("$ 112.000,87", world.ViewModel.ExactCanonText);
         Assert.Equal("$ 112.000", world.ViewModel.NewCanonText);
+
+        // As Ajustes shows it (Tomás's check, 2026-11-20): a percentage, not the stored "12".
+        Assert.Equal("12,00 %", world.ViewModel.CoefficientPercentText);
     }
 
-    /// <summary>Canvas "Corregir ajuste": the contract over the correction, its units, clause and the latest adjustment's first period.</summary>
+    /// <summary>
+    /// Canvas "Corregir ajuste": the contract over the correction, its units, clause and the first period the latest adjustment
+    /// prices, which is not its due date: due 01/11/2026 and confirmed late, it prices from 12/2026 (Tomás's check, 2026-11-20).
+    /// </summary>
     [Fact]
     public async Task TheCorrectionsHeader_NamesTheContractsUnitsClauseAndLatestAdjustment()
     {
@@ -321,15 +328,39 @@ public class ContractAdjustmentsViewModelTests
         {
             Units = [new ContractUnitLine(Guid.NewGuid(), "Pellegrini 722", 100m)],
             Clause = new ContractClauseLine(["IPC"], 6, RoundingRule.TruncateToWholePeso, [Guid.NewGuid()], 2),
-            Adjustments =
+            Adjustments = [new ContractAdjustmentLine(new DateOnly(2026, 11, 1), 395_000m, 428_025m, 8.36m, AdjustmentKind.Regular)],
+        };
+        var desk = new FakeAdjustmentDesk
+        {
+            History =
             [
-                new ContractAdjustmentLine(new DateOnly(2026, 3, 1), 360_000m, 395_000m, 1.097222m, AdjustmentKind.Regular),
-                new ContractAdjustmentLine(new DateOnly(2026, 10, 1), 395_000m, 428_025m, 1.083608m, AdjustmentKind.Regular),
+                new AdjustmentHistoryEntry(LatestId, new DateOnly(2026, 11, 1), new DateOnly(2026, 12, 1), 395_000m, 428_025m, 8.36m, AdjustmentKind.Regular, DateTimeOffset.UtcNow, "Tomás", []),
             ],
         };
-        var viewModel = new ContractDetailViewModel(new FakeContractRegistry { Detail = detail }, new FakeAdjustmentDesk(), ContractId, new FakeClock(new DateOnly(2026, 11, 19)));
+        var viewModel = new ContractDetailViewModel(new FakeContractRegistry { Detail = detail }, desk, ContractId, new FakeClock(new DateOnly(2026, 11, 19)));
         await viewModel.LoadCommand.ExecuteAsync(null);
 
-        Assert.Equal("Pellegrini 722 · IPC, cada 6 meses · el último ajuste rige desde 10/2026", viewModel.CorrectionHeaderText);
+        Assert.Equal("Pellegrini 722 · IPC, cada 6 meses · el último ajuste rige desde 12/2026", viewModel.CorrectionHeaderText);
+    }
+
+    /// <summary>The reminder names the tenant as the contract does, "Vera, Marta", not as the summary reads it.</summary>
+    [Fact]
+    public async Task TheReminder_NamesTheTenantAsTheContractDoes()
+    {
+        var desk = new FakeAdjustmentDesk
+        {
+            History = [new AdjustmentHistoryEntry(LatestId, July, null, 100_000m, 110_000m, 10m, AdjustmentKind.Regular, DateTimeOffset.UtcNow, "Tomás", [])],
+        };
+        var detail = Detail() with { Parties = [new ContractPartyLine(Guid.NewGuid(), "Vera, Marta", PartyRole.Tenant)] };
+        var viewModel = new ContractDetailViewModel(new FakeContractRegistry { Detail = detail }, desk, ContractId, new FakeClock(new DateOnly(2026, 11, 19)));
+        await viewModel.LoadCommand.ExecuteAsync(null);
+        var correction = Correction();
+        desk.CorrectionPreviews.Enqueue(AdjustmentPreviewResult.Ready(correction));
+        await viewModel.Adjustments.CorrectCommand.ExecuteAsync(viewModel.Adjustments.History[0]);
+        desk.NextConfirm = AdjustmentConfirmResult.Done(Written(correction));
+
+        await viewModel.Adjustments.ConfirmCommand.ExecuteAsync(null);
+
+        Assert.Equal("Avise a Vera, Marta del nuevo canon. El sistema no le envía nada.", viewModel.Adjustments.NoticeReminder);
     }
 }

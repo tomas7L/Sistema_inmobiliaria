@@ -37,7 +37,8 @@ public sealed partial class ContractDetailViewModel : ObservableObject
         _contractId = contractId;
         _clock = clock;
         _openAccount = openAccount;
-        Adjustments = new ContractAdjustmentsViewModel(adjustments, Runner, LoadAsync);
+        Adjustments = new ContractAdjustmentsViewModel(
+            adjustments, Runner, LoadAsync, () => Detail is { } read ? Names(read, PartyRole.Tenant) : null);
         LoadCommand = new AsyncRelayCommand(LoadAsync, CanAct);
         ReviewNoticeCommand = new RelayCommand(ReviewNotice, CanAct);
         ReviewEndCommand = new AsyncRelayCommand(ReviewEndAsync, CanAct);
@@ -290,7 +291,8 @@ public sealed partial class ContractDetailViewModel : ObservableObject
             {
                 string.Join(", ", d.Units.Select(u => u.Address)),
                 d.Clause is { } c ? $"{string.Join(" y ", c.IndexNames)}, {(c.IntervalMonths == 1 ? "cada mes" : $"cada {c.IntervalMonths} meses")}" : null,
-                d.Adjustments.Count > 0 ? $"el último ajuste rige desde {Formats.Period(d.Adjustments.Max(a => a.EffectiveDate))}" : null,
+                // The period it prices from, as the history shows it; its due date is another (a late one prices from later).
+                Adjustments.History.FirstOrDefault() is { } latest ? $"el último ajuste rige desde {latest.AppliesFromText}" : null,
             }.Where(part => !string.IsNullOrEmpty(part)))
         : null;
 
@@ -450,6 +452,7 @@ public sealed partial class ContractDetailViewModel : ObservableObject
                 _contractId,
                 canCorrect: !detail.IsCancelled && !ended,
                 whyNot: ended ? AdjustmentRefusal.ContractEnded.OperatorText() : null);
+            OnPropertyChanged(nameof(CorrectionHeaderText));
         }
     }
 
