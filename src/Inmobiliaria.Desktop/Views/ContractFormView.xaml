@@ -10,7 +10,9 @@
     <!--
         A new contract as the designer drew it (canvas "Nuevo contrato", at 1536 x 785): four tabs, each marked with the errors it holds,
         people and units picked by typing, every error beside its field or under its row. Bound to ContractFormViewModel;
-        no logic lives here. The title and "Volver a contratos" are the list's, which hosts this in its place.
+        no logic lives here. The title and "Volver a contratos" are the list's, which hosts this in its place. The same form
+        corrects a contract that exists (canvas "Editar contrato"): what can no longer change shows read-only, with the reason
+        over the form.
     -->
     <UserControl.Resources>
         <views:EqualsConverter x:Key="Equals" />
@@ -40,6 +42,33 @@
                     <Setter Property="BorderBrush" Value="{DynamicResource Theme.Warn}" />
                     <Setter Property="TextElement.Foreground" Value="{DynamicResource Theme.Warn}" />
                 </Trigger>
+                <Trigger Property="Tag" Value="ok">
+                    <Setter Property="Background" Value="{DynamicResource Theme.OkBack}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource Theme.Ok}" />
+                    <Setter Property="TextElement.Foreground" Value="{DynamicResource Theme.Ok}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- An input the contract's lock makes read-only: the canvas's ".inp ro", on the second surface in the second ink. -->
+        <Style x:Key="LockedInput" TargetType="TextBox" BasedOn="{StaticResource Theme.Input}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsCoreLocked}" Value="True">
+                    <Setter Property="IsReadOnly" Value="True" />
+                    <Setter Property="Focusable" Value="False" />
+                    <Setter Property="Cursor" Value="No" />
+                    <Setter Property="Background" Value="{DynamicResource Theme.Surface2}" />
+                    <Setter Property="Foreground" Value="{DynamicResource Theme.Ink2}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Shown unless the contract's lock is on: what adds or takes away its people, units and fee plan. -->
+        <Style x:Key="UnlessLocked" TargetType="FrameworkElement">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsCoreLocked}" Value="True">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
             </Style.Triggers>
         </Style>
 
@@ -206,10 +235,21 @@
         <DataTemplate x:Key="PersonRow">
             <StackPanel Margin="0,0,0,8">
                 <Border BorderBrush="{DynamicResource Theme.Line}" BorderThickness="1" CornerRadius="12" Padding="14,8">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Tag.CanRemove, RelativeSource={RelativeSource AncestorType=ItemsControl}}" Value="False">
+                                    <Setter Property="Background" Value="{DynamicResource Theme.Surface2}" />
+                                    <Setter Property="TextElement.Foreground" Value="{DynamicResource Theme.Ink2}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
                     <DockPanel>
                         <Button Content="Quitar" Style="{StaticResource Theme.SmallGhostButton}" DockPanel.Dock="Right"
                                 Command="{Binding Tag.RemoveCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                CommandParameter="{Binding}" />
+                                CommandParameter="{Binding}"
+                                Visibility="{Binding Tag.CanRemove, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={StaticResource Shown}}" />
                         <TextBlock VerticalAlignment="Center" FontWeight="Bold">
                             <Run Text="{Binding LastName, Mode=OneWay}" /><Run Text=", " /><Run Text="{Binding FirstName, Mode=OneWay}" />
                         </TextBlock>
@@ -231,6 +271,21 @@
 
     <StackPanel>
         <TextBlock Text="{Binding Runner.ErrorMessage}" Style="{StaticResource FieldError}" />
+
+        <!-- Why the contract's data can no longer change, with the way out the canvas offers: cancelling it. -->
+        <Border Style="{StaticResource Notice}" Tag="info" Margin="0,12,0,0" Visibility="{Binding LockText, Converter={StaticResource SetShown}}">
+            <DockPanel>
+                <Viewbox Width="18" Height="18" VerticalAlignment="Top" Margin="0,2,12,0" DockPanel.Dock="Left">
+                    <Canvas Width="24" Height="24">
+                        <Path Style="{StaticResource NoticeIcon}" Data="M3,12 A9,9 0 1 1 21,12 A9,9 0 1 1 3,12 Z M12,11 V16 M12,7.5 V8" />
+                    </Canvas>
+                </Viewbox>
+                <Button Content="Cancelar contrato" Style="{StaticResource Theme.LinkButton}" DockPanel.Dock="Right" VerticalAlignment="Top"
+                        Margin="12,0,0,0"
+                        Command="{Binding DataContext.CancelInsteadCommand, RelativeSource={RelativeSource AncestorType=views:ContractsView}}" />
+                <TextBlock Text="{Binding LockText}" TextWrapping="Wrap" />
+            </DockPanel>
+        </Border>
         <Border Style="{StaticResource Notice}" Tag="bad" Margin="0,12,0,0"
                 Visibility="{Binding Errors.Summary, Converter={StaticResource SetShown}}">
             <DockPanel>
@@ -248,9 +303,31 @@
         <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Theme.Line}" Margin="0,12,0,0">
             <DockPanel>
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="12,4,0,6">
-                    <Button Content="Cancelar" Style="{StaticResource LargeGhost}"
-                            Command="{Binding DataContext.BackCommand, RelativeSource={RelativeSource AncestorType=views:ContractsView}}" />
-                    <Button Content="Guardar contrato" Style="{StaticResource LargePrimary}" Margin="12,0,0,0" Command="{Binding SaveCommand}" />
+                    <!-- A correction goes back to its contract, and its save reads "Guardar cambios" (canvas "Editar contrato"). -->
+                    <Button Content="Cancelar">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource LargeGhost}">
+                                <Setter Property="Command" Value="{Binding DataContext.BackCommand, RelativeSource={RelativeSource AncestorType=views:ContractsView}}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                                        <Setter Property="Command" Value="{Binding DataContext.CloseEditCommand, RelativeSource={RelativeSource AncestorType=views:ContractsView}}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    <Button Margin="12,0,0,0" Command="{Binding SaveCommand}">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource LargePrimary}">
+                                <Setter Property="Content" Value="Guardar contrato" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                                        <Setter Property="Content" Value="Guardar cambios" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal">
                 <RadioButton x:Name="PartiesTab" GroupName="FormTab" Style="{StaticResource Tab}" IsChecked="True">
@@ -300,9 +377,28 @@
                         <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Inquilino " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
                         <Border BorderBrush="{DynamicResource Theme.Line}" BorderThickness="1" CornerRadius="12" Padding="14,8"
                                 Visibility="{Binding Tenant, Converter={StaticResource SetShown}}">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsCoreLocked}" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource Theme.Surface2}" />
+                                            <Setter Property="TextElement.Foreground" Value="{DynamicResource Theme.Ink2}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
                             <DockPanel>
-                                <Button Content="Quitar" Style="{StaticResource Theme.SmallGhostButton}" DockPanel.Dock="Right"
-                                        Command="{Binding ClearTenantCommand}" />
+                                <Button Content="Quitar" DockPanel.Dock="Right" Command="{Binding ClearTenantCommand}">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource Theme.SmallGhostButton}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsCoreLocked}" Value="True">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
                                 <TextBlock VerticalAlignment="Center" FontWeight="Bold">
                                     <Run Text="{Binding Tenant.LastName, Mode=OneWay}" /><Run Text=", " /><Run Text="{Binding Tenant.FirstName, Mode=OneWay}" />
                                 </TextBlock>
@@ -319,11 +415,22 @@
                         <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Propietarios " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
                         <ItemsControl ItemsSource="{Binding Lessors}" ItemTemplate="{StaticResource PersonRow}">
                             <ItemsControl.Tag>
-                                <views:RowListContext Field="Lessors" RemoveCommand="{Binding RemoveLessorCommand}" />
+                                <views:RowListContext Field="Lessors" RemoveCommand="{Binding RemoveLessorCommand}"
+                                                      CanRemove="{Binding IsCoreLocked, Converter={StaticResource Equals}, ConverterParameter={StaticResource False}}" />
                             </ItemsControl.Tag>
                         </ItemsControl>
                         <ContentControl Content="{Binding LessorPicker}" ContentTemplate="{StaticResource Picker}"
-                                        Tag="Escriba el nombre del propietario o copropietario" />
+                                        Tag="Escriba el nombre del propietario o copropietario">
+                            <ContentControl.Style>
+                                <Style TargetType="ContentControl">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsCoreLocked}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ContentControl.Style>
+                        </ContentControl>
                         <TextBlock Text="{Binding Errors[Lessors]}" Style="{StaticResource FieldError}" />
                     </StackPanel>
 
@@ -340,8 +447,18 @@
                         <TextBlock Text="{Binding Errors[Codebtors]}" Style="{StaticResource FieldError}" />
                     </StackPanel>
                 </Grid>
-                <TextBlock Style="{StaticResource FieldHint}" Margin="0,12,0,0"
-                           Text="Hace falta al menos un inquilino y un propietario; puede haber varios, por ejemplo copropietarios. El codeudor es opcional. ¿La persona no está? Cárguela primero en Personas." />
+                <TextBlock Margin="0,12,0,0">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource FieldHint}">
+                            <Setter Property="Text" Value="Hace falta al menos un inquilino y un propietario; puede haber varios, por ejemplo copropietarios. El codeudor es opcional. ¿La persona no está? Cárguela primero en Personas." />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsCoreLocked}" Value="True">
+                                    <Setter Property="Text" Value="El codeudor se puede agregar, cambiar o quitar en cualquier momento." />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
             </StackPanel>
         </Border>
 
@@ -355,9 +472,20 @@
                         <DataTemplate>
                             <StackPanel Margin="0,0,0,8">
                                 <Border BorderBrush="{DynamicResource Theme.Line}" BorderThickness="1" CornerRadius="12" Padding="14,8">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding DataContext.IsCoreLocked, ElementName=UnitRows}" Value="True">
+                                                    <Setter Property="Background" Value="{DynamicResource Theme.Surface2}" />
+                                                    <Setter Property="TextElement.Foreground" Value="{DynamicResource Theme.Ink2}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
                                     <DockPanel>
                                         <Button Content="Quitar" Style="{StaticResource Theme.SmallGhostButton}" DockPanel.Dock="Right" Margin="12,0,0,0"
-                                                Command="{Binding DataContext.RemoveUnitCommand, ElementName=UnitRows}" CommandParameter="{Binding}" />
+                                                Command="{Binding DataContext.RemoveUnitCommand, ElementName=UnitRows}" CommandParameter="{Binding}"
+                                                Visibility="{Binding DataContext.CanRemoveUnits, ElementName=UnitRows, Converter={StaticResource Shown}}" />
                                         <!-- The share, only with more than one unit: one alone takes the whole rent. -->
                                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                                             <StackPanel.Style>
@@ -370,8 +498,21 @@
                                                 </Style>
                                             </StackPanel.Style>
                                             <TextBlock Text="Parte del alquiler" Foreground="{DynamicResource Theme.Muted}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                                            <TextBox Style="{StaticResource Theme.Input}" Width="140"
-                                                     Text="{Binding ShareText, UpdateSourceTrigger=LostFocus}" />
+                                            <TextBox Width="140" Text="{Binding ShareText, UpdateSourceTrigger=LostFocus}">
+                                                <TextBox.Style>
+                                                    <Style TargetType="TextBox" BasedOn="{StaticResource Theme.Input}">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding DataContext.IsCoreLocked, ElementName=UnitRows}" Value="True">
+                                                                <Setter Property="IsReadOnly" Value="True" />
+                                                                <Setter Property="Focusable" Value="False" />
+                                                                <Setter Property="Cursor" Value="No" />
+                                                                <Setter Property="Background" Value="{DynamicResource Theme.Surface2}" />
+                                                                <Setter Property="Foreground" Value="{DynamicResource Theme.Ink2}" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBox.Style>
+                                            </TextBox>
                                         </StackPanel>
                                         <TextBlock Text="{Binding Unit.AddressText}" FontWeight="Bold" VerticalAlignment="Center" TextWrapping="Wrap" />
                                     </DockPanel>
@@ -390,12 +531,31 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Agregar propiedad " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
-                <ContentControl Content="{Binding UnitPicker}" ContentTemplate="{StaticResource Picker}"
-                                Tag="Escriba la dirección; puede sumar más de una, por ejemplo una cochera" />
+                <!-- A correction replaces a unit and never adds one: the picker shows once a unit was taken away. -->
+                <StackPanel Visibility="{Binding IsUnitPickerShown, Converter={StaticResource Shown}}">
+                    <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Agregar propiedad " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
+                    <ContentControl Content="{Binding UnitPicker}" ContentTemplate="{StaticResource Picker}"
+                                    Tag="Escriba la dirección; puede sumar más de una, por ejemplo una cochera" />
+                </StackPanel>
                 <TextBlock Text="{Binding Errors[Units]}" Style="{StaticResource FieldError}" />
+                <TextBlock Text="Una unidad se puede reemplazar, pero no sumar ni sacar. Para eso, hay que cancelar el contrato y cargarlo de nuevo.">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource FieldHint}">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding IsEditing}" Value="True" />
+                                        <Condition Binding="{Binding IsCoreLocked}" Value="False" />
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </MultiDataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
 
-                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0" Style="{StaticResource UnlessLocked}">
                     <Border Style="{StaticResource Theme.SegmentGroup}">
                         <StackPanel Orientation="Horizontal">
                             <RadioButton Content="Partes en porcentaje" GroupName="ShareMode" Style="{StaticResource Theme.Segment}"
@@ -434,7 +594,7 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel>
                             <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Inicio " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
-                            <TextBox Style="{StaticResource Theme.Input}" Tag="01/12/2026"
+                            <TextBox Style="{StaticResource LockedInput}" Tag="01/12/2026"
                                      Text="{Binding StartDateText, UpdateSourceTrigger=LostFocus}" views:FieldError.Text="{Binding Errors[StartDate]}" />
                             <TextBlock Text="{Binding Errors[StartDate]}" Style="{StaticResource FieldError}" />
                             <TextBlock Text="Siempre el día 1 de un mes: con el mes y el año alcanza." Style="{StaticResource FieldHint}" />
@@ -442,14 +602,14 @@
 
                         <StackPanel Grid.Column="2">
                             <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Fin " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
-                            <TextBox Style="{StaticResource Theme.Input}" Tag="30/11/2028"
+                            <TextBox Style="{StaticResource LockedInput}" Tag="30/11/2028"
                                      Text="{Binding NominalEndDateText, UpdateSourceTrigger=LostFocus}" views:FieldError.Text="{Binding Errors[EndDate]}" />
                             <TextBlock Text="{Binding Errors[EndDate]}" Style="{StaticResource FieldError}" />
                         </StackPanel>
 
                         <StackPanel Grid.Column="4">
                             <TextBlock Text="Día de vencimiento" Style="{StaticResource Theme.Label}" />
-                            <TextBox Style="{StaticResource Theme.Input}" Tag="Del 1 al 31" Text="{Binding DueDayText, UpdateSourceTrigger=LostFocus}" views:FieldError.Text="{Binding Errors[DueDay]}" />
+                            <TextBox Style="{StaticResource LockedInput}" Tag="Del 1 al 31" Text="{Binding DueDayText, UpdateSourceTrigger=LostFocus}" views:FieldError.Text="{Binding Errors[DueDay]}" />
                             <TextBlock Text="{Binding Errors[DueDay]}" Style="{StaticResource FieldError}" />
                             <TextBlock Text="Por defecto, el 10. Si el mes es más corto, vence el último día." Style="{StaticResource FieldHint}" />
                         </StackPanel>
@@ -493,7 +653,7 @@
                         <StackPanel>
                             <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Alquiler mensual " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
                             <Grid>
-                                <TextBox Style="{StaticResource Theme.Input}" Padding="36,0,16,0" Tag="En pesos enteros"
+                                <TextBox Style="{StaticResource LockedInput}" Padding="36,0,16,0" Tag="En pesos enteros"
                                          Text="{Binding MonthlyRentText, UpdateSourceTrigger=LostFocus}" views:FieldError.Text="{Binding Errors[Rent]}" />
                                 <TextBlock Text="$" Style="{StaticResource FieldAffix}" HorizontalAlignment="Left" Margin="18,0,0,0" />
                             </Grid>
@@ -514,26 +674,46 @@
                     </Grid>
 
                     <!-- The fee plan, behind its button as on the canvas; a plan typed shows its fields. -->
-                    <Button Content="+ Agregar honorarios contractuales" Style="{StaticResource Theme.LinkButton}" HorizontalAlignment="Left"
-                            Margin="0,12,0,0" Command="{Binding AddFeePlanCommand}"
-                            Visibility="{Binding HasFeePlan, Converter={StaticResource SetShown}, ConverterParameter=invert}" />
+                    <Button Content="+ Agregar honorarios contractuales" HorizontalAlignment="Left" Margin="0,12,0,0" Command="{Binding AddFeePlanCommand}">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource Theme.LinkButton}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasFeePlan}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsCoreLocked}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
                     <StackPanel Margin="0,12,0,0" Visibility="{Binding HasFeePlan, Converter={StaticResource Shown}}">
                         <!-- One wrapping row as the canvas's: a 300 field, a 200 field and "Quitar" at the bottom, 16 apart. -->
                         <WrapPanel>
                             <StackPanel Width="300" Margin="0,0,16,0" VerticalAlignment="Bottom">
                                 <TextBlock Text="Honorarios contractuales: monto de cada cuota" Style="{StaticResource Theme.Label}" TextWrapping="Wrap" />
                                 <Grid>
-                                    <TextBox Style="{StaticResource Theme.Input}" Padding="36,0,16,0" Tag="Por ejemplo 20.000"
+                                    <TextBox Style="{StaticResource LockedInput}" Padding="36,0,16,0" Tag="Por ejemplo 20.000"
                                              Text="{Binding FeePlanAmountText, UpdateSourceTrigger=LostFocus}" views:FieldError.Text="{Binding Errors[FeePlan]}" />
                                     <TextBlock Text="$" Style="{StaticResource FieldAffix}" HorizontalAlignment="Left" Margin="18,0,0,0" />
                                 </Grid>
                             </StackPanel>
                             <StackPanel Width="200" Margin="0,0,16,0" VerticalAlignment="Bottom">
                                 <TextBlock Text="Cantidad de cuotas" Style="{StaticResource Theme.Label}" />
-                                <TextBox Style="{StaticResource Theme.Input}" Tag="De 1 a 6" Text="{Binding FeePlanInstalmentsText, UpdateSourceTrigger=LostFocus}" views:FieldError.Text="{Binding Errors[FeePlan]}" />
+                                <TextBox Style="{StaticResource LockedInput}" Tag="De 1 a 6" Text="{Binding FeePlanInstalmentsText, UpdateSourceTrigger=LostFocus}" views:FieldError.Text="{Binding Errors[FeePlan]}" />
                             </StackPanel>
-                            <Button Content="Quitar los honorarios contractuales" Style="{StaticResource Theme.LinkButton}"
-                                    VerticalAlignment="Bottom" Margin="0,8,0,12" Command="{Binding RemoveFeePlanCommand}" />
+                            <Button Content="Quitar los honorarios contractuales" VerticalAlignment="Bottom" Margin="0,8,0,12" Command="{Binding RemoveFeePlanCommand}">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource Theme.LinkButton}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsCoreLocked}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
                         </WrapPanel>
                         <TextBlock Text="{Binding Errors[FeePlan]}" Style="{StaticResource FieldError}" />
                         <TextBlock Style="{StaticResource FieldHint}"
@@ -548,6 +728,28 @@
                 Visibility="{Binding IsChecked, ElementName=ClauseTab, Converter={StaticResource Shown}}">
             <StackPanel>
                 <TextBlock Text="Cláusula de ajuste" Style="{StaticResource Theme.CardTitle}" />
+                <!-- Why the clause can no longer change, over it (canvas "Editar contrato"). -->
+                <Border Style="{StaticResource Notice}" Tag="info" Margin="0,0,0,12" Visibility="{Binding ClauseLockText, Converter={StaticResource SetShown}}">
+                    <DockPanel>
+                        <Viewbox Width="18" Height="18" VerticalAlignment="Top" Margin="0,2,12,0" DockPanel.Dock="Left">
+                            <Canvas Width="24" Height="24">
+                                <Path Style="{StaticResource NoticeIcon}" Data="M3,12 A9,9 0 1 1 21,12 A9,9 0 1 1 3,12 Z M12,11 V16 M12,7.5 V8" />
+                            </Canvas>
+                        </Viewbox>
+                        <TextBlock Text="{Binding ClauseLockText}" TextWrapping="Wrap" />
+                    </DockPanel>
+                </Border>
+                <!-- A locked clause still shows, but nothing in it can be chosen. -->
+                <StackPanel>
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsClauseLocked}" Value="True">
+                                    <Setter Property="IsEnabled" Value="False" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
                 <Border Style="{StaticResource Theme.SegmentGroup}" HorizontalAlignment="Left">
                     <StackPanel Orientation="Horizontal">
                         <RadioButton Content="Alquiler fijo, sin cláusula" GroupName="ClauseKind" Style="{StaticResource Theme.Segment}"
@@ -630,6 +832,7 @@
                         </DockPanel>
                     </Border>
                 </StackPanel>
+                </StackPanel>
                 <TextBlock Text="{Binding Errors[Clause]}" Style="{StaticResource FieldError}" />
             </StackPanel>
         </Border>
@@ -657,6 +860,24 @@
         </Border>
 
         <TextBlock Text="{Binding RefusalMessage}" Style="{StaticResource FieldError}" Margin="0,12,0,0" />
+
+        <!-- A correction that landed: what it did, with the way back to its contract (canvas "Editar contrato"). -->
+        <Border Style="{StaticResource Notice}" Tag="ok" Padding="20,16" Margin="0,12,0,0" Visibility="{Binding Corrected, Converter={StaticResource SetShown}}">
+            <DockPanel>
+                <Viewbox Width="26" Height="26" Margin="0,0,14,0" VerticalAlignment="Center" DockPanel.Dock="Left">
+                    <Canvas Width="24" Height="24">
+                        <Path Style="{StaticResource NoticeIcon}" StrokeThickness="1.8" Data="M3,12 A9,9 0 1 1 21,12 A9,9 0 1 1 3,12 Z M8,12.5 L11,15.5 L16,9.5" />
+                    </Canvas>
+                </Viewbox>
+                <Button Content="Volver al contrato" Style="{StaticResource Theme.PrimaryButton}" DockPanel.Dock="Right" VerticalAlignment="Center"
+                        Margin="14,0,0,0"
+                        Command="{Binding DataContext.CloseEditCommand, RelativeSource={RelativeSource AncestorType=views:ContractsView}}" />
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="Cambios guardados" FontSize="17" FontWeight="Bold" Foreground="{DynamicResource Theme.Ink}" Margin="0,0,0,2" />
+                    <TextBlock Text="{Binding SavedText}" TextWrapping="Wrap" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
 
     </StackPanel>
 </UserControl>

@@ -278,6 +278,24 @@ public class ContractsViewModelTests
         Assert.Equal(999_000m, viewModel.OpenDetail!.Detail!.MonthlyRent);
     }
 
+    /// <summary>Canvas "Editar contrato": the lock's banner links to "Cancelar contrato", which leaves the form for that action's screen.</summary>
+    [Fact]
+    public async Task TheLocksLink_LeavesTheFormForCancelling()
+    {
+        var port = new FakeContractRegistry { Detail = DetailOf(Vigente) };
+        port.Contracts.Add(Vigente);
+        var viewModel = Editable(port);
+        await viewModel.LoadCommand.ExecuteAsync(null);
+        await viewModel.OpenCommand.ExecuteAsync(viewModel.Contracts[0]);
+        await viewModel.EditCommand.ExecuteAsync(null);
+
+        Assert.True(viewModel.CancelInsteadCommand.CanExecute(null));
+        await viewModel.CancelInsteadCommand.ExecuteAsync(null);
+
+        Assert.Null(viewModel.OpenForm);
+        Assert.Equal(ContractAction.Cancel, viewModel.OpenDetail!.OpenAction);
+    }
+
     /// <summary>A cancelled contract offers no "Editar" (task 12.3d), and without a way to build the form nothing is offered.</summary>
     [Fact]
     public async Task Editing_IsNotOffered_OnACancelledContract_OrWithoutAForm()

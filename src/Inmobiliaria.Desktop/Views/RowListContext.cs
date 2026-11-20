@@ -15,6 +15,16 @@ public sealed class RowListContext : Freezable
     public static readonly DependencyProperty RemoveCommandProperty =
         DependencyProperty.Register(nameof(RemoveCommand), typeof(ICommand), typeof(RowListContext));
 
+    /// <summary>Whether each row offers "Quitar": not on a locked contract's lessors (canvas "Editar contrato").</summary>
+    public static readonly DependencyProperty CanRemoveProperty =
+        DependencyProperty.Register(nameof(CanRemove), typeof(bool), typeof(RowListContext), new PropertyMetadata(true));
+
+    public bool CanRemove
+    {
+        get => (bool)GetValue(CanRemoveProperty);
+        set => SetValue(CanRemoveProperty, value);
+    }
+
     /// <summary>The <c>ContractField</c> the rows' errors belong to, by name.</summary>
     public string? Field
     {

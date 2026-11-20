@@ -196,6 +196,7 @@
                             <MultiDataTrigger.Conditions>
                                 <Condition Binding="{Binding IsDetailOpen}" Value="True" />
                                 <Condition Binding="{Binding OpenDetail.IsActionOpen}" Value="False" />
+                                <Condition Binding="{Binding IsFormOpen}" Value="False" />
                             </MultiDataTrigger.Conditions>
                             <Setter Property="Visibility" Value="Visible" />
                         </MultiDataTrigger>
@@ -215,6 +216,9 @@
                      shown where its state offers it. Only the actions whose screens are built are here. -->
                 <DockPanel Margin="0,12,0,0">
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                        <Button Content="Editar" Style="{StaticResource Theme.GhostButton}" Margin="0,0,10,0"
+                                Command="{Binding EditCommand}"
+                                Visibility="{Binding OpenDetail.IsEditOffered, Converter={StaticResource Shown}}" />
                         <Button Content="Registrar aviso" Style="{StaticResource Theme.GhostButton}"
                                 Command="{Binding OpenDetail.OpenNoticeCommand}"
                                 Visibility="{Binding OpenDetail.IsNoticeOffered, Converter={StaticResource Shown}}" />
@@ -254,15 +258,49 @@
         <views:ContractActionView DataContext="{Binding OpenDetail}"
                                   Visibility="{Binding IsActionOpen, Converter={StaticResource Shown}, FallbackValue=Collapsed}" />
 
-        <!-- The form of a new contract, in place of the list. It scrolls only on a screen smaller than the canvas's. -->
+        <!-- The form, in place of the list for a new contract and in place of the detail to correct one (canvas "Editar
+             contrato"). It scrolls only on a screen smaller than the canvas's. -->
         <ScrollViewer VerticalScrollBarVisibility="Auto" Visibility="{Binding IsFormOpen, Converter={StaticResource Shown}}">
             <StackPanel>
-                <TextBlock Text="Nuevo contrato" Style="{StaticResource Theme.Title}" />
-                <TextBlock Text="Complete las partes, la propiedad, las fechas y los importes. Al guardar se crea también su cuenta, vacía."
-                           Style="{StaticResource Theme.Subtitle}" />
-                <!-- The back link of every screen: a small ghost button with its chevron, under the title on the left. -->
-                <Button Style="{StaticResource Theme.SmallGhostButton}" Padding="10,0,14,0" HorizontalAlignment="Left"
-                        Margin="0,12,0,0" Command="{Binding BackCommand}">
+                <TextBlock>
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource Theme.Title}">
+                            <Setter Property="Text" Value="Nuevo contrato" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding OpenForm.IsEditing}" Value="True">
+                                    <Setter Property="Text" Value="Editar contrato" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <TextBlock>
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource Theme.Subtitle}">
+                            <Setter Property="Text" Value="Complete las partes, la propiedad, las fechas y los importes. Al guardar se crea también su cuenta, vacía." />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding OpenForm.IsEditing}" Value="True">
+                                    <Setter Property="Text" Value="Corrija lo que cargó mal. Lo que ya no se puede cambiar aparece bloqueado, con el motivo." />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <!-- The back link of every screen: a small ghost button with its chevron, under the title on the left. A correction
+                     goes back to its contract. -->
+                <Button Padding="10,0,14,0" HorizontalAlignment="Left" Margin="0,12,0,0">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource Theme.SmallGhostButton}">
+                            <Setter Property="Command" Value="{Binding BackCommand}" />
+                            <Setter Property="Tag" Value="Volver a contratos" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding OpenForm.IsEditing}" Value="True">
+                                    <Setter Property="Command" Value="{Binding CloseEditCommand}" />
+                                    <Setter Property="Tag" Value="Volver al contrato" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
                     <StackPanel Orientation="Horizontal">
                         <Viewbox Width="16" Height="16" Margin="0,0,6,0">
                             <Canvas Width="24" Height="24">
@@ -271,7 +309,7 @@
                                       Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
                             </Canvas>
                         </Viewbox>
-                        <TextBlock Text="Volver a contratos" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding Tag, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
                 <views:ContractFormView DataContext="{Binding OpenForm}" />
