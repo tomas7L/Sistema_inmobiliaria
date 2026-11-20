@@ -224,6 +224,9 @@
                         <Button Content="Terminar" Style="{StaticResource Theme.GhostButton}" Margin="10,0,0,0"
                                 Command="{Binding OpenDetail.OpenEndCommand}"
                                 Visibility="{Binding OpenDetail.IsEndOffered, Converter={StaticResource Shown}}" />
+                        <Button Content="Deshacer fin" Style="{StaticResource Theme.GhostButton}" Margin="10,0,0,0"
+                                Command="{Binding OpenDetail.OpenUndoEndCommand}"
+                                Visibility="{Binding OpenDetail.IsUndoEndOffered, Converter={StaticResource Shown}}" />
                     </StackPanel>
                     <Button Style="{StaticResource Theme.SmallGhostButton}" Padding="10,0,14,0" HorizontalAlignment="Left"
                             VerticalAlignment="Center" Command="{Binding BackCommand}">

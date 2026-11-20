@@ -800,6 +800,60 @@ public class ContractDetailViewModelTests
         Assert.Equal<object?>(["UndoEnd", ContractId, "Terminado por error"], port.Calls[^1]);
     }
 
+    /// <summary>
+    /// Canvas "Deshacer fin": its own screen, offered only on an ended contract, heading the contract with the end's date and
+    /// reason; it opens with no reason typed, and an undone end ends on its own notice.
+    /// </summary>
+    [Fact]
+    public async Task TheUndoEndScreen_ShowsTheEndDateAndReason_AndEndsOnItsNotice()
+    {
+        var ended = Peopled(ContractStatus.Ended) with { ActualEndDate = new DateOnly(2026, 11, 19), EndReason = EndReason.MutualAgreement };
+        var port = new FakeContractRegistry { Detail = ended };
+        var viewModel = New(port);
+        await viewModel.LoadCommand.ExecuteAsync(null);
+        viewModel.ChangeReason = "left from before";
+
+        Assert.True(viewModel.OpenUndoEndCommand.CanExecute(null));
+        viewModel.OpenUndoEndCommand.Execute(null);
+
+        Assert.Equal(ContractAction.UndoEnd, viewModel.OpenAction);
+        Assert.Equal(string.Empty, viewModel.ChangeReason);
+        Assert.Equal(
+            [new DetailLine("Fecha de fin", "19/11/2026"), new DetailLine("Motivo del fin", "Acuerdo de partes")],
+            viewModel.ActionCardLines.TakeLast(2));
+
+        viewModel.ChangeReason = "El inquilino decidió quedarse";
+        await viewModel.ReviewUndoEndCommand.ExecuteAsync(null);
+        port.Detail = Peopled(ContractStatus.Active);
+        await viewModel.ConfirmCommand.ExecuteAsync(null);
+
+        Assert.Equal(new ActionDone("Listo", "El fin se deshizo. El contrato de Ocampo, Martín vuelve a estar Vigente."), viewModel.Done);
+
+        var inForce = await LoadedAsync(Peopled(ContractStatus.Active));
+        Assert.False(inForce.OpenUndoEndCommand.CanExecute(null));
+    }
+
+    /// <summary>Canvas "Deshacer fin": a missing reason is said under its field before the port is asked, and typing one clears it.</summary>
+    [Fact]
+    public async Task UndoingAnEnd_WithNoReason_SaysItUnderTheField_AndAsksNothing()
+    {
+        var port = new FakeContractRegistry { Detail = Detail(ContractStatus.Ended) };
+        var viewModel = New(port);
+        await viewModel.LoadCommand.ExecuteAsync(null);
+        port.Calls.Clear();
+        viewModel.ChangeReason = "  ";
+
+        await viewModel.ReviewUndoEndCommand.ExecuteAsync(null);
+
+        Assert.Equal(ContractRefusal.ReasonMissing.OperatorText(), viewModel.ChangeReasonError);
+        Assert.Null(viewModel.RefusalMessage);
+        Assert.False(viewModel.IsSummaryOpen);
+        Assert.Empty(port.Calls);
+
+        viewModel.ChangeReason = "Otro";
+        Assert.Null(viewModel.ChangeReasonError);
+    }
+
     [Fact]
     public async Task AnUndoBlockedByAUnitLetAgain_NamesTheTenant_AndOpensNoSummary()
     {

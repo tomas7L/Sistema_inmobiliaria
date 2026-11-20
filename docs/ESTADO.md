@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-18 (cierre), con el arreglo del Test60 (#156) e Índices a 1536 x 785 (#157) mergeados_
+_Última actualización: 2026-11-19 (cierre), con #158 a #165 mergeados_
 
 > Este archivo **apunta**, no resume. El estado real de una implementación vive en
 > `openspec/changes/<change>/tasks.md`, y el porqué de cada decisión vive en Engram.
@@ -8,24 +8,26 @@ _Última actualización: 2026-11-18 (cierre), con el arreglo del Test60 (#156) e
 
 ## En qué estamos
 
-**Change activo: `gestion-de-alquileres`, Phase 12 (Pantallas).** Llegó el rediseño de Mateo a **1536 x 785** (las 80
-pantallas). Se pasa **una pantalla por vez**: **Índices está hecha, aprobada en PRUEBA y mergeada (#157).** Detalle:
-`gestion-de-alquileres/tasks.md`, 12.3d (entrada del 2026-11-18), y Engram `decisions/s12-indices-1536`.
+**Change activo: `gestion-de-alquileres`, Phase 12 (Pantallas).** Todas las pantallas que existían ya están a **1536 x 785**
+(Personas, Propiedades, Contratos y el menú lateral, #158 a #162). Empezaron las **acciones del detalle de contrato**, una por PR,
+todas en una sola pantalla compartida (`Views/ContractActionView.xaml`): Registrar aviso (#163), Deshacer aviso (#164) y
+Terminar (#165). Detalle: `gestion-de-alquileres/tasks.md`, 12.3d (entradas del 2026-11-19); cómo sumar una acción: Engram
+`pattern/contract-action-screen`.
 
 ## Próximos pasos
 
-1. **Nota de historia:** el commit `599d37e` (#156) se llama "fit the Índices screen" pero es solo el arreglo del Test60
-   (`AdjustmentDeskTests.cs`; Engram `bug/test60-received-on-bound-time-bomb`). Índices es `8d30879` (#157).
-2. **La siguiente pantalla ya hecha**, igual que Índices: leer su `.dc.html` y el `caja.css`, contarle a Tomás qué cambia, cambiar
-   solo esa y que la revise en pantalla. Quedan Personas, Propiedades y, de Contratos, el listado, el detalle y el formulario; **sugerida la siguiente: Personas** (Tomás elige). El menú
-   lateral (`MainWindow`) todavía no tiene el estilo del lienzo: va como pantalla propia, con el nombre del usuario en el encabezado.
-   Antes de mostrar cada una, revisar `memory/wpf-screen-lessons.md`. En las pruebas en pantalla, dar períodos **posteriores** al
-   último cargado: el aviso de nivel lejano compara con el mes anterior.
-3. **Después:** las pantallas de acciones del detalle (Editar, Registrar aviso, Terminar, Deshacer aviso, Deshacer fin,
-   Cancelar por error, Ver cuenta, Corregir ajuste, que trae además los alquileres y el botón "Corregir ajuste" en Índices) y
-   Ajustes; la vista de Mora (`mora/tasks.md` 2.2 a 2.4) y la de Avisos (`notificaciones/tasks.md` 4.2).
-4. **Reunión con Nicolás:** `lectura-reunion-nicolas.md` (raíz, local), preguntas N1 a N22 que siguen abiertas.
-5. **Panorama de lo que falta:** Engram `plan/remaining-work-panorama`. `carga-inicial` espera el Excel de la reunión.
+1. **Primero, verificar una cifra:** al terminar "Prueba, Maria" el resumen dijo "Queda adeudado $ 5.418.000" (alquiler
+   $ 450.000 desde 07/2026: cinco períodos son unos $ 2.250.000 sin recargo). La calcula `SummarizeEndAsync`, que ya existía.
+   Mirar su cuenta en la Caja (y los términos de recargo de PRUEBA) antes de seguir. Necesita Supabase PRUEBA despausada.
+2. **Deshacer fin**, con "Prueba, Maria" (está Finalizada desde el 19/11/2026). Después: Cancelar por error, Editar, Ver
+   cuenta y Corregir ajuste (trae la columna "Corregir" del Historial). El detalle muestra solo los botones de las acciones
+   ya hechas (Tomás, 2026-11-19).
+3. **Después:** Ajustes; la vista de Mora (`mora/tasks.md` 2.2 a 2.4) y la de Avisos (`notificaciones/tasks.md` 4.2); las
+   pantallas viejas sin tema (Caja, Cobros recientes, Anular, Avisos, Puesta en marcha, Usuarios). Cada pantalla redibujada
+   suma su `NavigationTarget` al disparador del nombre de usuario en `MainWindow.xaml`.
+4. **Antes de mostrar cada pantalla**, revisar `memory/wpf-screen-lessons.md` (12 lecciones).
+5. **Reunión con Nicolás:** `lectura-reunion-nicolas.md` (raíz, local), preguntas N1 a N22 que siguen abiertas.
+6. **Panorama de lo que falta:** Engram `plan/remaining-work-panorama`. `carga-inicial` espera el Excel de la reunión.
 
 ## Pendientes / bloqueos
 
@@ -68,7 +70,9 @@ pantallas). Se pasa **una pantalla por vez**: **Índices está hecha, aprobada e
 - **Base de prueba:** usuario Admin `tomas`, los Empleados `muñoz` y `muñoz20` (desactivados), y datos ficticios cargados por
   Tomás el 2026-11-17: las personas Ocampo, Ruiz, Gómez, Sosa (sin email, con teléfono), Molina y Vera; las propiedades
   Pellegrini 722, Rivadavia 640, Sarmiento 201, la cochera Mitre 88 y José Hernández 1844; y cinco contratos vigentes, entre
-  ellos "Maria/Juan Prueba", uno con dos unidades y uno con copropietarios. Ninguno en rescisión, terminado ni cancelado todavía.
+  ellos "Maria/Juan Prueba", uno con dos unidades y uno con copropietarios. El 2026-11-19 se sumaron la propiedad San Martín 345
+  y el contrato "Sosa, Ana" sobre ella (empieza el 01/12/2026: hasta entonces no admite aviso ni fin), y "Prueba, Maria" quedó
+  **Finalizada** el 19/11/2026 (Acuerdo de partes), con un aviso registrado y deshecho en su registro de eventos.
 - **Registro de errores en la PC:** `%LOCALAPPDATA%\SistemaInmobiliaria\logs\errores-yyyy-MM-dd.log`.
 - **Datos personales, nunca al repo:** el Excel de Nicolás y el PDF de muestra (`C:\Users\buffa\Downloads\abregu.pdf`). Las
   copias del Excel se borran al terminar la carga: Descargas, papelera y el chat donde llegue.
@@ -102,8 +106,9 @@ dotnet test Inmobiliaria.Core.slnf --configuration Release
 dotnet ef migrations has-pending-model-changes -p src/Inmobiliaria.Infrastructure -s src/Inmobiliaria.Infrastructure
 ```
 
-Esperado en `develop` (#157): **2574 pasados (Domain 857, Presentation 761, Infrastructure 956), 0 fallas, 0 omitidos**, build
-sin advertencias y el modelo en sintonía con `20261113165451_RevokeSupabaseApiRoles`. Si el build de Desktop falla con MSB3027,
+Esperado en `develop` (#165): **2587 pasados (Domain 857, Presentation 774, Infrastructure 956), 0 fallas, 0 omitidos**, build
+sin advertencias y el modelo en sintonía con `20261113165451_RevokeSupabaseApiRoles`. Infrastructure **no se corrió** del #158 al
+#165 (ninguno la toca): correrla con Docker al empezar la próxima sesión. Si el build de Desktop falla con MSB3027,
 la aplicación está abierta y tiene tomadas sus DLL: cerrarla. La app la abre siempre el asistente (Tomás, 2026-11-13).
 
 **Aplicar una migración** (Tomás, en una ventana de PowerShell aparte, nunca con `!`): variable `INMOBILIARIA_DB` con

@@ -99,6 +99,33 @@
             </Style.Triggers>
         </Style>
 
+        <Style x:Key="UndoEndForm" TargetType="StackPanel">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding OpenAction}" Value="{x:Static contracts:ContractAction.UndoEnd}" />
+                        <Condition Binding="{Binding IsSummaryOpen}" Value="False" />
+                        <Condition Binding="{Binding Done}" Value="{x:Null}" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Visibility" Value="Visible" />
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="UndoEndSummary" TargetType="StackPanel">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding OpenAction}" Value="{x:Static contracts:ContractAction.UndoEnd}" />
+                        <Condition Binding="{Binding IsSummaryOpen}" Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Visibility" Value="Visible" />
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+
         <Style x:Key="EndForm" TargetType="StackPanel">
             <Setter Property="Visibility" Value="Collapsed" />
             <Style.Triggers>
@@ -183,6 +210,9 @@
                             <DataTrigger Binding="{Binding OpenAction}" Value="{x:Static contracts:ContractAction.End}">
                                 <Setter Property="Text" Value="Terminar contrato" />
                             </DataTrigger>
+                            <DataTrigger Binding="{Binding OpenAction}" Value="{x:Static contracts:ContractAction.UndoEnd}">
+                                <Setter Property="Text" Value="Deshacer fin" />
+                            </DataTrigger>
                         </Style.Triggers>
                     </Style>
                 </TextBlock.Style>
@@ -197,6 +227,9 @@
                             </DataTrigger>
                             <DataTrigger Binding="{Binding OpenAction}" Value="{x:Static contracts:ContractAction.End}">
                                 <Setter Property="Text" Value="El contrato deja de generar períodos desde la fecha de fin. Lo que se debe queda en la cuenta." />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding OpenAction}" Value="{x:Static contracts:ContractAction.UndoEnd}">
+                                <Setter Property="Text" Value="Saca el fin del contrato y vuelve a estar activo. Queda anotado quién lo hizo y por qué." />
                             </DataTrigger>
                         </Style.Triggers>
                     </Style>
@@ -422,6 +455,44 @@
                 </Border>
                 <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                     <Button Content="Terminar contrato" Style="{StaticResource LargePrimary}" Command="{Binding ConfirmCommand}" />
+                    <Button Content="Volver y corregir" Style="{StaticResource LargeGhost}" Margin="12,0,0,0" Command="{Binding CancelCommand}" />
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Deshacer fin, step 1: why, said under its field when missing. -->
+            <StackPanel Style="{StaticResource UndoEndForm}">
+                <Border Style="{StaticResource Theme.Card}" Width="900" HorizontalAlignment="Left" Margin="0,12,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Motivo" Style="{StaticResource Theme.CardTitle}" />
+                        <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Por qué se deshace " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
+                        <TextBox Style="{StaticResource TextArea}" Tag="Por ejemplo: el inquilino decidió quedarse"
+                                 Text="{Binding ChangeReason, UpdateSourceTrigger=PropertyChanged}"
+                                 views:FieldError.Text="{Binding ChangeReasonError}" />
+                        <TextBlock Text="{Binding ChangeReasonError}" Style="{StaticResource Theme.ErrorText}" Margin="0,6,0,0" />
+                        <TextBlock Text="El motivo queda guardado con su nombre y la fecha." Style="{StaticResource Theme.Hint}" Margin="0,12,0,0" />
+                    </StackPanel>
+                </Border>
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                    <Button Content="Continuar" Style="{StaticResource LargePrimary}" Command="{Binding ReviewUndoEndCommand}" />
+                    <Button Content="Volver" Style="{StaticResource LargeGhost}" Margin="12,0,0,0" Command="{Binding CloseActionCommand}" />
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Deshacer fin, step 2: the summary to confirm; nothing is written before "Deshacer". -->
+            <StackPanel Style="{StaticResource UndoEndSummary}">
+                <Border Style="{StaticResource Theme.Card}" Width="900" HorizontalAlignment="Left" Margin="0,12,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Revise antes de deshacer" Style="{StaticResource Theme.CardTitle}" />
+                        <TextBlock Text="{Binding PendingChange.Summary}" TextWrapping="Wrap" />
+                        <DockPanel Margin="0,12,0,0">
+                            <TextBlock DockPanel.Dock="Right" Text="{Binding PendingChange.Reason}" FontWeight="Bold" TextWrapping="Wrap"
+                                       MaxWidth="600" TextAlignment="Right" />
+                            <TextBlock Text="Motivo" Foreground="{DynamicResource Theme.Muted}" />
+                        </DockPanel>
+                    </StackPanel>
+                </Border>
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                    <Button Content="Deshacer" Style="{StaticResource LargePrimary}" Command="{Binding ConfirmCommand}" />
                     <Button Content="Volver y corregir" Style="{StaticResource LargeGhost}" Margin="12,0,0,0" Command="{Binding CancelCommand}" />
                 </StackPanel>
             </StackPanel>
