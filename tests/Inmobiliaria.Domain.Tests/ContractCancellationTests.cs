@@ -472,4 +472,16 @@ public class ContractCancellationTests
         Assert.Equal(ContractRefusal.ContractCancelled, ContractLifecycleRules.CheckUndoEnd(ContractStatus.Ended, EndReason.LoadedByMistake, "Error"));
         Assert.Equal(ContractRefusal.ReasonMissing, ContractLifecycleRules.CheckUndoEnd(ContractStatus.Ended, EndReason.Expiry, " "));
     }
+
+    /// <summary>Canvas "Cancelar por error": the recibos to void read as a list, "24301 y 24302", not "24301, 24302".</summary>
+    [Theory]
+    [InlineData(new[] { 24301 }, "24301")]
+    [InlineData(new[] { 24301, 24302 }, "24301 y 24302")]
+    [InlineData(new[] { 24301, 24302, 24303 }, "24301, 24302 y 24303")]
+    public void TheRecibosToVoid_ReadAsAList(int[] recibos, string expected)
+    {
+        var summary = new ContractCancellationSummary(ContractRefusal.PaymentMustBeVoidedFirst, string.Empty, string.Empty, 0m, recibos, false, 0m, [], string.Empty);
+
+        Assert.Equal($"Primero hay que anular los recibos {expected}.", summary.RefusalText);
+    }
 }

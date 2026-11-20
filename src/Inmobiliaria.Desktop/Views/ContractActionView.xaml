@@ -40,6 +40,18 @@
             <Setter Property="FontSize" Value="15" />
         </Style>
 
+        <!-- The canvas's ".redbtn": a primary button in the danger colour, for what cannot be undone. -->
+        <Style x:Key="LargeDanger" TargetType="Button" BasedOn="{StaticResource LargePrimary}">
+            <Setter Property="Background" Value="{DynamicResource Theme.Bad}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Theme.Bad}" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource Theme.Bad}" />
+                    <Setter Property="Opacity" Value="0.9" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
         <Style x:Key="Required" TargetType="Run">
             <Setter Property="Foreground" Value="{DynamicResource Theme.Bad}" />
         </Style>
@@ -153,6 +165,33 @@
             </Style.Triggers>
         </Style>
 
+        <Style x:Key="CancelForm" TargetType="StackPanel">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding OpenAction}" Value="{x:Static contracts:ContractAction.Cancel}" />
+                        <Condition Binding="{Binding IsSummaryOpen}" Value="False" />
+                        <Condition Binding="{Binding Done}" Value="{x:Null}" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Visibility" Value="Visible" />
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="CancelSummary" TargetType="StackPanel">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding OpenAction}" Value="{x:Static contracts:ContractAction.Cancel}" />
+                        <Condition Binding="{Binding IsSummaryOpen}" Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Visibility" Value="Visible" />
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+
         <!-- The canvas's textarea: the input's box, taller, the text from the top. -->
         <Style x:Key="TextArea" TargetType="TextBox" BasedOn="{StaticResource Theme.Input}">
             <Setter Property="Height" Value="96" />
@@ -213,6 +252,9 @@
                             <DataTrigger Binding="{Binding OpenAction}" Value="{x:Static contracts:ContractAction.UndoEnd}">
                                 <Setter Property="Text" Value="Deshacer fin" />
                             </DataTrigger>
+                            <DataTrigger Binding="{Binding OpenAction}" Value="{x:Static contracts:ContractAction.Cancel}">
+                                <Setter Property="Text" Value="Cancelar contrato por error" />
+                            </DataTrigger>
                         </Style.Triggers>
                     </Style>
                 </TextBlock.Style>
@@ -230,6 +272,9 @@
                             </DataTrigger>
                             <DataTrigger Binding="{Binding OpenAction}" Value="{x:Static contracts:ContractAction.UndoEnd}">
                                 <Setter Property="Text" Value="Saca el fin del contrato y vuelve a estar activo. Queda anotado quién lo hizo y por qué." />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding OpenAction}" Value="{x:Static contracts:ContractAction.Cancel}">
+                                <Setter Property="Text" Value="Use esto solo si el contrato se cargó por equivocación. Es definitivo." />
                             </DataTrigger>
                         </Style.Triggers>
                     </Style>
@@ -257,7 +302,7 @@
             <Border Style="{StaticResource Theme.Card}" MaxWidth="900" HorizontalAlignment="Left" Width="900" Margin="0,12,0,0">
                 <StackPanel>
                     <DockPanel>
-                        <!-- Coloured as on the list and the detail: green in force, amber with notice. -->
+                        <!-- Coloured as on the list and the detail: green in force, amber with notice, red cancelled. -->
                         <Border DockPanel.Dock="Right" Margin="0" VerticalAlignment="Center">
                             <Border.Style>
                                 <Style TargetType="Border" BasedOn="{StaticResource Theme.Chip}">
@@ -267,6 +312,9 @@
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding Detail.Status}" Value="{x:Static leasing:ContractStatus.PendingTermination}">
                                             <Setter Property="Tag" Value="warn" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Detail.IsCancelled}" Value="True">
+                                            <Setter Property="Tag" Value="bad" />
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -493,6 +541,97 @@
                 </Border>
                 <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                     <Button Content="Deshacer" Style="{StaticResource LargePrimary}" Command="{Binding ConfirmCommand}" />
+                    <Button Content="Volver y corregir" Style="{StaticResource LargeGhost}" Margin="12,0,0,0" Command="{Binding CancelCommand}" />
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Cancelar por error, step 1: why, said under its field when missing. -->
+            <StackPanel Style="{StaticResource CancelForm}">
+                <Border Style="{StaticResource Theme.Card}" Width="900" HorizontalAlignment="Left" Margin="0,12,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Motivo" Style="{StaticResource Theme.CardTitle}" />
+                        <TextBlock Style="{StaticResource Theme.Label}"><Run Text="Por qué se cancela " /><Run Text="*" Style="{StaticResource Required}" /></TextBlock>
+                        <TextBox Style="{StaticResource TextArea}" Tag="Por ejemplo: se cargó dos veces"
+                                 Text="{Binding ChangeReason, UpdateSourceTrigger=PropertyChanged}"
+                                 views:FieldError.Text="{Binding ChangeReasonError}" />
+                        <TextBlock Text="{Binding ChangeReasonError}" Style="{StaticResource Theme.ErrorText}" Margin="0,6,0,0" />
+                        <TextBlock Text="El motivo queda guardado con su nombre y la fecha. Si lo deja vacío o solo con espacios, no se puede continuar."
+                                   Style="{StaticResource Theme.Hint}" TextWrapping="Wrap" Margin="0,12,0,0" />
+                    </StackPanel>
+                </Border>
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                    <Button Content="Continuar" Style="{StaticResource LargePrimary}" Command="{Binding ReviewCancelCommand}" />
+                    <Button Content="Volver" Style="{StaticResource LargeGhost}" Margin="12,0,0,0" Command="{Binding CloseActionCommand}" />
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Cancelar por error, step 2: the summary to confirm; nothing is written before "Confirmar cancelación". -->
+            <StackPanel Style="{StaticResource CancelSummary}">
+                <Border Style="{StaticResource Theme.Card}" Width="900" HorizontalAlignment="Left" Margin="0,12,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Revise antes de cancelar" Style="{StaticResource Theme.CardTitle}" />
+                        <TextBlock Text="{Binding PendingChange.Summary}" TextWrapping="Wrap" />
+                        <DockPanel Margin="0,12,0,6">
+                            <TextBlock DockPanel.Dock="Right" Text="{Binding PendingChange.Figures.Tenants}" FontWeight="Bold" />
+                            <TextBlock Text="Inquilino" Foreground="{DynamicResource Theme.Muted}" />
+                        </DockPanel>
+                        <DockPanel Margin="0,6">
+                            <TextBlock DockPanel.Dock="Right" Text="{Binding PendingChange.Figures.Units}" FontWeight="Bold" />
+                            <TextBlock Text="Propiedad" Foreground="{DynamicResource Theme.Muted}" />
+                        </DockPanel>
+                        <DockPanel Margin="0,6">
+                            <TextBlock DockPanel.Dock="Right" Text="{Binding PendingChange.Reason}" FontWeight="Bold" TextWrapping="Wrap"
+                                       MaxWidth="600" TextAlignment="Right" />
+                            <TextBlock Text="Motivo" Foreground="{DynamicResource Theme.Muted}" />
+                        </DockPanel>
+                        <Separator Margin="0,8" Background="{DynamicResource Theme.Line}" />
+                        <DockPanel Margin="0,6">
+                            <TextBlock DockPanel.Dock="Right" Text="{Binding PendingChange.AmountText}" FontWeight="Bold" />
+                            <TextBlock Text="Deja de deberse" Foreground="{DynamicResource Theme.Muted}" />
+                        </DockPanel>
+                        <TextBlock Text="{Binding PendingChange.CompensationLine}" Style="{StaticResource Theme.Hint}" TextWrapping="Wrap"
+                                   Visibility="{Binding PendingChange.CompensationLine, Converter={StaticResource Set}}" />
+                    </StackPanel>
+                </Border>
+                <Border CornerRadius="14" Padding="14,10" Margin="0,12,0,0" BorderThickness="1" Width="900" HorizontalAlignment="Left"
+                        Background="{DynamicResource Theme.Surface}" BorderBrush="{DynamicResource Theme.Line}">
+                    <DockPanel>
+                        <Viewbox Width="18" Height="18" Margin="0,2,12,0" VerticalAlignment="Top" DockPanel.Dock="Left">
+                            <Canvas Width="24" Height="24">
+                                <Path Data="M3,12 A9,9 0 1 1 21,12 A9,9 0 1 1 3,12 Z M12,11 V16 M12,7.5 V8" Stroke="{DynamicResource Theme.Ink2}" StrokeThickness="1.9"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                            </Canvas>
+                        </Viewbox>
+                        <TextBlock Text="{x:Static contracts:PendingCancel.EffectsLine}" TextWrapping="Wrap" Foreground="{DynamicResource Theme.Ink2}" />
+                    </DockPanel>
+                </Border>
+                <Border CornerRadius="14" Padding="14,10" Margin="0,12,0,0" BorderThickness="1" Width="900" HorizontalAlignment="Left"
+                        Background="{DynamicResource Theme.WarnBack}" BorderBrush="{DynamicResource Theme.Warn}"
+                        Visibility="{Binding PendingChange.RetainedLine, Converter={StaticResource Set}}">
+                    <DockPanel>
+                        <Viewbox Width="18" Height="18" Margin="0,2,12,0" VerticalAlignment="Top" DockPanel.Dock="Left">
+                            <Canvas Width="24" Height="24">
+                                <Path Data="M12,3 L22,21 H2 Z M12,10 V15 M12,18 V18.5" Stroke="{DynamicResource Theme.Warn}" StrokeThickness="1.9"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                            </Canvas>
+                        </Viewbox>
+                        <TextBlock Text="{Binding PendingChange.RetainedLine}" TextWrapping="Wrap" Foreground="{DynamicResource Theme.Warn}" />
+                    </DockPanel>
+                </Border>
+                <Border CornerRadius="14" Padding="14,10" Margin="0,12,0,0" BorderThickness="1" Width="900" HorizontalAlignment="Left"
+                        Background="{DynamicResource Theme.WarnBack}" BorderBrush="{DynamicResource Theme.Warn}">
+                    <DockPanel>
+                        <Viewbox Width="18" Height="18" Margin="0,2,12,0" VerticalAlignment="Top" DockPanel.Dock="Left">
+                            <Canvas Width="24" Height="24">
+                                <Path Data="M12,3 L22,21 H2 Z M12,10 V15 M12,18 V18.5" Stroke="{DynamicResource Theme.Warn}" StrokeThickness="1.9"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                            </Canvas>
+                        </Viewbox>
+                        <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource Theme.Warn}"><Run Text="Esto es definitivo." FontWeight="Bold" /><Run Text=" " /><Run Text="{x:Static contracts:PendingCancel.FinalityLine}" /></TextBlock>
+                    </DockPanel>
+                </Border>
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                    <Button Content="Confirmar cancelación" Style="{StaticResource LargeDanger}" Command="{Binding ConfirmCommand}" />
                     <Button Content="Volver y corregir" Style="{StaticResource LargeGhost}" Margin="12,0,0,0" Command="{Binding CancelCommand}" />
                 </StackPanel>
             </StackPanel>

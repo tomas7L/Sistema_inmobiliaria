@@ -43,6 +43,7 @@ public sealed partial class ContractDetailViewModel : ObservableObject
         OpenUndoNoticeCommand = new RelayCommand(() => OpenActionScreen(ContractAction.UndoNotice), () => CanAct() && IsUndoNoticeOffered);
         OpenEndCommand = new RelayCommand(() => OpenActionScreen(ContractAction.End), () => CanAct() && IsEndOffered);
         OpenUndoEndCommand = new RelayCommand(() => OpenActionScreen(ContractAction.UndoEnd), () => CanAct() && IsUndoEndOffered);
+        OpenCancelCommand = new RelayCommand(() => OpenActionScreen(ContractAction.Cancel), () => CanAct() && IsCancelOffered);
         CloseActionCommand = new RelayCommand(() => OpenActionScreen(null), CanAct);
         Runner.PropertyChanged += OnRunnerChanged;
     }
@@ -79,6 +80,9 @@ public sealed partial class ContractDetailViewModel : ObservableObject
 
     /// <summary>The canvas's "Deshacer fin" button: its own screen, in place of the detail.</summary>
     public IRelayCommand OpenUndoEndCommand { get; }
+
+    /// <summary>The canvas's "Cancelar por error" button: its own screen, in place of the detail.</summary>
+    public IRelayCommand OpenCancelCommand { get; }
 
     /// <summary>"Volver al contrato": back to the detail, forgetting what the action's screen held.</summary>
     public IRelayCommand CloseActionCommand { get; }
@@ -333,6 +337,7 @@ public sealed partial class ContractDetailViewModel : ObservableObject
         OpenUndoNoticeCommand.NotifyCanExecuteChanged();
         OpenEndCommand.NotifyCanExecuteChanged();
         OpenUndoEndCommand.NotifyCanExecuteChanged();
+        OpenCancelCommand.NotifyCanExecuteChanged();
     }
 
     [ObservableProperty]
@@ -530,6 +535,13 @@ public sealed partial class ContractDetailViewModel : ObservableObject
         RefusalMessage = null;
         CloseSummary();
 
+        // Canvas "Cancelar por error": a missing reason is said under its field, before the port is asked.
+        if (string.IsNullOrWhiteSpace(ChangeReason))
+        {
+            ChangeReasonError = ContractRefusal.ReasonMissing.OperatorText();
+            return;
+        }
+
         var reason = ChangeReason;
         var outcome = await Runner.RunAsync(() => _contracts.SummarizeCancelAsync(_contractId, reason));
         if (!outcome.Completed)
@@ -594,6 +606,12 @@ public sealed partial class ContractDetailViewModel : ObservableObject
         {
             Done = new ActionDone("Listo", $"El fin se deshizo. El contrato de {Names(reopened, PartyRole.Tenant)} vuelve a estar Vigente.");
         }
+        else if (pending is PendingCancel && Detail is { } cancelled)
+        {
+            Done = new ActionDone(
+                "Contrato cancelado",
+                $"El contrato de {Names(cancelled, PartyRole.Tenant)} quedó cancelado por error. Sigue visible en la lista, con su motivo.");
+        }
 
         await LoadAsync();
     }
@@ -614,6 +632,7 @@ public sealed partial class ContractDetailViewModel : ObservableObject
             OpenUndoNoticeCommand.NotifyCanExecuteChanged();
             OpenEndCommand.NotifyCanExecuteChanged();
             OpenUndoEndCommand.NotifyCanExecuteChanged();
+            OpenCancelCommand.NotifyCanExecuteChanged();
             CloseActionCommand.NotifyCanExecuteChanged();
         }
     }
@@ -635,6 +654,7 @@ public enum ContractAction
     UndoNotice,
     End,
     UndoEnd,
+    Cancel,
 }
 
 /// <summary>The notice an action ends on when it lands: its title and its sentence.</summary>
@@ -714,13 +734,31 @@ public sealed record PendingCancel(string Reason, ContractCancellationSummary Fi
 {
     /// <summary>The tenant, the units and the exact amount, since this cannot be undone (spec Requirement 23).</summary>
     public string Summary =>
-        $"Se cancela el contrato de {Figures.Tenants}, sobre {Figures.Units}. Deja de deberse {Formats.Money(Figures.AmountStoppedBeingOwed)}. " +
-        "Esto es definitivo. Una vez cancelado, el contrato no se puede recuperar.";
+        $"Se cancela el contrato de {Figures.Tenants}, sobre {Figures.Units}. Deja de deberse {Formats.Money(Figures.AmountStoppedBeingOwed)}.";
+
+    /// <summary>What stops being owed, as the summary's card shows it.</summary>
+    public string AmountText => Formats.Money(Figures.AmountStoppedBeingOwed);
+
+    /// <summary>
+    /// How what stops being owed is cleared, or null when nothing is. The canvas also names the period's due date; the summary
+    /// carries only the total, so that waits for a later change (Tomás, 2026-11-20).
+    /// </summary>
+    public string? CompensationLine => Figures.AmountStoppedBeingOwed == 0m
+        ? null
+        : "Se compensa con una corrección, sin recargo. Los movimientos anteriores no se tocan.";
+
+    /// <summary>What cancelling does to the contract, its unit and its people (canvas "Cancelar por error").</summary>
+    public const string EffectsLine =
+        "El contrato deja de generar períodos, también los que todavía no se cargaron. La propiedad queda disponible. " +
+        "Las personas y la propiedad no se borran. El contrato sigue visible, marcado como cancelado y con su motivo.";
+
+    /// <summary>Said after "Esto es definitivo.", which the screen sets in bold.</summary>
+    public const string FinalityLine = "Una vez cancelado, el contrato no se puede recuperar.";
 
     /// <summary>Money past the voiding window, or null when there is none: it stays with its recibos and is returned by hand (spec Decision 36).</summary>
     public string? RetainedLine => Figures.RetainedRecibos.Count == 0
         ? null
-        : $"Los recibos {string.Join(", ", Figures.RetainedRecibos)} quedan como están, por {Formats.Money(Figures.RetainedAmount)}: ese dinero se devuelve a mano.";
+        : $"Los recibos {ContractCancellationSummary.ListRecibos(Figures.RetainedRecibos)} quedan como están, por {Formats.Money(Figures.RetainedAmount)}: ese dinero se devuelve a mano.";
 }
 
 /// <param name="Reason">Why it ends.</param>

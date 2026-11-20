@@ -99,10 +99,20 @@ public sealed record ContractCancellationSummary(
     {
         null => null,
         ContractRefusal.PaymentMustBeVoidedFirst =>
-            $"Primero hay que anular los recibos {string.Join(", ", RecibosToVoid)}."
+            $"Primero hay que anular los recibos {ListRecibos(RecibosToVoid)}."
             + (OnlyAnAdminCanVoid ? $" Los de más de {Collection.CollectionRules.VoidingFreeWindowDays} días solo los puede anular un Administrador." : string.Empty),
         { } refusal => refusal.OperatorText(),
     };
+
+    /// <summary>Recibos as the operator reads a list: "24301", "24301 y 24302", "24301, 24302 y 24303".</summary>
+    public static string ListRecibos(IReadOnlyList<int> recibos)
+    {
+        ArgumentNullException.ThrowIfNull(recibos);
+
+        return recibos.Count <= 1
+            ? string.Join(string.Empty, recibos)
+            : $"{string.Join(", ", recibos.Take(recibos.Count - 1))} y {recibos[^1]}";
+    }
 }
 
 /// <param name="Refusal">Why it cannot be undone, or null.</param>
