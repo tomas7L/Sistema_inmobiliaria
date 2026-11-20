@@ -175,4 +175,21 @@ public sealed class DueAdjustmentQueryTests
             Assert.Equal(531_000m, entry.ProposedCanon);
         }
     }
+
+    /// <summary>Canvas "Ajustes": each row names its clause, so the entry carries the clause's indices and interval.</summary>
+    [SkippableFact]
+    public async Task EachEntry_NamesItsClausesIndicesAndInterval()
+    {
+        Skip.If(!_fixture.IsDockerAvailable, _fixture.SkipReason);
+
+        await using var context = _fixture.CreateDbContext();
+        var dueDate = new DateOnly(2026, 9, 1);
+        var (contract, index) = SeedDueContract(context, dueDate);
+        await context.SaveChangesAsync();
+
+        var entry = Assert.Single(await new DueAdjustmentQuery(context).GetDueAsync(dueDate), d => d.ContractId == contract.Id);
+
+        Assert.Equal([index.Name], entry.IndexNames);
+        Assert.Equal(1, entry.IntervalMonths);
+    }
 }

@@ -113,6 +113,11 @@ public sealed class DueAdjustmentQuery : IDueAdjustmentQuery
             {
                 IndexValues = indexValues,
                 Combination = row.Clause.Combination,
+                IndexNames = row.Clause.Indices
+                    .OrderBy(i => i.Ordinal)
+                    .Select(i => catalog.TryGetValue(i.EconomicIndexId, out var named) ? named.Name : "(unknown index)")
+                    .ToList(),
+                IntervalMonths = row.Clause.IntervalMonths,
             });
         }
 

@@ -40,4 +40,10 @@ public sealed record DueAdjustment(
 
     /// <summary>How the clause combines its indices: one alone, or their average.</summary>
     public CombinationRule Combination { get; init; } = CombinationRule.Single;
+
+    /// <summary>The clause's indices by name, in its order: what the Ajustes list names it by.</summary>
+    public IReadOnlyList<string> IndexNames { get; init; } = [];
+
+    /// <summary>Every how many months the clause adjusts.</summary>
+    public int IntervalMonths { get; init; }
 }
