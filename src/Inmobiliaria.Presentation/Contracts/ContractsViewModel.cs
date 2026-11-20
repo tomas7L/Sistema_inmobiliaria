@@ -26,19 +26,25 @@ public sealed partial class ContractsViewModel : ObservableObject
     private readonly IContractRegistry _contracts;
     private readonly Func<Guid, ContractDetailViewModel>? _buildDetail;
     private readonly Func<ContractFormViewModel>? _buildForm;
+    private readonly Func<ContractDetail, ContractFormViewModel>? _buildEdit;
     private IReadOnlyList<ContractListing> _loaded = [];
 
     /// <param name="contracts">The port.</param>
     /// <param name="openDetail">Builds one contract's detail; without it, no contract is offered to open.</param>
     /// <param name="newForm">Builds the form of a new contract; without it, "Nuevo contrato" is not offered.</param>
+    /// <param name="editForm">Builds the form on a contract that exists; without it, "Editar" is not offered.</param>
     public ContractsViewModel(
-        IContractRegistry contracts, Func<Guid, ContractDetailViewModel>? openDetail = null, Func<ContractFormViewModel>? newForm = null)
+        IContractRegistry contracts, Func<Guid, ContractDetailViewModel>? openDetail = null, Func<ContractFormViewModel>? newForm = null,
+        Func<ContractDetail, ContractFormViewModel>? editForm = null)
     {
         ArgumentNullException.ThrowIfNull(contracts);
 
         _contracts = contracts;
         _buildDetail = openDetail;
         _buildForm = newForm;
+        _buildEdit = editForm;
+        EditCommand = new AsyncRelayCommand(EditAsync, () => _buildEdit is not null && OpenDetail is { IsEditOffered: true } && !Runner.IsBusy);
+        CloseEditCommand = new AsyncRelayCommand(CloseEditAsync, () => !Runner.IsBusy);
         NewCommand = new AsyncRelayCommand(NewAsync, () => _buildForm is not null && !Runner.IsBusy);
         LoadCommand = new AsyncRelayCommand(LoadAsync, () => !Runner.IsBusy);
         OpenCommand = new AsyncRelayCommand<ContractRow>(OpenAsync, row => _buildDetail is not null && row is not null && !Runner.IsBusy);
@@ -61,6 +67,12 @@ public sealed partial class ContractsViewModel : ObservableObject
 
     /// <summary>"Nuevo contrato": the form in place of the list.</summary>
     public IAsyncRelayCommand NewCommand { get; }
+
+    /// <summary>The detail's "Editar": the form on the open contract, over its detail (canvas "Editar contrato").</summary>
+    public IAsyncRelayCommand EditCommand { get; }
+
+    /// <summary>"Volver al contrato" from the form: the detail again, read anew so what was saved shows.</summary>
+    public IAsyncRelayCommand CloseEditCommand { get; }
 
     /// <summary>The form of a new contract, open in place of the list, or null.</summary>
     [ObservableProperty]
@@ -135,6 +147,52 @@ public sealed partial class ContractsViewModel : ObservableObject
         await LoadAsync();
     }
 
+    private async Task EditAsync()
+    {
+        if (_buildEdit is null || OpenDetail?.Detail is not { } detail)
+        {
+            return;
+        }
+
+        ForgetSaved();
+        var form = _buildEdit(detail);
+        OpenForm = form;
+        await form.LoadCommand.ExecuteAsync(null);
+    }
+
+    private async Task CloseEditAsync()
+    {
+        OpenForm = null;
+        if (OpenDetail is { } detail)
+        {
+            await detail.LoadCommand.ExecuteAsync(null);
+        }
+    }
+
+    /// <summary>"Editar" follows the contract open: offered once it is read, and only where its state offers it.</summary>
+    partial void OnOpenDetailChanged(ContractDetailViewModel? oldValue, ContractDetailViewModel? newValue)
+    {
+        if (oldValue is not null)
+        {
+            oldValue.PropertyChanged -= OnDetailChanged;
+        }
+
+        if (newValue is not null)
+        {
+            newValue.PropertyChanged += OnDetailChanged;
+        }
+
+        EditCommand.NotifyCanExecuteChanged();
+    }
+
+    private void OnDetailChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ContractDetailViewModel.IsEditOffered))
+        {
+            EditCommand.NotifyCanExecuteChanged();
+        }
+    }
+
     private async Task NewAsync()
     {
         if (_buildForm is null)
@@ -199,6 +257,8 @@ public sealed partial class ContractsViewModel : ObservableObject
             OpenCommand.NotifyCanExecuteChanged();
             BackCommand.NotifyCanExecuteChanged();
             NewCommand.NotifyCanExecuteChanged();
+            EditCommand.NotifyCanExecuteChanged();
+            CloseEditCommand.NotifyCanExecuteChanged();
         }
     }
 }

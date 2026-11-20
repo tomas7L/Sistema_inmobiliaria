@@ -360,4 +360,21 @@ public class ContractDraftRulesOnACorrectionTests
     {
         Assert.Equal(ContractRefusal.StartBeforeCurrentMonth, ContractDraftRules.Check(Draft(new DateOnly(2026, 9, 1)), Today));
     }
+
+    /// <summary>
+    /// Spec Requirement 9: what stops a correction, whatever it says, in the order it is said. The detail asks the same rule, so
+    /// the form locks what the port would refuse.
+    /// </summary>
+    [Theory]
+    [InlineData(ContractStatus.Active, false, false, null)]
+    [InlineData(ContractStatus.PendingTermination, false, false, null)]
+    [InlineData(ContractStatus.Active, true, false, ContractRefusal.AccountHasMovements)]
+    [InlineData(ContractStatus.Active, false, true, ContractRefusal.AdjustmentConfirmed)]
+    [InlineData(ContractStatus.Active, true, true, ContractRefusal.AccountHasMovements)]
+    [InlineData(ContractStatus.Ended, true, true, ContractRefusal.ContractEnded)]
+    [InlineData(ContractStatus.Ended, false, false, ContractRefusal.ContractEnded)]
+    public void WhyNotCorrectable_NamesTheFirstLock(ContractStatus status, bool hasMovements, bool hasAdjustment, ContractRefusal? expected)
+    {
+        Assert.Equal(expected, ContractLifecycleRules.WhyNotCorrectable(status, hasMovements, hasAdjustment));
+    }
 }

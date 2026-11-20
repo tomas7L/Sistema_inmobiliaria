@@ -9,6 +9,26 @@ namespace Inmobiliaria.Domain.Leasing;
 public static class ContractLifecycleRules
 {
     /// <summary>
+    /// What stops a contract's data being corrected, whatever the correction says, or null (spec Requirement 9): an ended contract,
+    /// then a first movement on its account, then a confirmed adjustment. The port refuses with it, and the detail carries it so
+    /// the form locks those fields before anything is typed.
+    /// </summary>
+    public static ContractRefusal? WhyNotCorrectable(ContractStatus status, bool hasMovements, bool hasConfirmedAdjustment)
+    {
+        if (status == ContractStatus.Ended)
+        {
+            return ContractRefusal.ContractEnded;
+        }
+
+        if (hasMovements)
+        {
+            return ContractRefusal.AccountHasMovements;
+        }
+
+        return hasConfirmedAdjustment ? ContractRefusal.AdjustmentConfirmed : null;
+    }
+
+    /// <summary>
     /// The month an end on <paramref name="endDate"/> leaves uncharged, or null. A contract charges a month only when its due date
     /// falls on or before the end (<see cref="AccrualSchedule"/>), so an end before that month's due date leaves it to a new
     /// contract starting on its 1st (spec Decision 39, Requirement 10). A due date on or before the cutover was never the system's.

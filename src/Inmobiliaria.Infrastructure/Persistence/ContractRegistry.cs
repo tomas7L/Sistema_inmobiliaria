@@ -58,6 +58,10 @@ public sealed partial class ContractRegistry : IContractRegistry
         }
 
         var (parties, units) = await NamesAsync([contract], ct);
+        var hasMovements = await _context.ContractAccounts.AsNoTracking()
+            .Where(a => a.ContractId == contractId)
+            .SelectMany(a => a.Movements)
+            .AnyAsync(ct);
         var events = await _context.ContractEvents.AsNoTracking()
             .Where(e => EF.Property<Guid>(e, "ContractId") == contractId)
             .ToListAsync(ct);
@@ -102,6 +106,7 @@ public sealed partial class ContractRegistry : IContractRegistry
                     ReciboRows.Read<DateTimeOffset>(e, "RecordedAt")))
                 .OrderBy(e => e.RecordedAt)
                 .ToList(),
+            CorrectionLock = ContractLifecycleRules.WhyNotCorrectable(contract.Status, hasMovements, contract.Adjustments.Count > 0),
         };
     }
 

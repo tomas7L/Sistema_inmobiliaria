@@ -328,21 +328,10 @@ public sealed partial class ContractRegistry
         return null;
     }
 
-    /// <summary>The reasons no correction can go ahead, whatever it says.</summary>
-    private static ContractRefusal? WhyNotCorrectable(Locked locked)
-    {
-        if (locked.Contract.Status == ContractStatus.Ended)
-        {
-            return ContractRefusal.ContractEnded;
-        }
-
-        if (locked.Account.Movements.Count > 0)
-        {
-            return ContractRefusal.AccountHasMovements;
-        }
-
-        return locked.Contract.Adjustments.Count > 0 ? ContractRefusal.AdjustmentConfirmed : null;
-    }
+    /// <summary>The reasons no correction can go ahead, whatever it says: the rule the detail also reports.</summary>
+    private static ContractRefusal? WhyNotCorrectable(Locked locked) =>
+        ContractLifecycleRules.WhyNotCorrectable(
+            locked.Contract.Status, locked.Account.Movements.Count > 0, locked.Contract.Adjustments.Count > 0);
 
     /// <summary>
     /// Saves between taking one tenant off and putting another on: the tenant index is not deferrable, and EF orders two updates
