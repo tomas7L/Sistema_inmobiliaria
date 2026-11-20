@@ -1,4 +1,4 @@
-using Inmobiliaria.Domain.Leasing;
+﻿using Inmobiliaria.Domain.Leasing;
 using Inmobiliaria.Presentation.Contracts;
 using Inmobiliaria.Presentation.Tests.Fakes;
 
@@ -224,5 +224,112 @@ public class ContractAdjustmentsViewModelTests
         await detail.LoadCommand.ExecuteAsync(null);
 
         Assert.True(detail.Adjustments.HasNoAdjustments);
+    }
+
+    /// <summary>
+    /// Canvas "Detalle del contrato", Historial de ajustes: the latest row offers "Corregir", and every other says why it does
+    /// not.
+    /// </summary>
+    [Fact]
+    public async Task EveryRowButTheLatest_SaysWhyItIsNotCorrected()
+    {
+        var world = await LoadedAsync();
+
+        Assert.Null(world.ViewModel.History[0].CorrectNote);
+        Assert.Equal(ContractAdjustmentsViewModel.OnlyTheLatest, world.ViewModel.History[1].CorrectNote);
+    }
+
+    /// <summary>The canvas offers no correction on an ended contract, and the port refuses one (AdjustmentRefusal.ContractEnded).</summary>
+    [Fact]
+    public async Task AnEndedContract_CorrectsNothing_AndSaysWhy()
+    {
+        var world = await LoadedAsync(EndReason.Expiry);
+
+        Assert.All(world.ViewModel.History, h => Assert.False(h.CanCorrect));
+        Assert.Equal(AdjustmentRefusal.ContractEnded.OperatorText(), world.ViewModel.History[0].CorrectNote);
+        Assert.False(world.ViewModel.CorrectCommand.CanExecute(world.ViewModel.History[0]));
+    }
+
+    /// <summary>Canvas "Corregir ajuste": its own screen, in place of the detail; "Cancelar" leaves it and writes nothing.</summary>
+    [Fact]
+    public async Task Correcting_OpensItsOwnScreen_AndCancellingLeavesIt()
+    {
+        var world = await CorrectingAsync(Correction());
+
+        Assert.True(world.ViewModel.IsCorrectionOpen);
+
+        world.ViewModel.CloseCorrectionCommand.Execute(null);
+
+        Assert.False(world.ViewModel.IsCorrectionOpen);
+        Assert.False(world.ViewModel.IsSummaryOpen);
+        Assert.Empty(world.Desk.CorrectionsConfirmed);
+    }
+
+    /// <summary>A correction refused before it opens never leaves the detail: the refusal shows under the history.</summary>
+    [Fact]
+    public async Task ACorrectionRefusedOnOpening_StaysOnTheDetail()
+    {
+        var world = await LoadedAsync();
+        world.Desk.CorrectionPreviews.Enqueue(AdjustmentPreviewResult.Refused(AdjustmentRefusal.NotLatest));
+
+        await world.ViewModel.CorrectCommand.ExecuteAsync(world.ViewModel.History[0]);
+
+        Assert.False(world.ViewModel.IsCorrectionOpen);
+        Assert.Equal(AdjustmentRefusal.NotLatest.OperatorText(), world.ViewModel.RefusalMessage);
+    }
+
+    /// <summary>Once confirmed, the screen stays with its notice and the reminder until "Volver al contrato", which clears them.</summary>
+    [Fact]
+    public async Task AConfirmedCorrection_StaysOnItsScreen_UntilGoingBack()
+    {
+        var correction = Correction();
+        var world = await CorrectingAsync(correction);
+        world.Desk.NextConfirm = AdjustmentConfirmResult.Done(Written(correction));
+
+        await world.ViewModel.ConfirmCommand.ExecuteAsync(null);
+
+        Assert.True(world.ViewModel.IsCorrectionOpen);
+        Assert.False(world.ViewModel.IsSummaryOpen);
+        Assert.NotNull(world.ViewModel.ConfirmedMessage);
+
+        world.ViewModel.CloseCorrectionCommand.Execute(null);
+
+        Assert.False(world.ViewModel.IsCorrectionOpen);
+        Assert.Null(world.ViewModel.ConfirmedMessage);
+        Assert.Null(world.ViewModel.NoticeReminder);
+    }
+
+    /// <summary>Canvas "Corregir ajuste": the exact result, with its cents, beside the canon it truncates to.</summary>
+    [Fact]
+    public async Task TheSummary_ShowsTheExactResult_WithItsCents()
+    {
+        var world = await CorrectingAsync(
+            new AdjustmentPreview(ContractId, "Maria Prueba", July, 100_000m, [], CombinationRule.Single, 12m, 112_000.87m, 112_000m, new DateOnly(2026, 12, 1), null)
+            {
+                CorrectsAdjustmentId = LatestId,
+            });
+
+        Assert.Equal("$ 112.000,87", world.ViewModel.ExactCanonText);
+        Assert.Equal("$ 112.000", world.ViewModel.NewCanonText);
+    }
+
+    /// <summary>Canvas "Corregir ajuste": the contract over the correction, its units, clause and the latest adjustment's first period.</summary>
+    [Fact]
+    public async Task TheCorrectionsHeader_NamesTheContractsUnitsClauseAndLatestAdjustment()
+    {
+        var detail = Detail() with
+        {
+            Units = [new ContractUnitLine(Guid.NewGuid(), "Pellegrini 722", 100m)],
+            Clause = new ContractClauseLine(["IPC"], 6, RoundingRule.TruncateToWholePeso, [Guid.NewGuid()], 2),
+            Adjustments =
+            [
+                new ContractAdjustmentLine(new DateOnly(2026, 3, 1), 360_000m, 395_000m, 1.097222m, AdjustmentKind.Regular),
+                new ContractAdjustmentLine(new DateOnly(2026, 10, 1), 395_000m, 428_025m, 1.083608m, AdjustmentKind.Regular),
+            ],
+        };
+        var viewModel = new ContractDetailViewModel(new FakeContractRegistry { Detail = detail }, new FakeAdjustmentDesk(), ContractId, new FakeClock(new DateOnly(2026, 11, 19)));
+        await viewModel.LoadCommand.ExecuteAsync(null);
+
+        Assert.Equal("Pellegrini 722 · IPC, cada 6 meses · el último ajuste rige desde 10/2026", viewModel.CorrectionHeaderText);
     }
 }

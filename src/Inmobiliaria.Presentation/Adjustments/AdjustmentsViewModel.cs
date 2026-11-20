@@ -275,4 +275,7 @@ public sealed record AdjustmentHistoryRow(
     public Guid AdjustmentId { get; init; }
 
     public bool CanCorrect { get; init; }
+
+    /// <summary>Under "Corregir", why this row is not corrected (canvas "Detalle del contrato"); null on the row that is.</summary>
+    public string? CorrectNote { get; init; }
 }

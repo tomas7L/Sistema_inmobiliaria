@@ -16,6 +16,9 @@ namespace Inmobiliaria.Presentation.Contracts;
 /// </summary>
 public sealed partial class ContractAdjustmentsViewModel : ObservableObject
 {
+    /// <summary>Under "Corregir" on every row but the latest (canvas "Detalle del contrato").</summary>
+    public const string OnlyTheLatest = "Solo se puede corregir el último ajuste del contrato. Este ajuste tiene otro posterior.";
+
     private readonly IAdjustmentDesk _desk;
     private readonly Func<Task> _readContractAgain;
     private Guid? _contractId;
@@ -35,6 +38,7 @@ public sealed partial class ContractAdjustmentsViewModel : ObservableObject
         CorrectCommand = new AsyncRelayCommand<AdjustmentHistoryRow>(CorrectAsync, row => CanAct() && row is { CanCorrect: true });
         ConfirmCommand = new AsyncRelayCommand(ConfirmAsync, () => CanAct() && Summary is not null);
         CloseCommand = new RelayCommand(() => SetSummary(null), CanAct);
+        CloseCorrectionCommand = new RelayCommand(CloseCorrection, CanAct);
         Runner.PropertyChanged += OnRunnerChanged;
     }
 
@@ -57,12 +61,19 @@ public sealed partial class ContractAdjustmentsViewModel : ObservableObject
     /// <summary>Closes the correction without writing anything.</summary>
     public IRelayCommand CloseCommand { get; }
 
+    /// <summary>"Cancelar" and "Volver al contrato" on the correction's screen: back to the detail, forgetting what it showed.</summary>
+    public IRelayCommand CloseCorrectionCommand { get; }
+
+    /// <summary>The correction's own screen, in place of the detail (canvas "Corregir ajuste"): open from a summary until going back.</summary>
+    [ObservableProperty]
+    private bool _isCorrectionOpen;
+
     /// <summary>The correction waiting to be confirmed, or null.</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
     [NotifyPropertyChangedFor(nameof(IsSummaryOpen), nameof(PreviousCanonText), nameof(NewCanonText), nameof(CoefficientText))]
     [NotifyPropertyChangedFor(nameof(DueDateText), nameof(AppliesFromText), nameof(HasDifference), nameof(DifferenceText))]
-    [NotifyPropertyChangedFor(nameof(CorrectionText), nameof(DifferenceOutcomeText))]
+    [NotifyPropertyChangedFor(nameof(CorrectionText), nameof(DifferenceOutcomeText), nameof(ExactCanonText))]
     private AdjustmentPreview? _summary;
 
     /// <summary>The operator's choice on the difference offered: no until they say yes, and no again for every new summary.</summary>
@@ -87,6 +98,9 @@ public sealed partial class ContractAdjustmentsViewModel : ObservableObject
 
     public string? NewCanonText => Summary is { } s ? Formats.Money(s.NewCanon) : null;
 
+    /// <summary>The canon before truncating, with its cents (canvas "Resultado exacto"): the operator sees what was cut.</summary>
+    public string? ExactCanonText => Summary is { } s ? $"$ {s.UntruncatedNewCanon.ToString("#,##0.00", Formats.Agency)}" : null;
+
     public string? CoefficientText => Summary is { } s ? Formats.Level(s.Coefficient) : null;
 
     public string? DueDateText => Summary is { } s ? Formats.Date(s.DueDate) : null;
@@ -101,8 +115,11 @@ public sealed partial class ContractAdjustmentsViewModel : ObservableObject
 
     public string? DifferenceOutcomeText => AdjustmentTexts.DifferenceOutcome(Summary);
 
-    /// <summary>Reads the contract's history. Only the latest row is offered for correcting, and none on a cancelled contract.</summary>
-    internal async Task ShowAsync(Guid contractId, bool canCorrect)
+    /// <summary>
+    /// Reads the contract's history. Only the latest row is offered for correcting, and none on a contract that cannot be; every
+    /// row not offered says why: <paramref name="whyNot"/> on the latest, <see cref="OnlyTheLatest"/> on the rest.
+    /// </summary>
+    internal async Task ShowAsync(Guid contractId, bool canCorrect, string? whyNot = null)
     {
         _contractId = contractId;
         var outcome = await Runner.RunAsync(() => _desk.HistoryAsync(contractId));
@@ -116,7 +133,10 @@ public sealed partial class ContractAdjustmentsViewModel : ObservableObject
         foreach (var entry in outcome.Value!)
         {
             // The history comes the most recently confirmed first, and only that one can be corrected (spec Decision 26).
-            History.Add(AdjustmentTexts.HistoryRow(entry, canCorrect && latest));
+            History.Add(AdjustmentTexts.HistoryRow(entry, canCorrect && latest) with
+            {
+                CorrectNote = latest ? (canCorrect ? null : whyNot) : OnlyTheLatest,
+            });
             latest = false;
         }
 
@@ -137,6 +157,18 @@ public sealed partial class ContractAdjustmentsViewModel : ObservableObject
         ConfirmedMessage = null;
         NoticeReminder = null;
         await OpenCorrectionAsync(contractId, row.AdjustmentId);
+
+        // A refusal on opening stays on the detail, under the history; only a summary opens the screen.
+        IsCorrectionOpen = Summary is not null;
+    }
+
+    private void CloseCorrection()
+    {
+        SetSummary(null);
+        RefusalMessage = null;
+        ConfirmedMessage = null;
+        NoticeReminder = null;
+        IsCorrectionOpen = false;
     }
 
     private async Task OpenCorrectionAsync(Guid contractId, Guid adjustmentId)
@@ -220,6 +252,7 @@ public sealed partial class ContractAdjustmentsViewModel : ObservableObject
             CorrectCommand.NotifyCanExecuteChanged();
             ConfirmCommand.NotifyCanExecuteChanged();
             CloseCommand.NotifyCanExecuteChanged();
+            CloseCorrectionCommand.NotifyCanExecuteChanged();
         }
     }
 }

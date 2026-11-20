@@ -221,7 +221,7 @@ public sealed partial class ContractDetailViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsNoticeOffered), nameof(IsUndoNoticeOffered), nameof(IsEndOffered), nameof(IsUndoEndOffered))]
     [NotifyPropertyChangedFor(nameof(IsCancelOffered), nameof(IsAccountOffered), nameof(HasNoEvents))]
     [NotifyPropertyChangedFor(nameof(Title), nameof(Subtitle), nameof(StateNote), nameof(PartyLines), nameof(UnitLines))]
-    [NotifyPropertyChangedFor(nameof(ClauseLines), nameof(AmountLines), nameof(NextAdjustmentText))]
+    [NotifyPropertyChangedFor(nameof(ClauseLines), nameof(AmountLines), nameof(NextAdjustmentText), nameof(CorrectionHeaderText))]
     private ContractDetail? _detail;
 
     /// <summary>The reason, who and when of what was cancelled, undone or removed, oldest first.</summary>
@@ -277,6 +277,21 @@ public sealed partial class ContractDetailViewModel : ObservableObject
 
     public string? Subtitle => Detail is { } d
         ? $"{string.Join(", ", d.Units.Select(u => u.Address))} · desde {Formats.Date(d.StartDate)} hasta {Formats.Date(d.NominalEndDate)}"
+        : null;
+
+    /// <summary>
+    /// The contract over the correction of its latest adjustment (canvas "Corregir ajuste"): its units, its clause and the first
+    /// period the latest adjustment prices.
+    /// </summary>
+    public string? CorrectionHeaderText => Detail is { } d
+        ? string.Join(
+            " · ",
+            new[]
+            {
+                string.Join(", ", d.Units.Select(u => u.Address)),
+                d.Clause is { } c ? $"{string.Join(" y ", c.IndexNames)}, {(c.IntervalMonths == 1 ? "cada mes" : $"cada {c.IntervalMonths} meses")}" : null,
+                d.Adjustments.Count > 0 ? $"el último ajuste rige desde {Formats.Period(d.Adjustments.Max(a => a.EffectiveDate))}" : null,
+            }.Where(part => !string.IsNullOrEmpty(part)))
         : null;
 
     /// <summary>What the state means for the operator, beside its chip; none for a contract simply in force.</summary>
@@ -429,7 +444,12 @@ public sealed partial class ContractDetailViewModel : ObservableObject
         Detail = outcome.Value;
         if (Detail is { } detail)
         {
-            await Adjustments.ShowAsync(_contractId, canCorrect: !detail.IsCancelled);
+            // An ended contract's canon no longer changes, and the port refuses its correction (canvas "Detalle del contrato").
+            var ended = detail is { IsCancelled: false, Status: ContractStatus.Ended };
+            await Adjustments.ShowAsync(
+                _contractId,
+                canCorrect: !detail.IsCancelled && !ended,
+                whyNot: ended ? AdjustmentRefusal.ContractEnded.OperatorText() : null);
         }
     }
 
