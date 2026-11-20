@@ -80,6 +80,65 @@ public static class AdjustmentTexts
             Formats.Level(line.BaseLevel),
             Formats.Period(line.EndPeriod),
             Formats.Level(line.EndLevel),
-            Formats.Level(line.Variation));
+            Formats.Level(line.Variation))
+        {
+            VariationPercentText = Percent(line.Variation, signed: true),
+        };
     }
+
+    /// <summary>A percentage as the canvas writes it, "5,28 %", or "+5,28 %" when its sign is part of the news.</summary>
+    public static string Percent(decimal value, bool signed = false) =>
+        $"{(signed && value >= 0m ? "+" : string.Empty)}{value.ToString("0.00", Formats.Agency)} %";
+
+    /// <summary>
+    /// How the coefficient came out, worked out (canvas "Confirmar ajuste"): one index's variation, or the average of several
+    /// variations, never of their values.
+    /// </summary>
+    public static string? CoefficientExplanation(AdjustmentPreview? preview)
+    {
+        if (preview is null || preview.Indices.Count == 0)
+        {
+            return null;
+        }
+
+        if (preview.Indices.Count == 1)
+        {
+            var line = preview.Indices[0];
+            var icl = line.IndexName == "ICL" ? " El ICL es el valor del día 1 del mes." : string.Empty;
+            return $"El coeficiente es la variación del {line.IndexName} entre el valor base y el valor final: " +
+                $"{Formats.Level(line.EndLevel)} ÷ {Formats.Level(line.BaseLevel)} − 1 = {Percent(preview.Coefficient)}.{icl} " +
+                "El cálculo usa todos los decimales.";
+        }
+
+        var count = preview.Indices.Count switch { 2 => "dos", 3 => "tres", var n => n.ToString(Formats.Agency) };
+        var variations = string.Join(" + ", preview.Indices.Select(i => Percent(i.Variation)));
+        return $"El coeficiente es el promedio de las variaciones de los {count} índices, no de sus valores: ({variations}) ÷ " +
+            $"{preview.Indices.Count} = {Percent(preview.Coefficient)}. El cálculo usa todos los decimales.";
+    }
+
+    /// <summary>How late an adjustment is, by month: "Vence este mes", "Atrasado 1 mes", "Atrasado 2 meses".</summary>
+    public static string Late(DateOnly dueDate, DateOnly today)
+    {
+        var months = ((today.Year * 12) + today.Month) - ((dueDate.Year * 12) + dueDate.Month);
+        return months switch
+        {
+            <= 0 => "Vence este mes",
+            1 => "Atrasado 1 mes",
+            _ => $"Atrasado {months} meses",
+        };
+    }
+
+    /// <summary>A clause by its indices: one by its name, several as the average they are.</summary>
+    public static string Clause(IReadOnlyList<string> indexNames, CombinationRule combination) =>
+        indexNames.Count > 1 || combination == CombinationRule.Average
+            ? $"Promedio de {string.Join(" y ", indexNames)}"
+            : string.Join(string.Empty, indexNames);
+
+    /// <summary>"Cada 3 meses", or "Cada mes".</summary>
+    public static string Every(int intervalMonths) => intervalMonths switch
+    {
+        <= 0 => string.Empty,
+        1 => "Cada mes",
+        _ => $"Cada {intervalMonths} meses",
+    };
 }

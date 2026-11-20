@@ -36,8 +36,60 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
         LoadCommand = new AsyncRelayCommand(LoadAsync, CanAct);
         OpenCommand = new AsyncRelayCommand(OpenAsync, () => CanAct() && SelectedRow is not null);
         ConfirmCommand = new AsyncRelayCommand(ConfirmAsync, () => CanAct() && Summary is not null);
+        BackCommand = new RelayCommand(Back, CanAct);
         Runner.PropertyChanged += OnRunnerChanged;
     }
+
+    /// <summary>"Cancelar" and "Volver a Ajustes" on the confirming screen: the list again, forgetting what the screen showed.</summary>
+    public IRelayCommand BackCommand { get; }
+
+    /// <summary>Every row read, whatever the filter: the list shows the ones the filter lets through.</summary>
+    private IReadOnlyList<DueAdjustmentRow> _rows = [];
+
+    /// <summary>The row whose summary is open, which heads the confirming screen.</summary>
+    private DueAdjustmentRow? _openRow;
+
+    /// <summary>The canvas's "Por confirmar", "Listos" and "Esperando un índice"; changing it asks the database nothing.</summary>
+    [ObservableProperty]
+    private AdjustmentFilter _filter = AdjustmentFilter.All;
+
+    partial void OnFilterChanged(AdjustmentFilter value) => Show();
+
+    /// <summary>"1 contrato", "2 contratos": the rows the filter shows.</summary>
+    public string CountText => Worklist.Count == 1 ? "1 contrato" : $"{Worklist.Count} contratos";
+
+    /// <summary>
+    /// Over the list, each index and month still missing with how many contracts wait on it (canvas "Faltan valores de índices");
+    /// null when none is.
+    /// </summary>
+    [ObservableProperty]
+    private string? _missingBannerText;
+
+    /// <summary>The confirming screen (canvas "Confirmar ajuste"), from a summary until going back.</summary>
+    [ObservableProperty]
+    private bool _isConfirmOpen;
+
+    public bool IsSummaryOpen => Summary is not null;
+
+    /// <summary>The open contract's state, beside its name.</summary>
+    public string? OpenStatusText => _openRow?.ContractStatusText;
+
+    /// <summary>How late the open adjustment is.</summary>
+    public string? OpenLateText => _openRow?.LateText;
+
+    /// <summary>Under the name: the unit, the contract's short id and its clause (canvas "Confirmar ajuste").</summary>
+    public string? OpenHeaderText => _openRow is { } row
+        ? $"{row.UnitsText} · Contrato {row.ContractId.ToString("N")[..8]} · {row.ClauseText}, {row.EveryText.ToLowerInvariant()}"
+        : null;
+
+    /// <summary>The coefficient as a percentage, as the canvas shows it.</summary>
+    public string? CoefficientPercentText => Summary is { } s ? AdjustmentTexts.Percent(s.Coefficient) : null;
+
+    /// <summary>The canon before truncating, with its cents (canvas "Resultado exacto").</summary>
+    public string? ExactCanonText => Summary is { } s ? $"$ {s.UntruncatedNewCanon.ToString("#,##0.00", Formats.Agency)}" : null;
+
+    /// <summary>How the coefficient came out, worked out.</summary>
+    public string? CoefficientExplanation => AdjustmentTexts.CoefficientExplanation(Summary);
 
     public OperationRunner Runner { get; } = new();
 
@@ -68,6 +120,7 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(TenantText), nameof(PreviousCanonText), nameof(CoefficientText), nameof(NewCanonText))]
     [NotifyPropertyChangedFor(nameof(DueDateText), nameof(AppliesFromText), nameof(LateText))]
     [NotifyPropertyChangedFor(nameof(HasDifference), nameof(DifferenceText))]
+    [NotifyPropertyChangedFor(nameof(IsSummaryOpen), nameof(CoefficientPercentText), nameof(ExactCanonText), nameof(CoefficientExplanation))]
     private AdjustmentPreview? _summary;
 
     /// <summary>After a confirmation: the new canon and the first period it applies to.</summary>
@@ -116,7 +169,39 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
             LoadCommand.NotifyCanExecuteChanged();
             OpenCommand.NotifyCanExecuteChanged();
             ConfirmCommand.NotifyCanExecuteChanged();
+            BackCommand.NotifyCanExecuteChanged();
         }
+    }
+
+    private void Back()
+    {
+        SetSummary(null);
+        RefusalMessage = null;
+        ConfirmedMessage = null;
+        NoticeReminder = null;
+        IsConfirmOpen = false;
+        _openRow = null;
+        OnPropertyChanged(nameof(OpenStatusText));
+        OnPropertyChanged(nameof(OpenLateText));
+        OnPropertyChanged(nameof(OpenHeaderText));
+    }
+
+    private void Show()
+    {
+        var selected = SelectedRow?.ContractId;
+        Worklist.Clear();
+        foreach (var row in _rows.Where(r => Filter switch
+        {
+            AdjustmentFilter.Ready => r.IsReady,
+            AdjustmentFilter.Waiting => !r.IsReady,
+            _ => true,
+        }))
+        {
+            Worklist.Add(row);
+        }
+
+        SelectedRow = Worklist.FirstOrDefault(r => r.ContractId == selected);
+        OnPropertyChanged(nameof(CountText));
     }
 
     private async Task LoadAsync()
@@ -135,22 +220,51 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
             return;
         }
 
-        var tenants = outcome.Value.Contracts.ToDictionary(c => c.Id, c => c.Tenants);
-        var selected = SelectedRow?.ContractId;
+        var listings = outcome.Value.Contracts.ToDictionary(c => c.Id);
 
-        Worklist.Clear();
-        foreach (var due in outcome.Value.Due)
-        {
-            Worklist.Add(new DueAdjustmentRow(
-                due.ContractId,
-                tenants.GetValueOrDefault(due.ContractId, string.Empty),
-                Formats.Date(due.DueDate),
-                Formats.Money(due.CurrentCanon),
-                due.Missing.Count == 0,
-                due.Missing.Count == 0 ? "Listo para confirmar" : MissingText(due.Missing)));
-        }
+        _rows = outcome.Value.Due
+            .Select(due =>
+            {
+                var listing = listings.GetValueOrDefault(due.ContractId);
+                var ready = due.Missing.Count == 0;
+                return new DueAdjustmentRow(
+                    due.ContractId,
+                    listing?.Tenants ?? string.Empty,
+                    Formats.Date(due.DueDate),
+                    Formats.Money(due.CurrentCanon),
+                    ready,
+                    ready ? "Listo para confirmar" : MissingText(due.Missing))
+                {
+                    UnitsText = listing?.Units ?? string.Empty,
+                    ClauseText = AdjustmentTexts.Clause(due.IndexNames, due.Combination),
+                    EveryText = AdjustmentTexts.Every(due.IntervalMonths),
+                    LateText = AdjustmentTexts.Late(due.DueDate, today),
+                    ProposalText = (ready, due.ProposedCanon, due.Coefficient) switch
+                    {
+                        (false, _, _) => "falta el índice",
+                        (true, { } canon, { } coefficient) => $"quedaría {Formats.Money(canon)} · {AdjustmentTexts.Percent(coefficient, signed: true)}",
+                        _ => string.Empty,
+                    },
+                    IsPendingTermination = listing?.Status == ContractStatus.PendingTermination,
+                    ContractStatusText = listing is null ? string.Empty : Formats.Status(listing.Status),
+                };
+            })
+            .ToList();
 
-        SelectedRow = Worklist.FirstOrDefault(r => r.ContractId == selected);
+        // Each index and month missing once, with how many contracts wait on it, the earliest month first.
+        var waiting = outcome.Value.Due
+            .SelectMany(due => due.Missing.Select(m => (m.IndexName, m.Period, due.ContractId)))
+            .GroupBy(m => (m.IndexName, m.Period))
+            .OrderBy(g => g.Key.Period)
+            .ThenBy(g => g.Key.IndexName, StringComparer.Ordinal)
+            .Select(g => (g.Key.IndexName, g.Key.Period, Count: g.Select(m => m.ContractId).Distinct().Count()))
+            .Select(w => w.Count == 1
+                ? $"1 contrato espera el {w.IndexName} de {Formats.Period(w.Period)}."
+                : $"{w.Count} contratos esperan el {w.IndexName} de {Formats.Period(w.Period)}.")
+            .ToList();
+        MissingBannerText = waiting.Count == 0 ? null : $"{string.Join(" ", waiting)} Mientras falte, sigue valiendo el alquiler actual.";
+
+        Show();
     }
 
     private async Task OpenAsync()
@@ -163,7 +277,14 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
         RefusalMessage = null;
         ConfirmedMessage = null;
         NoticeReminder = null;
+        _openRow = row;
         await ShowSummaryAsync(row.ContractId);
+
+        // A refusal on opening stays on the list; only a summary opens the confirming screen.
+        IsConfirmOpen = Summary is not null;
+        OnPropertyChanged(nameof(OpenStatusText));
+        OnPropertyChanged(nameof(OpenLateText));
+        OnPropertyChanged(nameof(OpenHeaderText));
     }
 
     private async Task ShowSummaryAsync(Guid contractId)
@@ -260,10 +381,50 @@ public sealed partial class AdjustmentsViewModel : ObservableObject
 /// <param name="CurrentCanonText">The canon the adjustment starts from.</param>
 /// <param name="IsReady">Every index value the window needs is published.</param>
 /// <param name="StatusText">Ready, or which index and month it still lacks.</param>
-public sealed record DueAdjustmentRow(Guid ContractId, string Tenants, string DueDateText, string CurrentCanonText, bool IsReady, string StatusText);
+public sealed record DueAdjustmentRow(Guid ContractId, string Tenants, string DueDateText, string CurrentCanonText, bool IsReady, string StatusText)
+{
+    /// <summary>Its units, under the tenant.</summary>
+    public string UnitsText { get; init; } = string.Empty;
+
+    /// <summary>"ICL", or "Promedio de IPC y RIPTE".</summary>
+    public string ClauseText { get; init; } = string.Empty;
+
+    /// <summary>"Cada 3 meses", under the clause.</summary>
+    public string EveryText { get; init; } = string.Empty;
+
+    /// <summary>"Vence este mes" or "Atrasado N meses", under the due date.</summary>
+    public string LateText { get; init; } = string.Empty;
+
+    /// <summary>"quedaría $ X · +Y %" when ready; "falta el índice" while waiting.</summary>
+    public string ProposalText { get; init; } = string.Empty;
+
+    /// <summary>A contract with notice given, marked as such on its row.</summary>
+    public bool IsPendingTermination { get; init; }
+
+    /// <summary>The contract's state, as the confirming screen shows it beside the name.</summary>
+    public string ContractStatusText { get; init; } = string.Empty;
+
+    /// <summary>The state's chip.</summary>
+    public string ChipText => IsReady ? "Listo para confirmar" : "Esperando un índice";
+
+    /// <summary>The row's button: the summary when ready, Índices while waiting.</summary>
+    public string ActionText => IsReady ? "Revisar" : "Ir a Índices";
+}
+
+/// <summary>The Ajustes list's filters (canvas "Por confirmar", "Listos", "Esperando un índice").</summary>
+public enum AdjustmentFilter
+{
+    All,
+    Ready,
+    Waiting,
+}
 
 public sealed record AdjustmentIndexRow(
-    string IndexName, string BasePeriodText, string BaseLevelText, string EndPeriodText, string EndLevelText, string VariationText);
+    string IndexName, string BasePeriodText, string BaseLevelText, string EndPeriodText, string EndLevelText, string VariationText)
+{
+    /// <summary>The variation as the canvas shows it, "+8,37 %".</summary>
+    public string VariationPercentText { get; init; } = string.Empty;
+}
 
 /// <param name="AppliesFromText">The first period it priced; for a row from before this was recorded, its due month.</param>
 /// <param name="ConfirmedByText">Who confirmed it, or "Sin registro" on rows from before that was recorded.</param>
