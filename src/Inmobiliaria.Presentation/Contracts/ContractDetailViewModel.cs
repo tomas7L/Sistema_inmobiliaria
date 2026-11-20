@@ -20,8 +20,14 @@ public sealed partial class ContractDetailViewModel : ObservableObject
     private readonly IContractRegistry _contracts;
     private readonly Guid _contractId;
     private readonly IAgencyClock _clock;
+    private readonly Func<Guid, Task<bool>>? _openAccount;
 
-    public ContractDetailViewModel(IContractRegistry contracts, IAdjustmentDesk adjustments, Guid contractId, IAgencyClock clock)
+    /// <param name="openAccount">
+    /// Opens this contract's account at the cash desk, answering false when the desk finds none; null when the desk is closed (its
+    /// recargo settings are invalid), and "Ver cuenta" is then not offered.
+    /// </param>
+    public ContractDetailViewModel(
+        IContractRegistry contracts, IAdjustmentDesk adjustments, Guid contractId, IAgencyClock clock, Func<Guid, Task<bool>>? openAccount = null)
     {
         ArgumentNullException.ThrowIfNull(contracts);
         ArgumentNullException.ThrowIfNull(adjustments);
@@ -30,6 +36,7 @@ public sealed partial class ContractDetailViewModel : ObservableObject
         _contracts = contracts;
         _contractId = contractId;
         _clock = clock;
+        _openAccount = openAccount;
         Adjustments = new ContractAdjustmentsViewModel(adjustments, Runner, LoadAsync);
         LoadCommand = new AsyncRelayCommand(LoadAsync, CanAct);
         ReviewNoticeCommand = new RelayCommand(ReviewNotice, CanAct);
@@ -45,6 +52,7 @@ public sealed partial class ContractDetailViewModel : ObservableObject
         OpenUndoEndCommand = new RelayCommand(() => OpenActionScreen(ContractAction.UndoEnd), () => CanAct() && IsUndoEndOffered);
         OpenCancelCommand = new RelayCommand(() => OpenActionScreen(ContractAction.Cancel), () => CanAct() && IsCancelOffered);
         CloseActionCommand = new RelayCommand(() => OpenActionScreen(null), CanAct);
+        OpenAccountCommand = new AsyncRelayCommand(OpenAccountAsync, () => CanAct() && IsAccountOffered);
         Runner.PropertyChanged += OnRunnerChanged;
     }
 
@@ -86,6 +94,12 @@ public sealed partial class ContractDetailViewModel : ObservableObject
 
     /// <summary>"Volver al contrato": back to the detail, forgetting what the action's screen held.</summary>
     public IRelayCommand CloseActionCommand { get; }
+
+    /// <summary>The canvas's "Ver cuenta": the cash desk, opened on this contract's account.</summary>
+    public IAsyncRelayCommand OpenAccountCommand { get; }
+
+    /// <summary>What the detail says when the desk finds no account for the contract.</summary>
+    public const string AccountNotAtDesk = "La caja no encontró la cuenta de este contrato.";
 
     /// <summary>The action whose screen is shown in place of the detail, or null for the detail itself.</summary>
     [ObservableProperty]
@@ -239,8 +253,21 @@ public sealed partial class ContractDetailViewModel : ObservableObject
 
     public bool IsCancelOffered => IsOpen;
 
-    /// <summary>Every contract read, a cancelled one included, has its account.</summary>
-    public bool IsAccountOffered => Detail is not null;
+    /// <summary>
+    /// The account at the desk, while the desk is open. Not for a cancelled contract: the desk hides a contract loaded by mistake,
+    /// so there would be nothing to open (Tomás, 2026-11-20).
+    /// </summary>
+    public bool IsAccountOffered => _openAccount is not null && Detail is { IsCancelled: false };
+
+    private async Task OpenAccountAsync()
+    {
+        RefusalMessage = null;
+        var outcome = await Runner.RunAsync(() => _openAccount!(_contractId));
+        if (outcome is { Completed: true, Value: false })
+        {
+            RefusalMessage = AccountNotAtDesk;
+        }
+    }
 
     /// <summary>The tab shown, the Resumen first (canvas "Detalle del contrato").</summary>
     [ObservableProperty]
@@ -338,6 +365,7 @@ public sealed partial class ContractDetailViewModel : ObservableObject
         OpenEndCommand.NotifyCanExecuteChanged();
         OpenUndoEndCommand.NotifyCanExecuteChanged();
         OpenCancelCommand.NotifyCanExecuteChanged();
+        OpenAccountCommand.NotifyCanExecuteChanged();
     }
 
     [ObservableProperty]
@@ -633,6 +661,7 @@ public sealed partial class ContractDetailViewModel : ObservableObject
             OpenEndCommand.NotifyCanExecuteChanged();
             OpenUndoEndCommand.NotifyCanExecuteChanged();
             OpenCancelCommand.NotifyCanExecuteChanged();
+            OpenAccountCommand.NotifyCanExecuteChanged();
             CloseActionCommand.NotifyCanExecuteChanged();
         }
     }
