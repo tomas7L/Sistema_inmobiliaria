@@ -19,6 +19,7 @@ using Inmobiliaria.Desktop.Printing;
 using Inmobiliaria.Presentation.GoLive;
 using Inmobiliaria.Presentation.Indices;
 using Inmobiliaria.Presentation.Login;
+using Inmobiliaria.Presentation.Mora;
 using Inmobiliaria.Presentation.Notices;
 using Inmobiliaria.Presentation.Parties;
 using Inmobiliaria.Presentation.Printing;
@@ -205,6 +206,23 @@ public partial class App : Application
                 }
             }, canVoid: voidingViewModel is not null, printing: printing);
 
+            // Mora measures recargo with the desk's terms and opens a row at the desk, so it exists only with the desk (mora
+            // design D6, D7).
+            var moraViewModel = cashDeskViewModel is not null
+                && recargo.Terms is { } moraTerms
+                && _sessionProvider.GetService<IMoraWorklistQuery>() is { } moraQuery
+                ? new MoraViewModel(
+                    moraQuery,
+                    moraTerms,
+                    _sessionProvider.GetRequiredService<IAgencyClock>(),
+                    _sessionProvider.GetRequiredService<IAccountDirectory>(),
+                    async listing =>
+                    {
+                        mainWindow?.ShowScreen(NavigationTarget.CashDesk);
+                        await cashDeskViewModel.ChooseAccountAsync(listing);
+                    })
+                : null;
+
             // Avisos needs the desk's recargo terms, so it exists only with them (notificaciones spec Requirement 8). The
             // mailbox lives in this PC's Credential Manager, built here as the clipboard is, never in the session's
             // services (design D9).
@@ -283,6 +301,7 @@ public partial class App : Application
                 new RunningWork(recentViewModel.Runner),
                 goLiveViewModel is null ? null : new RunningWork(goLiveViewModel.Runner),
                 usersViewModel is null ? null : new RunningWork(usersViewModel.Runner),
+                moraViewModel is null ? null : new RunningWork(moraViewModel.Runner),
                 noticesViewModel is null ? null : new RunningWork(noticesViewModel.Runner),
                 new RunningWork(contractsViewModel.Runner),
                 new RunningWork(partiesViewModel.Runner),
@@ -294,7 +313,7 @@ public partial class App : Application
 
             mainWindow = new MainWindow(
                 shellViewModel, cashDeskViewModel, recentViewModel, voidingViewModel, goLiveViewModel, usersViewModel,
-                noticesViewModel, contractsViewModel, partiesViewModel, unitsViewModel, indicesViewModel, adjustmentsViewModel);
+                moraViewModel, noticesViewModel, contractsViewModel, partiesViewModel, unitsViewModel, indicesViewModel, adjustmentsViewModel);
             MainWindow = mainWindow;
             // ShutdownMode is OnExplicitShutdown (App.xaml) precisely so that closing
             // LoginWindow or ChangePasswordWindow mid-bootstrap never ends the process before

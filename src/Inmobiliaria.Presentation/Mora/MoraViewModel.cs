@@ -68,6 +68,10 @@ public sealed partial class MoraViewModel : ObservableObject
     [ObservableProperty]
     private bool _isEmpty;
 
+    /// <summary>How many accounts the last read found; null before a read and after a failed one (12.3e).</summary>
+    [ObservableProperty]
+    private string? _countText;
+
     /// <summary>Set when a row's account can no longer be opened at the desk.</summary>
     [ObservableProperty]
     private string? _openMessage;
@@ -82,6 +86,7 @@ public sealed partial class MoraViewModel : ObservableObject
             // (spec Decision 12).
             Rows.Clear();
             IsEmpty = false;
+            CountText = null;
             return;
         }
 
@@ -92,6 +97,7 @@ public sealed partial class MoraViewModel : ObservableObject
         }
 
         IsEmpty = Rows.Count == 0;
+        CountText = MoraTexts.Count(Rows.Count);
     }
 
     private async Task OpenAsync(MoraRow? row)

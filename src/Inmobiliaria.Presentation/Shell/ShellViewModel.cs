@@ -77,6 +77,9 @@ public sealed partial class ShellViewModel : ObservableObject
             new(NavigationTarget.RecentCollections, NavigationTitles.RecentCollections),
             new(NavigationTarget.Voiding, NavigationTitles.Voiding, termsReason is null, termsReason),
 
+            // Both roles; its figures are the desk's, so the same terms close it (mora spec Requirement 8, Test 9).
+            new(NavigationTarget.Mora, NavigationTitles.Mora, termsReason is null, termsReason),
+
             // Both roles; the notices' figure is the desk's, so the same terms close it (notificaciones spec Requirement 8).
             new(NavigationTarget.Notices, NavigationTitles.Notices, termsReason is null, termsReason),
 

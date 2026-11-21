@@ -236,6 +236,10 @@
                                 <Setter Property="Visibility" Value="Collapsed" />
                             </DataTrigger>
                             <DataTrigger Binding="{Binding SelectedItem.Target, ElementName=NavigationList}"
+                                         Value="{x:Static shell:NavigationTarget.Mora}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding SelectedItem.Target, ElementName=NavigationList}"
                                          Value="{x:Static shell:NavigationTarget.Notices}">
                                 <Setter Property="Visibility" Value="Collapsed" />
                             </DataTrigger>
@@ -311,6 +315,20 @@
                     </Style>
                 </views:GoLiveView.Style>
             </views:GoLiveView>
+
+            <views:MoraView x:Name="MoraScreen">
+                <views:MoraView.Style>
+                    <Style TargetType="views:MoraView" BasedOn="{StaticResource Theme.Page}">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding SelectedItem.Target, ElementName=NavigationList}"
+                                         Value="{x:Static shell:NavigationTarget.Mora}">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </views:MoraView.Style>
+            </views:MoraView>
 
             <views:NoticesView x:Name="NoticesScreen">
                 <views:NoticesView.Style>
@@ -439,6 +457,10 @@
                         </DataTrigger>
                         <DataTrigger Binding="{Binding SelectedItem.Target, ElementName=NavigationList}"
                                      Value="{x:Static shell:NavigationTarget.Adjustments}">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding SelectedItem.Target, ElementName=NavigationList}"
+                                     Value="{x:Static shell:NavigationTarget.Mora}">
                             <Setter Property="Visibility" Value="Visible" />
                         </DataTrigger>
                         </Style.Triggers>

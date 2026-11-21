@@ -18,6 +18,7 @@ public sealed class NavigationIconConverter : IValueConverter
         [NavigationTarget.CashDesk] = Parse("M4,6 H20 A2,2 0 0 1 22,8 V17 A2,2 0 0 1 20,19 H4 A2,2 0 0 1 2,17 V8 A2,2 0 0 1 4,6 Z M9,12.5 A3,3 0 1 0 15,12.5 A3,3 0 1 0 9,12.5 Z"),
         [NavigationTarget.RecentCollections] = Parse("M6,3 H18 V21 L15,19 L12,21 L9,19 L6,21 Z M9,8 H15 M9,12 H15"),
         [NavigationTarget.Voiding] = Parse("M3,12 A9,9 0 1 1 21,12 A9,9 0 1 1 3,12 Z M5.6,5.6 L18.4,18.4"),
+        [NavigationTarget.Mora] = Parse("M3,12 A9,9 0 1 1 21,12 A9,9 0 1 1 3,12 Z M12,7 V12 L15,14"),
         [NavigationTarget.Notices] = Parse("M5,5 H19 A2,2 0 0 1 21,7 V17 A2,2 0 0 1 19,19 H5 A2,2 0 0 1 3,17 V7 A2,2 0 0 1 5,5 Z M3,7 L12,13 L21,7"),
         [NavigationTarget.Contracts] = Parse("M6,3 H15 L19,7 V21 H6 Z M14,3 V8 H19 M9,13 H16 M9,17 H16"),
         [NavigationTarget.Parties] = Parse("M5.5,8 A3.5,3.5 0 1 0 12.5,8 A3.5,3.5 0 1 0 5.5,8 Z M2.5,20 C2.5,16.4 5.4,14 9,14 C12.6,14 15.5,16.4 15.5,20 M16,4.6 A3.5,3.5 0 0 1 16,11.4 M18.5,14.4 C20.4,15.1 21.5,16.9 21.5,20"),

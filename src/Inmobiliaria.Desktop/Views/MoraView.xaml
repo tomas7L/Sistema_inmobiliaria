@@ -1,0 +1,169 @@
+<UserControl x:Class="Inmobiliaria.Desktop.Views.MoraView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:leasing="clr-namespace:Inmobiliaria.Domain.Leasing;assembly=Inmobiliaria.Domain"
+             xmlns:views="clr-namespace:Inmobiliaria.Desktop.Views"
+             mc:Ignorable="d"
+             d:DesignHeight="785" d:DesignWidth="1268">
+    <!--
+        The Mora screen as the designer drew it (canvas "Mora", 1536 x 785): every account with overdue debt, worst first, each
+        opened at the cash desk. Only the table scrolls, inside its card. Bound to MoraViewModel; no logic lives here.
+    -->
+    <UserControl.Resources>
+        <views:SetToVisibleConverter x:Key="Set" />
+        <BooleanToVisibilityConverter x:Key="Shown" />
+
+        <Style x:Key="SmallPrimary" TargetType="Button" BasedOn="{StaticResource Theme.PrimaryButton}">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="14,0" />
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+
+        <!-- The canvas's "wrapth": a long header breaks into two lines, at the bottom, instead of being cut. -->
+        <Style x:Key="WrapHeader" TargetType="DataGridColumnHeader" BasedOn="{StaticResource Theme.TableHeader}">
+            <Setter Property="VerticalContentAlignment" Value="Bottom" />
+            <Setter Property="ContentTemplate">
+                <Setter.Value>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}" TextWrapping="Wrap" TextAlignment="Center" LineHeight="15" />
+                    </DataTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- A note under a cell's main value, small and muted. -->
+        <Style x:Key="CellNote" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource Theme.Muted}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="TextAlignment" Value="Center" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+    </UserControl.Resources>
+
+    <!-- The page's margins, as every screen drawn to the 1536 x 785 canvas. -->
+    <Grid Margin="32,20,32,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel>
+            <TextBlock Text="Mora" Style="{StaticResource Theme.Title}" />
+            <TextBlock Text="Cuentas con deuda vencida, de la más grave a la menos grave." Style="{StaticResource Theme.Subtitle}" />
+
+            <!-- Actualizar, with how many accounts the last read found. -->
+            <Border Style="{StaticResource Theme.Card}" Padding="16,12" CornerRadius="22" Margin="0,12,0,0">
+                <DockPanel>
+                    <Button Style="{StaticResource Theme.GhostButton}" Command="{Binding LoadCommand}" DockPanel.Dock="Left">
+                        <StackPanel Orientation="Horizontal">
+                            <Viewbox Width="16" Height="16" Margin="0,0,8,0">
+                                <Canvas Width="24" Height="24">
+                                    <Path Data="M20,11 A8,8 0 1 0 17.7,16.7 M20,4 V11 H13" StrokeThickness="1.8"
+                                          Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                                </Canvas>
+                            </Viewbox>
+                            <TextBlock Text="Actualizar" />
+                        </StackPanel>
+                    </Button>
+                    <TextBlock Text="{Binding CountText}" Style="{StaticResource Theme.Hint}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                </DockPanel>
+            </Border>
+
+            <TextBlock Text="{Binding Runner.ErrorMessage}" Style="{StaticResource Theme.ErrorText}" Margin="0,12,0,0" TextWrapping="Wrap" />
+
+            <!-- A row whose account the desk can no longer open. -->
+            <Border CornerRadius="14" Padding="14,10" Margin="0,12,0,0" BorderThickness="1"
+                    Background="{DynamicResource Theme.WarnBack}" BorderBrush="{DynamicResource Theme.Warn}"
+                    Visibility="{Binding OpenMessage, Converter={StaticResource Set}}">
+                <TextBlock Text="{Binding OpenMessage}" Foreground="{DynamicResource Theme.Warn}" TextWrapping="Wrap" />
+            </Border>
+
+            <Border Style="{StaticResource Theme.Card}" Margin="0,12,0,0" Visibility="{Binding IsEmpty, Converter={StaticResource Shown}}">
+                <TextBlock Text="No hay ninguna cuenta en mora." Style="{StaticResource Theme.Hint}" FontSize="15" Margin="14,6" />
+            </Border>
+        </StackPanel>
+
+        <!-- The rows, in a card whose table scrolls inside it. -->
+        <Border Grid.Row="1" Style="{StaticResource Theme.Card}" Padding="8,8,8,4" Margin="0,12,0,0" VerticalAlignment="Top"
+                Visibility="{Binding Rows.Count, Converter={StaticResource Set}}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <DataGrid Style="{StaticResource Theme.Table}" ItemsSource="{Binding Rows}" VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled" ColumnHeaderStyle="{StaticResource WrapHeader}">
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="INQUILINO" Width="1.3*" MinWidth="140">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Tenants}" FontWeight="Bold" TextAlignment="Center" TextWrapping="Wrap"
+                                               HorizontalAlignment="Center" Margin="0,6" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="UNIDADES" Width="1.6*" MinWidth="160">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Units}" TextAlignment="Center" TextWrapping="Wrap" HorizontalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="CONTRATO" Binding="{Binding ShortId}" Width="0.9*" MinWidth="100" />
+                        <DataGridTemplateColumn Header="ESTADO" Width="1*" MinWidth="120">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Border x:Name="Chip" Style="{StaticResource Theme.Chip}" HorizontalAlignment="Center">
+                                        <TextBlock Text="{Binding StatusText}" TextAlignment="Center" TextWrapping="Wrap" />
+                                    </Border>
+                                    <!-- As the canvas: running green, ended red, ending neutral. -->
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding Account.Status}" Value="{x:Static leasing:ContractStatus.Active}">
+                                            <Setter TargetName="Chip" Property="Tag" Value="ok" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Account.Status}" Value="{x:Static leasing:ContractStatus.Ended}">
+                                            <Setter TargetName="Chip" Property="Tag" Value="bad" />
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="DÍAS DE ATRASO" Binding="{Binding DaysOverdue}" Width="0.8*" MinWidth="90" />
+                        <DataGridTextColumn Header="IMPAGO MÁS VIEJO" Binding="{Binding OldestDueText}" Width="1*" MinWidth="110" />
+                        <DataGridTemplateColumn Header="IMPORTE ADEUDADO" Width="1.1*" MinWidth="120">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding AmountOwedText}" FontWeight="Bold" TextAlignment="Center" HorizontalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="RECARGO" Width="1.1*" MinWidth="130">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel HorizontalAlignment="Center" Margin="0,6">
+                                        <TextBlock Text="{Binding RecargoText}" TextAlignment="Center" />
+                                        <TextBlock Text="{Binding FrozenText}" Style="{StaticResource CellNote}"
+                                                   Visibility="{Binding FrozenText, Converter={StaticResource Set}}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="" Width="1.1*" MinWidth="150">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Button Content="Abrir en la caja" Style="{StaticResource SmallPrimary}" HorizontalAlignment="Center" Margin="0,6"
+                                            Command="{Binding DataContext.OpenCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+                <TextBlock Grid.Row="1" Text="{Binding CoverageText}" Style="{StaticResource Theme.Hint}" TextWrapping="Wrap" Margin="14,10,14,14" />
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>
