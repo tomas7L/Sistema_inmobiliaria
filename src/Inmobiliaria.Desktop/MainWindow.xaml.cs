@@ -4,6 +4,7 @@ using Inmobiliaria.Presentation.CashDesk;
 using Inmobiliaria.Presentation.Contracts;
 using Inmobiliaria.Presentation.GoLive;
 using Inmobiliaria.Presentation.Indices;
+using Inmobiliaria.Presentation.Mora;
 using Inmobiliaria.Presentation.Notices;
 using Inmobiliaria.Presentation.Parties;
 using Inmobiliaria.Presentation.Recibos;
@@ -28,6 +29,7 @@ public partial class MainWindow : Window
         VoidingViewModel? voiding,
         GoLiveViewModel? goLive,
         UsersViewModel? users,
+        MoraViewModel? mora,
         NoticesViewModel? notices,
         ContractsViewModel contracts,
         PartiesViewModel parties,
@@ -50,6 +52,7 @@ public partial class MainWindow : Window
         VoidingViewScreen.DataContext = voiding;
         GoLiveScreen.DataContext = goLive;
         UsersScreen.DataContext = users;
+        MoraScreen.DataContext = mora;
         NoticesScreen.DataContext = notices;
         ContractsScreen.DataContext = contracts;
         PartiesScreen.DataContext = parties;

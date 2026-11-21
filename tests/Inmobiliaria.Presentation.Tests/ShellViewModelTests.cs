@@ -58,7 +58,8 @@ public sealed class ShellViewModelTests
         Assert.Equal(
             [
                 (NavigationTarget.CashDesk, "Cobranza"), (NavigationTarget.RecentCollections, "Cobranza"),
-                (NavigationTarget.Voiding, "Cobranza"), (NavigationTarget.Notices, "Cobranza"),
+                (NavigationTarget.Voiding, "Cobranza"), (NavigationTarget.Mora, "Cobranza"),
+                (NavigationTarget.Notices, "Cobranza"),
                 (NavigationTarget.Contracts, "Alquileres"), (NavigationTarget.Parties, "Alquileres"),
                 (NavigationTarget.Units, "Alquileres"), (NavigationTarget.Indices, "Alquileres"),
                 (NavigationTarget.Adjustments, "Alquileres"),
@@ -75,7 +76,7 @@ public sealed class ShellViewModelTests
         Assert.Equal(
             [
                 NavigationTarget.CashDesk, NavigationTarget.RecentCollections, NavigationTarget.Voiding,
-                NavigationTarget.Notices, .. RentalScreens,
+                NavigationTarget.Mora, NavigationTarget.Notices, .. RentalScreens,
             ],
             TargetsOf(shell));
         Assert.DoesNotContain(NavigationTarget.GoLive, TargetsOf(shell));
@@ -91,7 +92,7 @@ public sealed class ShellViewModelTests
         Assert.Equal(
             [
                 NavigationTarget.CashDesk, NavigationTarget.RecentCollections, NavigationTarget.Voiding,
-                NavigationTarget.Notices, .. RentalScreens, NavigationTarget.GoLive, NavigationTarget.Users,
+                NavigationTarget.Mora, NavigationTarget.Notices, .. RentalScreens, NavigationTarget.GoLive, NavigationTarget.Users,
             ],
             TargetsOf(shell));
         Assert.Equal("Usuarios", shell.Navigation.Single(e => e.Target == NavigationTarget.Users).Title);
@@ -164,6 +165,23 @@ public sealed class ShellViewModelTests
         var byTarget = ShellFor(role, "Recargo:DailyRate falta.").Navigation.ToDictionary(entry => entry.Target);
         Assert.False(byTarget[NavigationTarget.Notices].IsAvailable);
         Assert.Equal(byTarget[NavigationTarget.CashDesk].UnavailableReason, byTarget[NavigationTarget.Notices].UnavailableReason);
+    }
+
+    /// <summary>
+    /// mora spec Test 9: both roles see Mora, after "Anular un cobro" as on Mateo's sidebar; with invalid recargo settings
+    /// it is disabled with Caja de cobranza's reason.
+    /// </summary>
+    [Theory]
+    [InlineData(UserRole.Admin)]
+    [InlineData(UserRole.Empleado)]
+    public void BothRolesSeeMora_AndInvalidRecargoTermsDisableItWithTheDesksReason(UserRole role)
+    {
+        var valid = ShellFor(role).Navigation.Single(e => e.Target == NavigationTarget.Mora);
+        Assert.Equal(("Mora", true, null), (valid.Title, valid.IsAvailable, valid.UnavailableReason));
+
+        var byTarget = ShellFor(role, "Recargo:DailyRate falta.").Navigation.ToDictionary(entry => entry.Target);
+        Assert.False(byTarget[NavigationTarget.Mora].IsAvailable);
+        Assert.Equal(byTarget[NavigationTarget.CashDesk].UnavailableReason, byTarget[NavigationTarget.Mora].UnavailableReason);
     }
 
     /// <summary>12.3d, Cerrar sesión (Tomás, 2026-11-13): the shell asks to end the session; the application does it.</summary>

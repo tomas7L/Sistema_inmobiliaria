@@ -106,6 +106,33 @@ public class MoraViewModelTests
     }
 
     /// <summary>
+    /// 12.3e, Mateo's Mora: the toolbar counts the accounts read ("1 cuenta", "N cuentas"); before a read and after a
+    /// failed one it says nothing, so it never reads as "0 cuentas" beside the error.
+    /// </summary>
+    [Fact]
+    public async Task TheCount_NamesHowManyAccountsWereRead_AndIsBlankWithoutARead()
+    {
+        var (mora, query, _, _) = Build();
+        Assert.Null(mora.CountText);
+
+        query.Rows = [Row("Zeta, Ana", 200), Row("Beta, Rosa", 5)];
+        await mora.LoadCommand.ExecuteAsync(null);
+        Assert.Equal("2 cuentas", mora.CountText);
+
+        query.Rows = [Row("Zeta, Ana", 200)];
+        await mora.LoadCommand.ExecuteAsync(null);
+        Assert.Equal("1 cuenta", mora.CountText);
+
+        query.Rows = [];
+        await mora.LoadCommand.ExecuteAsync(null);
+        Assert.Equal("0 cuentas", mora.CountText);
+
+        query.Failure = new InvalidOperationException("down");
+        await mora.LoadCommand.ExecuteAsync(null);
+        Assert.Null(mora.CountText);
+    }
+
+    /// <summary>
     /// Test 11, after an earlier read (verifier advisory, 2026-11-11): a failed refresh clears the list and the empty state,
     /// so the screen never says "nobody in mora", nor shows figures from an earlier read, beside the error.
     /// </summary>

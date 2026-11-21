@@ -12,5 +12,7 @@ public static class MoraTexts
 
     public const string AccountGone = "Esta cuenta ya no se puede abrir en la caja. Actualice la lista.";
 
+    public static string Count(int accounts) => accounts == 1 ? "1 cuenta" : $"{accounts} cuentas";
+
     public static string FrozenOn(string date) => $"Recargo congelado el {date}";
 }

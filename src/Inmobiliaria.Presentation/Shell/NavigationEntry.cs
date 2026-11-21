@@ -6,6 +6,7 @@ public enum NavigationTarget
     CashDesk,
     RecentCollections,
     Voiding,
+    Mora,
     Notices,
     Contracts,
     Parties,
@@ -22,6 +23,7 @@ public static class NavigationTitles
     public const string CashDesk = "Caja de cobranza";
     public const string RecentCollections = "Cobros recientes";
     public const string Voiding = "Anular un cobro";
+    public const string Mora = "Mora";
     public const string Notices = "Avisos";
     public const string Contracts = "Contratos";
     public const string Parties = "Personas";
@@ -50,7 +52,7 @@ public sealed record NavigationEntry(
     public string Group => Target switch
     {
         NavigationTarget.CashDesk or NavigationTarget.RecentCollections or NavigationTarget.Voiding
-            or NavigationTarget.Notices => NavigationGroups.Collection,
+            or NavigationTarget.Mora or NavigationTarget.Notices => NavigationGroups.Collection,
         NavigationTarget.GoLive or NavigationTarget.Users => NavigationGroups.Administration,
         _ => NavigationGroups.Leasing,
     };
